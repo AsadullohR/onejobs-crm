@@ -1,0 +1,17 @@
+{
+  "name": "onejobs-crm-fullstack",
+  "version": "1.0.0",
+  "description": "OneJobs CRM - Full Stack (React + Node.js + PostgreSQL)",
+  "scripts": {
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "dev": "concurrently \"cd server && npm run dev\" \"cd client && npm run dev\"",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "setup:db": "cd server && npm run setup-db",
+    "deploy:vercel": "cd client && npx vercel --prod",
+    "deploy:render": "echo 'Push to GitHub, then connect repo on render.com'"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

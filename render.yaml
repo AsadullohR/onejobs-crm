@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: onejobs-api
+    env: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: onejobs-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+      - key: FRONTEND_URL
+        value: https://onejobs-crm.vercel.app
+
+databases:
+  - name: onejobs-db
+    databaseName: onejobs
+    user: onejobs
+    plan: free
