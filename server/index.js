@@ -417,10 +417,13 @@ app.post('/api/webhook/lead', async (req, res) => {
 
 // ─── SERVE FRONTEND ───────────────────────────────────────────────────────────
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/dist')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
-  });
+  // app.use(express.static(path.join(__dirname, '../client/dist')));
+  // app.get('*', (req, res) => {
+  //   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  // });
+  app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'OneJobs CRM API is running' });
+});
 }
 
 // ─── START SERVER ─────────────────────────────────────────────────────────────
