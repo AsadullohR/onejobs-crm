@@ -426,6 +426,107 @@ if (process.env.NODE_ENV === 'production') {
 });
 }
 
+
+// ═══════════════════════════════════════════════════════════
+// WEBHOOK ENDPOINTS — Tally + Meta Ads + Make.com
+// ═══════════════════════════════════════════════════════════
+
+// ─── TALLY FORMS ──────────────────────────────────────────
+app.post('/api/webhook/tally', async (req, res) => {
+  res.sendStatus(200); // Tally ga darhol javob bering
+
+  try {
+    const payload = req.body;
+    if (!payload?.data?.fields) return;
+
+    const get = (label) => {
+      const f = payload.data.fields.find(f =>
+        f.label?.toLowerCase().includes(label.toLowerCase())
+      );
+      if (!f) return '';
+      return Array.isArray(f.value) ? f.value.join(', ') : (f.value || '');
+    };
+
+    const name    = get('ism') || get('name') || get('full') || 'Noma\'lum';
+    const phone   = get('telefon') || get('phone') || get('tel') || '';
+    const country = get('mamlaket') || get('country') || get('davlat') || '';
+    const pos     = get('lavozim') || get('position') || get('kasb') || '';
+    const comment = get('izoh') || get('comment') || '';
+    // Agar formda "hamkor" yoki "partner" maydoni bo'lsa, source shu bo'ladi
+    const source  = payload.data.fields.find(f =>
+                      f.label?.toLowerCase().includes('hamkor') ||
+                      f.label?.toLowerCase().includes('partner')
+                    )?.value || 'Tally Form';
+
+    const id = 'TALLY-' + Date.now();
+    await pool.query(
+      `INSERT INTO leads (id,name,phone,status,country,position,source,reklama_name,comment,created_at)
+       VALUES ($1,$2,$3,'Yangi',$4,$5,$6,$7,$8,NOW())
+       ON CONFLICT (id) DO NOTHING`,
+      [id, name, phone, country, pos, source, payload.formName||'', comment]
+    );
+    console.log('✅ Tally lead:', id, name, phone);
+  } catch (err) {
+    console.error('Tally error:', err.message);
+  }
+});
+
+// ─── META ADS — Verification ──────────────────────────────
+app.get('/api/webhook/meta', (req, res) => {
+  const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'onejobs2026';
+  if (req.query['hub.mode'] === 'subscribe' &&
+      req.query['hub.verify_token'] === VERIFY_TOKEN) {
+    res.send(req.query['hub.challenge']);
+    console.log('✅ Meta webhook tasdiqlandi');
+  } else {
+    res.sendStatus(403);
+  }
+});
+
+// ─── META ADS — New Lead ──────────────────────────────────
+app.post('/api/webhook/meta', async (req, res) => {
+  res.sendStatus(200);
+
+  try {
+    for (const entry of req.body.entry || []) {
+      for (const change of entry.changes || []) {
+        if (change.field !== 'leadgen') continue;
+
+        const leadgenId = change.value.leadgen_id;
+
+        // Meta Graph API dan to'liq ma'lumot olinadi
+        const r = await fetch(
+          `https://graph.facebook.com/v19.0/${leadgenId}?access_token=${process.env.META_PAGE_TOKEN}`
+        );
+        const data = await r.json();
+        if (data.error) { console.error('Meta API:', data.error); continue; }
+
+        const f = {};
+        for (const field of data.field_data || []) {
+          f[field.name] = field.values?.[0] || '';
+        }
+
+        const id = 'META-' + leadgenId;
+        await pool.query(
+          `INSERT INTO leads (id,name,phone,status,country,source,reklama_name,comment,created_at)
+           VALUES ($1,$2,$3,'Yangi',$4,'Meta Ads',$5,$6,NOW())
+           ON CONFLICT (id) DO NOTHING`,
+          [id,
+           f.full_name || f.name || 'Noma\'lum',
+           f.phone_number || f.phone || '',
+           f.country || f.city || '',
+           change.value.ad_name || '',
+           `Ad: ${change.value.ad_id||''}`]
+        );
+        console.log('✅ Meta lead:', id, f.full_name, f.phone_number);
+      }
+    }
+  } catch (err) {
+    console.error('Meta error:', err.message);
+  }
+});
+// ═══════════════════════════════════════════════════════════
+
 // ─── START SERVER ─────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`🚀 OneJobs CRM API running on port ${PORT}`);

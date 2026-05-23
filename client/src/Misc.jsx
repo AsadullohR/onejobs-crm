@@ -1,0 +1,228 @@
+import { useState } from "react";
+import { useT } from "./theme.js";
+import { uid, inp, lab, I, Av, Modal, fmtMs} from "./helpers.jsx";
+import { INIT_VISA } from "./constants.js";
+
+// ─── VISA, TEAM, SETTINGS (compact) ──────────────────────────────────────────
+function Visa({user, roles}) {
+  const T=useT(); const [visas,setVisas]=useState(INIT_VISA); const [sel,setSel]=useState(1); const [edit,setEdit]=useState(false); const [form,setForm]=useState(null);
+  const canEdit=roles[user.role]?.canCfg; const cur=visas.find(v=>v.id===sel);
+  const save=()=>{if(!form.country)return;const u={...form,docs:form.docsText.split("\n").map(s=>s.trim()).filter(Boolean)};delete u.docsText;setVisas(p=>p.some(v=>v.id===u.id)?p.map(v=>v.id===u.id?u:v):[...p,u]);setSel(u.id);setEdit(false);};
+  const inpS=inp(T); const labS=lab(T);
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <h1 style={{fontSize:18,fontWeight:900,color:T.text,margin:0}}>Viza Ma'lumotlari</h1>
+      {canEdit&&<button onClick={()=>{setForm({id:uid(),country:"",flag:"🌍",type:"",duration:"",docs:[],docsText:"",notes:""});setEdit(true);}} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 11px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,fontSize:11,border:"none",cursor:"pointer"}}>{I.plus} Qo'shish</button>}
+    </div>
+    <div style={{display:"flex",gap:7,marginBottom:14,flexWrap:"wrap"}}>
+      {visas.map(v=><button key={v.id} onClick={()=>setSel(v.id)} style={{padding:"5px 12px",borderRadius:7,border:`2px solid ${sel===v.id?T.accent:T.border}`,background:sel===v.id?`${T.accent}22`:"transparent",color:sel===v.id?T.text:T.muted,fontWeight:600,cursor:"pointer",fontSize:11}}>{v.flag} {v.country}</button>)}
+    </div>
+    {cur&&!edit&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+      <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:11,padding:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+          <h3 style={{margin:0,fontSize:13,fontWeight:700,color:T.text}}>{cur.flag} {cur.country}</h3>
+          {canEdit&&<div style={{display:"flex",gap:5}}>
+            <button onClick={()=>{setForm({...cur,docsText:cur.docs.join("\n")});setEdit(true);}} style={{padding:"3px 8px",borderRadius:5,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,cursor:"pointer",fontSize:10,fontWeight:600}}>Tahrir</button>
+            <button onClick={()=>setVisas(p=>p.filter(v=>v.id!==cur.id))} style={{padding:"3px 8px",borderRadius:5,background:`${T.red}22`,color:T.red,border:`1px solid ${T.red}44`,cursor:"pointer",fontSize:10}}>✕</button>
+          </div>}
+        </div>
+        <div style={{display:"flex",gap:8,marginBottom:10}}>
+          {[["Viza turi",cur.type,T.accent],["Muddati",cur.duration,T.green]].map(([lb,val,c])=>(
+            <div key={lb} style={{flex:1,background:`${c}22`,border:`1px solid ${c}44`,borderRadius:6,padding:"7px 9px",textAlign:"center"}}><div style={{fontSize:9,color:T.muted}}>{lb}</div><div style={{fontSize:11,fontWeight:700,color:c,marginTop:2}}>{val}</div></div>
+          ))}
+        </div>
+        {cur.docs.map((d,i)=><div key={i} style={{display:"flex",gap:6,padding:"5px 0",borderBottom:`1px solid ${T.border}22`}}><span style={{color:T.green,fontWeight:700}}>✓</span><span style={{color:T.text,fontSize:11}}>{d}</span></div>)}
+      </div>
+      <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:11,padding:16}}>
+        {cur.notes&&<div style={{background:`${T.yellow}15`,border:`1px solid ${T.yellow}33`,borderRadius:7,padding:"9px 11px",marginBottom:10}}><div style={{fontSize:10,fontWeight:700,color:T.yellow,marginBottom:3}}>⚠️ Eslatma</div><p style={{color:T.text,fontSize:11,margin:0,lineHeight:1.6}}>{cur.notes}</p></div>}
+        <h3 style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:T.text}}>📋 Bosqichlar</h3>
+        {["Hujjatlar yig'ish","Shartnoma imzolash","XBA to'lovi","CV topshirish","Interview","Elchixona","Viza","Jo'nab ketish"].map((st,i)=>(
+          <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:`1px solid ${T.border}22`}}>
+            <div style={{width:18,height:18,borderRadius:"50%",background:`${T.accent}22`,color:T.accent,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:700,border:`1px solid ${T.accent}44`,flexShrink:0}}>{i+1}</div>
+            <span style={{color:T.text,fontSize:11}}>{st}</span>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {edit&&form&&<div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:11,padding:18,maxWidth:540}}>
+      <h3 style={{margin:"0 0 12px",fontSize:12,fontWeight:700,color:T.text}}>{visas.some(v=>v.id===form.id)?"Tahrirlash":"Yangi"}</h3>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+        <div><label style={labS}>Bayroq</label><input value={form.flag||""} onChange={e=>setForm(p=>({...p,flag:e.target.value}))} style={inpS} placeholder="🇺🇿"/></div>
+        <div><label style={labS}>Mamlakat *</label><input value={form.country||""} onChange={e=>setForm(p=>({...p,country:e.target.value}))} style={inpS}/></div>
+        <div><label style={labS}>Viza turi</label><input value={form.type||""} onChange={e=>setForm(p=>({...p,type:e.target.value}))} style={inpS}/></div>
+        <div><label style={labS}>Muddati</label><input value={form.duration||""} onChange={e=>setForm(p=>({...p,duration:e.target.value}))} style={inpS}/></div>
+        <div style={{gridColumn:"1/-1"}}><label style={labS}>Hujjatlar (satr-satr)</label><textarea value={form.docsText||""} onChange={e=>setForm(p=>({...p,docsText:e.target.value}))} rows={4} style={{...inpS,resize:"vertical"}}/></div>
+        <div style={{gridColumn:"1/-1"}}><label style={labS}>Izohlar</label><textarea value={form.notes||""} onChange={e=>setForm(p=>({...p,notes:e.target.value}))} rows={2} style={{...inpS,resize:"vertical"}}/></div>
+      </div>
+      <div style={{display:"flex",gap:7,marginTop:12}}>
+        <button onClick={()=>setEdit(false)} style={{padding:"7px 13px",borderRadius:7,background:T.card2,color:T.text,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:11,fontWeight:600}}>Bekor</button>
+        <button onClick={save} style={{padding:"7px 16px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:"pointer",fontSize:11}}>💾 Saqlash</button>
+      </div>
+    </div>}
+  </div>;
+}
+
+function TeamPage({user, team, setTeam, roles}) {
+  const T=useT(); const [modal,setModal]=useState(null); const [form,setForm]=useState({});
+  const f=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const COLORS=["#6366f1","#22c55e","#f97316","#eab308","#ef4444","#06b6d4","#a855f7","#10b981","#3b82f6"];
+  const save=()=>{if(!form.name||!form.username)return;setTeam(p=>p.some(t=>t.id===form.id)?p.map(t=>t.id===form.id?form:t):[...p,{...form,salItems:[]}]);setModal(null);};
+  const inpS=inp(T); const labS=lab(T);
+  return <div>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+      <h1 style={{fontSize:18,fontWeight:900,color:T.text,margin:0}}>Jamoa</h1>
+      {user.role==="admin"&&<button onClick={()=>{setForm({id:uid(),name:"",username:"",role:"sales",password:"",av:"",color:COLORS[0],phone:"",email:"",active:true,salary:0,salType:"fixed",pct:5,salItems:[]});setModal("form");}} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 11px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,fontSize:11,border:"none",cursor:"pointer"}}>{I.plus} Qo'shish</button>}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
+      {team.map(m=>(
+        <div key={m.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:13,display:"flex",gap:10,alignItems:"flex-start",opacity:m.active===false?.5:1}}>
+          <Av id={m.id} team={team} size={34}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}><span style={{fontSize:13,fontWeight:700,color:T.text}}>{m.name}</span>{m.id===user.id&&<span style={{fontSize:8,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,borderRadius:3,padding:"0 4px",fontWeight:600}}>Siz</span>}</div>
+            <div style={{fontSize:10,color:T.muted,marginBottom:4}}>@{m.username} · {m.phone}</div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+              <span style={{background:`${roles[m.role]?.color||T.accent}22`,color:roles[m.role]?.color||T.accent,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:20}}>{roles[m.role]?.label||m.role}</span>
+              {(user.role==="admin"||user.role==="manager")&&<select value={m.role} onChange={e=>setTeam(p=>p.map(t=>t.id===m.id?{...t,role:e.target.value}:t))} style={{...inpS,width:"auto",fontSize:9,padding:"2px 5px"}}>{Object.keys(roles).map(r=><option key={r} value={r}>{roles[r].label}</option>)}</select>}
+            </div>
+            <div style={{fontSize:9,color:T.muted,marginTop:3}}>{m.salType==="fixed"?`Maosh: ${fmtMs(m.salary||0)} so'm`:`${m.pct||0}% komissiya`}</div>
+          </div>
+          {user.role==="admin"&&<div style={{display:"flex",gap:4,flexShrink:0}}>
+            <button onClick={()=>{setForm({...m});setModal("form");}} style={{padding:"3px 6px",borderRadius:4,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,cursor:"pointer",fontSize:10}}>{I.edit}</button>
+            {m.id!==user.id&&<button onClick={()=>setTeam(p=>p.map(t=>t.id===m.id?{...t,active:!t.active}:t))} style={{padding:"3px 6px",borderRadius:4,background:m.active===false?`${T.green}22`:`${T.yellow}22`,color:m.active===false?T.green:T.yellow,border:`1px solid ${m.active===false?T.green:T.yellow}44`,cursor:"pointer",fontSize:9}}>{m.active===false?"Faol":"To'xtat"}</button>}
+          </div>}
+        </div>
+      ))}
+    </div>
+    {modal==="form"&&<Modal onClose={()=>setModal(null)} width={500}>
+      <div style={{padding:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><h3 style={{margin:0,fontSize:13,fontWeight:800,color:T.text}}>Xodim</h3><button onClick={()=>setModal(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}>{I.x}</button></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+          <div style={{gridColumn:"1/-1"}}><label style={labS}>To'liq ismi *</label><input value={form.name||""} onChange={e=>f("name",e.target.value)} style={inpS}/></div>
+          <div><label style={labS}>Username *</label><input value={form.username||""} onChange={e=>f("username",e.target.value)} style={inpS}/></div>
+          <div><label style={labS}>Parol</label><input value={form.password||""} onChange={e=>f("password",e.target.value)} style={inpS}/></div>
+          <div><label style={labS}>Telefon</label><input value={form.phone||""} onChange={e=>f("phone",e.target.value)} style={inpS}/></div>
+          <div><label style={labS}>Rol</label><select value={form.role||"sales"} onChange={e=>f("role",e.target.value)} style={inpS}>{Object.entries(roles).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
+          <div><label style={labS}>Avatar (2 harf)</label><input value={form.av||""} onChange={e=>f("av",e.target.value.toUpperCase().slice(0,2))} maxLength={2} style={inpS} placeholder="AS"/></div>
+          <div><label style={labS}>Maosh turi</label><select value={form.salType||"fixed"} onChange={e=>f("salType",e.target.value)} style={inpS}><option value="fixed">Fiksed</option><option value="percent">Foiz %</option></select></div>
+          {form.salType==="fixed"?<div><label style={labS}>Oylik maosh</label><input type="number" value={form.salary||0} onChange={e=>f("salary",Number(e.target.value))} style={inpS}/></div>:<div><label style={labS}>Foiz %</label><input type="number" value={form.pct||5} onChange={e=>f("pct",Number(e.target.value))} style={inpS}/></div>}
+          <div style={{gridColumn:"1/-1"}}><label style={labS}>Rang</label><div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:2}}>{COLORS.map(c=><div key={c} onClick={()=>f("color",c)} style={{width:20,height:20,borderRadius:"50%",background:c,cursor:"pointer",border:`3px solid ${form.color===c?T.text:"transparent"}`}}/>)}</div></div>
+        </div>
+        <div style={{display:"flex",gap:6,marginTop:12,justifyContent:"flex-end"}}>
+          <button onClick={()=>setModal(null)} style={{padding:"7px 12px",borderRadius:6,background:T.card2,color:T.text,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:11,fontWeight:600}}>Bekor</button>
+          <button onClick={save} style={{padding:"7px 16px",borderRadius:6,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:"pointer",fontSize:11}}>💾 Saqlash</button>
+        </div>
+      </div>
+    </Modal>}
+  </div>;
+}
+
+const ROLE_CAPS=[{key:"canOwner",label:"Mas'ulni o'zgartirish"},{key:"canFin",label:"Moliya bo'limi"},{key:"canEdit",label:"Lead tahrirlash"},{key:"canCfg",label:"Sozlamalar"},{key:"canTeam",label:"Jamoa boshqaruvi"},{key:"seeAll",label:"Barcha leadlarni ko'rish"},{key:"canTakeUnassigned",label:"Bo'sh leadni olish"}];
+
+function Settings({user, config, setConfig, roles, setRoles}) {
+  const T=useT(); const [tab,setTab]=useState("lists"); const [lt,setLt]=useState("countries"); const [ni,setNi]=useState(""); const [rf,setRf]=useState(null); const [rfm,setRfm]=useState({});
+  const rfu=(k,v)=>setRfm(p=>({...p,[k]:v}));
+  const ce=roles[user.role]?.canCfg; const isAdmin=user.role==="admin";
+  const secs={countries:"Mamlakatlar",sectors:"Sohalar",sources:"Manbalar",positions:"Lavozimlar",txnInc:"Kirim kat.",txnExp:"Chiqim kat."};
+  const addItem=(k)=>{if(!ni.trim())return;setConfig(p=>({...p,[k]:[...p[k],ni.trim()]}));setNi("");};
+  const rmItem=(k,item)=>setConfig(p=>({...p,[k]:p[k].filter(x=>x!==item)}));
+  const saveRole=()=>{if(!rfm.key||!rfm.label)return;setRoles(p=>({...p,[rfm.key]:{label:rfm.label,color:rfm.color||T.accent,...Object.fromEntries(ROLE_CAPS.map(c=>[c.key,!!rfm[c.key]]))}}));setRf(null);};
+  const inpS=inp(T); const labS=lab(T);
+  const RCOLS=["#6366f1","#22c55e","#f97316","#eab308","#ef4444","#06b6d4","#a855f7","#10b981"];
+  return <div>
+    <h1 style={{fontSize:18,fontWeight:900,color:T.text,margin:"0 0 12px"}}>Sozlamalar</h1>
+    <div style={{display:"flex",gap:7,marginBottom:14,flexWrap:"wrap"}}>
+      {[["lists","📋 Ro'yxatlar"],["roles","🔐 Rollar"],["integrations","🔗 Integratsiyalar"]].map(([k,l])=>(
+        <button key={k} onClick={()=>setTab(k)} style={{padding:"6px 12px",borderRadius:7,border:`2px solid ${tab===k?T.accent:T.border}`,background:tab===k?`${T.accent}22`:"transparent",color:tab===k?T.text:T.muted,fontWeight:tab===k?700:400,cursor:"pointer",fontSize:11}}>{l}</button>
+      ))}
+    </div>
+    {tab==="lists"&&ce&&<div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:11,padding:16}}>
+      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+        {Object.entries(secs).map(([k,l])=><button key={k} onClick={()=>setLt(k)} style={{padding:"4px 10px",borderRadius:6,border:`2px solid ${lt===k?T.accent:T.border}`,background:lt===k?`${T.accent}22`:"transparent",color:lt===k?T.text:T.muted,fontWeight:lt===k?700:400,cursor:"pointer",fontSize:10}}>{l}</button>)}
+      </div>
+      <div style={{display:"flex",gap:7,marginBottom:10}}>
+        <input value={ni} onChange={e=>setNi(e.target.value)} placeholder={`Yangi ${secs[lt]}...`} style={{...inpS,flex:1}} onKeyDown={e=>e.key==="Enter"&&addItem(lt)}/>
+        <button onClick={()=>addItem(lt)} style={{padding:"7px 14px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:"pointer",fontSize:11}}>+</button>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {(config[lt]||[]).map(item=>(
+          <div key={item} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"4px 9px",borderRadius:20,background:T.card2,border:`1px solid ${T.border}`,fontSize:11,color:T.text}}>
+            {item}<button onClick={()=>rmItem(lt,item)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:13,lineHeight:1,padding:0,marginLeft:2}}>{I.x}</button>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {tab==="roles"&&<div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <h3 style={{margin:0,fontSize:12,fontWeight:700,color:T.text}}>Rollar</h3>
+        {isAdmin&&<button onClick={()=>{setRfm({key:"",label:"",color:T.accent,...Object.fromEntries(ROLE_CAPS.map(c=>[c.key,false]))});setRf("form");}} style={{display:"flex",alignItems:"center",gap:4,padding:"5px 10px",borderRadius:6,background:T.accent,color:"#fff",fontWeight:700,fontSize:10,border:"none",cursor:"pointer"}}>{I.plus} Yangi rol</button>}
+      </div>
+      <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:11,overflow:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead><tr style={{borderBottom:`1px solid ${T.border}`,background:T.card2}}>
+            <th style={{textAlign:"left",padding:"8px 10px",color:T.muted,fontSize:9,textTransform:"uppercase",fontWeight:600}}>Rol</th>
+            {ROLE_CAPS.map(c=><th key={c.key} style={{textAlign:"center",padding:"8px 5px",color:T.muted,fontSize:9,textTransform:"uppercase",fontWeight:600,maxWidth:70}}>{c.label}</th>)}
+            <th style={{padding:"8px 10px",color:T.muted,fontSize:9}}></th>
+          </tr></thead>
+          <tbody>
+            {Object.entries(roles).map(([key,role])=>(
+              <tr key={key} style={{borderBottom:`1px solid ${T.border}22`}}>
+                <td style={{padding:"8px 10px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:8,height:8,borderRadius:"50%",background:role.color}}/><span style={{fontSize:11,fontWeight:600,color:T.text}}>{role.label}</span><span style={{fontSize:8,color:T.muted,fontFamily:"monospace"}}>{key}</span></div>
+                </td>
+                {ROLE_CAPS.map(c=>(
+                  <td key={c.key} style={{textAlign:"center",padding:"8px 5px"}}>
+                    {isAdmin?<input type="checkbox" checked={!!role[c.key]} onChange={e=>setRoles(p=>({...p,[key]:{...p[key],[c.key]:e.target.checked}}))} style={{accentColor:role.color,width:13,height:13}}/>
+                    :<span style={{color:role[c.key]?T.green:T.border,fontSize:12}}>{role[c.key]?"✓":"–"}</span>}
+                  </td>
+                ))}
+                <td style={{padding:"8px 10px"}}>
+                  {isAdmin&&<div style={{display:"flex",gap:3}}>
+                    <button onClick={()=>{setRfm({key,label:role.label,color:role.color,...Object.fromEntries(ROLE_CAPS.map(c=>[c.key,!!role[c.key]]))});setRf("form");}} style={{padding:"2px 6px",borderRadius:4,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,cursor:"pointer",fontSize:9}}>{I.edit}</button>
+                    {!["admin","manager","sales","partner"].includes(key)&&<button onClick={()=>{const r={...roles};delete r[key];setRoles(r);}} style={{padding:"2px 6px",borderRadius:4,background:`${T.red}22`,color:T.red,border:`1px solid ${T.red}44`,cursor:"pointer",fontSize:9}}>{I.trash}</button>}
+                  </div>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>}
+    {tab==="integrations"&&<div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:11,padding:16}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+        {[["Tally Forms","tally.so → Make → Webhook","Yangi arizalar avtomatik","#6366f1"],["Meta Leads","Facebook Lead Ads → Make","Reklama leadlari","#1d4ed8"],["MicroSIP","tel: link → SIP qo'ng'iroq","Telefon tugmasiga bosing","#22c55e"],["Make / Zapier","Webhook: POST /api/leads","Barcha integratsiyalar","#f97316"],["Google Sheets","CSV export","Hisobotlar uchun","#16a34a"],["WhatsApp","+wa link","Tezkor muloqot","#25D366"]].map(([t,api,d,c])=>(
+          <div key={t} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:10,borderLeft:`3px solid ${c}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:2}}>{t}</div>
+            <div style={{fontSize:9,color:c,marginBottom:3,fontFamily:"monospace"}}>{api}</div>
+            <div style={{fontSize:9,color:T.muted}}>{d}</div>
+          </div>
+        ))}
+      </div>
+    </div>}
+    {rf==="form"&&<Modal onClose={()=>setRf(null)} width={480}>
+      <div style={{padding:18}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><h3 style={{margin:0,fontSize:13,fontWeight:800,color:T.text}}>Rol</h3><button onClick={()=>setRf(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}>{I.x}</button></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:12}}>
+          <div><label style={labS}>Kalit</label><input value={rfm.key||""} onChange={e=>rfu("key",e.target.value.toLowerCase().replace(/\s/g,"_"))} style={inpS} placeholder="my_role"/></div>
+          <div><label style={labS}>Nom</label><input value={rfm.label||""} onChange={e=>rfu("label",e.target.value)} style={inpS}/></div>
+          <div style={{gridColumn:"1/-1"}}><label style={labS}>Rang</label><div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:2}}>{RCOLS.map(c=><div key={c} onClick={()=>rfu("color",c)} style={{width:20,height:20,borderRadius:"50%",background:c,cursor:"pointer",border:`3px solid ${rfm.color===c?T.text:"transparent"}`}}/>)}</div></div>
+        </div>
+        <div style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:11,marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:700,color:T.text,marginBottom:8}}>Ruxsatlar</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+            {ROLE_CAPS.map(cap=>(
+              <label key={cap.key} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:11,color:T.text}}>
+                <input type="checkbox" checked={!!rfm[cap.key]} onChange={e=>rfu(cap.key,e.target.checked)} style={{width:14,height:14,accentColor:rfm.color||T.accent}}/>{cap.label}
+              </label>
+            ))}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
+          <button onClick={()=>setRf(null)} style={{padding:"7px 12px",borderRadius:6,background:T.card2,color:T.text,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:11,fontWeight:600}}>Bekor</button>
+          <button onClick={saveRole} style={{padding:"7px 15px",borderRadius:6,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:"pointer",fontSize:11}}>💾 Saqlash</button>
+        </div>
+      </div>
+    </Modal>}
+  </div>;
+}
+
+export { Visa, TeamPage, Settings };
