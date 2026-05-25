@@ -46,27 +46,64 @@ export default function App() {
   const T=mkT(dark);
 
   const addNotif=useCallback((msg,type="info")=>setNotifs(p=>[{id:uid(),msg,type,at:new Date().toISOString()},...p].slice(0,50)),[]);
-  const saveLead=useCallback(async f=>{
-  const isNew=!leads.some(l=>l.id===f.id);
-  setLeads(p=>p.some(l=>l.id===f.id)?p.map(l=>l.id===f.id?f:l):[...p,f]);
-  if(isNew) addNotif(`🆕 Yangi lead: ${f.name}`);
-  else { const old=leads.find(l=>l.id===f.id); if(old&&old.status!==f.status)addNotif(`📌 ${f.name}: ${old.status} → ${f.status}`); }
-  setDrawer(null);
-  try {
-    await leadsAPI.save({
-  id:f.id, name:f.name, phone:f.phone, telegram:f.telegram,
-  status:f.status, country:f.country, sector:f.sector, position:f.position,
-  source:f.source, gender:f.gender, comment:f.comment, note:f.note,
-  ownerSales:f.ownerSales||null, ownerConsult:f.ownerConsult||null, ownerDocs:f.ownerDocs||null,
-  q1:f.q1, q2:f.q2, q3:f.q3, xba:f.xba,
-  kpiSales:f.kpiSales, kpiConsult:f.kpiConsult, kpiDocs:f.kpiDocs,
-  cv:f.cv, docs:f.docs, history:f.history, sofFoyda:f.sofFoyda||null,
-  lastContact:f.lastCall||null,
-  contractDate:f.shartnomaSana||null,
-  interviewDate:f.officeSuhbat||null,
-  });
-    } catch(err){ console.warn("Lead sync failed:", err.message); }
-  },[leads,addNotif]);
+  const saveLead = useCallback(async f => {
+    try {
+
+      await leadsAPI.save({
+        id:f.id,
+        name:f.name,
+        phone:f.phone,
+        telegram:f.telegram,
+        status:f.status,
+        country:f.country,
+        sector:f.sector,
+        position:f.position,
+        source:f.source,
+        gender:f.gender,
+        comment:f.comment,
+        note:f.note,
+
+        ownerSales:f.ownerSales || null,
+        ownerConsult:f.ownerConsult || null,
+        ownerDocs:f.ownerDocs || null,
+
+        q1:f.q1,
+        q2:f.q2,
+        q3:f.q3,
+        xba:f.xba,
+
+        kpiSales:f.kpiSales,
+        kpiConsult:f.kpiConsult,
+        kpiDocs:f.kpiDocs,
+
+        cv:f.cv,
+        docs:f.docs,
+        history:f.history,
+
+        sofFoyda:f.sofFoyda || null,
+
+        lastContact:f.lastCall || null,
+        contractDate:f.shartnomaSana || null,
+        interviewDate:f.officeSuhbat || null,
+      });
+
+      const isNew = !leads.some(l => l.id === f.id);
+
+      setLeads(p =>
+        p.some(l => l.id === f.id)
+          ? p.map(l => l.id === f.id ? f : l)
+          : [...p, f]
+      );
+
+      if(isNew) addNotif(`🆕 Yangi lead: ${f.name}`);
+
+      setDrawer(null);
+
+    } catch(err) {
+      console.error(err);
+      alert("Lead saqlanmadi!");
+    }
+}, [leads]);
   const addTask=useCallback(t=>{setTasks(p=>[...p,t]);addNotif(`📋 Yangi vazifa: ${t.title}`);},[addNotif]);
   const openLead=l=>setDrawer(l||{id:`NO-${Math.floor(Math.random()*9000)+1000}`,name:"",phone:"",telegram:"",status:"Yangi",country:"",sector:"",position:"",ownerSales:null,ownerConsult:null,ownerDocs:null,source:user?.role==="partner"?user.name:"",gender:"",comment:"",q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,q1R:null,q2R:null,q3R:null,xbaR:null,cv:{},history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)});
 
@@ -155,7 +192,10 @@ export default function App() {
       } catch(err){
         console.error("Load failed:", err.message);
         // Fallback to hardcoded data if API unreachable
-        setLeads(INIT_LEADS); setTasks(INIT_TASKS); setTxns(INIT_TXN);
+        console.error(err);
+        setApiError(err.message);   
+        setTasks(INIT_TASKS);   
+        setTxns(INIT_TXN);
       } finally { setAppLoading(false); }
     };
 
