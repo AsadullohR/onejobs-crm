@@ -91,7 +91,13 @@ export default function App() {
   const payload = decodeJWT(tok);
   if (!payload) { clearToken(); return; }
 
-  usersAPI.getAll().then(users=>{
+  fetch(`${import.meta.env.VITE_API_URL}/api/users`, {
+  headers: {
+    Authorization: `Bearer ${tok}`
+  }
+})
+.then(r=>r.json())
+.then(users=>{
     const me = users.find(u=>u.id===payload.id);
     if(me) setUser({...me, token:tok, password:me.username});
     else clearToken();

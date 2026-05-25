@@ -5,9 +5,9 @@ import { uid, fmtM, fmtMs, fmtD, isOD, inp, lab, I, Pill, Av, Modal, SearchSelec
 
 // ─── LEAD DRAWER ──────────────────────────────────────────────────────────────
 function Drawer({lead, user, team, leads, tasks, onSave, onClose, onAddTask, config, roles, addNotif}) {
-  const T=useT();
-  const isNew=!lead.id;
-  const [form,setForm]=useState({
+const T=useT();
+const isNew=!lead.id;
+const [form,setForm]=useState({
   cv:{},
   history:[],
   q1:false,
@@ -22,12 +22,15 @@ function Drawer({lead, user, team, leads, tasks, onSave, onClose, onAddTask, con
   q3R:null,
   xbaR:null,
   sofFoyda:null,
+
+  ...lead,
+
   docs: {
-  ownerSales: null,
-  ownerConsult: null,
-  ownerDocs: null,
-  ...(lead.docs || {})
-},
+    ownerSales: null,
+    ownerConsult: null,
+    ownerDocs: null,
+    ...(lead.docs || {})
+  },
 });
   const [tab,setTab]=useState("info");
   const [note,setNote]=useState("");

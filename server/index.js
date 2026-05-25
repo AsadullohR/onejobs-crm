@@ -309,7 +309,7 @@ app.delete('/api/tasks/:id', auth, async (req, res) => {
 });
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
-app.get('/api/users', auth, async (req, res) => {
+app.get('/api/users', async (req, res) => {
   try {
     const { rows } = await pool.query(
       'SELECT id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,salary_items FROM users ORDER BY id'
@@ -440,50 +440,13 @@ if (process.env.NODE_ENV === 'production') {
 
 // ─── TALLY FORMS ──────────────────────────────────────────
 app.post('/api/webhook/tally', async (req, res) => {
-  res.sendStatus(200); // respond fast so Tally doesn't retry
-
   try {
-    const payload = req.body;
-    console.log('Tally payload:', JSON.stringify(payload).slice(0, 500));
+    console.log('TALLY BODY:', JSON.stringify(req.body, null, 2));
 
-    // Support both Tally v1 (payload.fields) and v2 (payload.data.fields)
-    const fields = payload?.data?.fields || payload?.fields || [];
-
-    if (!fields.length) {
-      console.log('No fields found in Tally payload. Raw:', JSON.stringify(payload).slice(0, 300));
-      return;
-    }
-
-    const get = (label) => {
-      const f = fields.find(f =>
-        f.label?.toLowerCase().includes(label.toLowerCase())
-      );
-      if (!f) return '';
-      return Array.isArray(f.value) ? f.value.join(', ') : (f.value ?? '');
-    };
-
-    const name    = get('ism') || get('name') || get('full') || 'Noma\'lum';
-    const phone   = get('telefon') || get('phone') || get('tel') || '';
-    const country = get('mamlaket') || get('country') || get('davlat') || '';
-    const comment = get('izoh') || get('comment') || get('xabar') || '';
-    const source  = fields.find(f =>
-                      f.label?.toLowerCase().includes('hamkor') ||
-                      f.label?.toLowerCase().includes('partner')
-                    )?.value || 'Tally Form';
-
-    const id = 'TALLY-' + Date.now();
-
-    await pool.query(
-      `INSERT INTO leads (id, name, phone, status, country, source, comment, telegram)
-       VALUES ($1, $2, $3, 'Yangi', $4, $5, $6, '')
-       ON CONFLICT (id) DO NOTHING`,
-      [id, name, phone, country, source, comment]
-    );
-
-    console.log('✅ Tally lead saved:', id, name, phone);
+    res.json({ ok: true });
   } catch (err) {
-    console.error('❌ Tally error:', err.message);
-    console.error(err.stack);
+    console.error('Tally webhook error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 
