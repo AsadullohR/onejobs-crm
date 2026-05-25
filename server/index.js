@@ -546,7 +546,19 @@ app.post('/api/webhook/meta', async (req, res) => {
   }
 });
 // ═══════════════════════════════════════════════════════════
-
+// New leads since timestamp (for 30-second polling)
+app.get('/api/leads/new', auth, async (req, res) => {
+  try {
+    const since = req.query.since || new Date(0).toISOString();
+    const { rows } = await pool.query(
+      'SELECT * FROM leads WHERE created_at > $1 ORDER BY created_at DESC LIMIT 50',
+      [since]
+    );
+    res.json({ leads: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // ─── START SERVER ─────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`🚀 OneJobs CRM API running on port ${PORT}`);

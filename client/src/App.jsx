@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, createContext, useContext } from "react";
+import { useState, useMemo, useRef, useCallback, createContext, useContext, useEffect } from "react";
 import { ThemeCtx, mkT, useT } from "./theme.js";
 import {
 STAGES, DONE, LOST, gS,
@@ -21,14 +21,23 @@ import { Dashboard } from "./Dashboard.jsx";
 import { SalaryPage } from "./SalaryPage.jsx";
 import { DebtsPage } from "./DebtsPage.jsx";
 import { Analytics } from "./Analytics.jsx";
-
+import { leadsAPI, tasksAPI, txnAPI, usersAPI, getToken, clearToken } from "./api.js";
 
 export default function App() {
-  const [dark,setDark]=useState(false); const [col,setCol]=useState(false);
-  const [team,setTeam]=useState(INIT_TEAM); const [roles,setRoles]=useState(INIT_ROLES);
-  const [user,setUser]=useState(null); const [page,setPage]=useState("pipeline");
-  const [leads,setLeads]=useState(INIT_LEADS); const [tasks,setTasks]=useState(INIT_TASKS);
-  const [txns,setTxns]=useState(INIT_TXN); const [config,setConfig]=useState(INIT_CFG);
+  const [dark,setDark]=useState(false); 
+  const [col,setCol]=useState(false);
+  const [team,setTeam]=useState(INIT_TEAM); 
+  const [roles,setRoles]=useState(INIT_ROLES);
+  const [user,setUser]=useState(null); 
+  const [page,setPage]=useState("pipeline");
+  const [leads,setLeads]=useState([]);
+  const [tasks,setTasks]=useState([]);
+  const [txns,setTxns]=useState([]);
+  const [appLoading,setAppLoading]=useState(false);
+  const lastPollRef=useRef(new Date().toISOString());
+  const [loading,setLoading]=useState(false);
+  const [apiError,setApiError]=useState(null);
+  const [config,setConfig]=useState(INIT_CFG);
   const [drawer,setDrawer]=useState(null);
   const [notifs,setNotifs]=useState([]);
   const [debts,setDebts]=useState([]);
@@ -37,15 +46,23 @@ export default function App() {
   const T=mkT(dark);
 
   const addNotif=useCallback((msg,type="info")=>setNotifs(p=>[{id:uid(),msg,type,at:new Date().toISOString()},...p].slice(0,50)),[]);
-  const saveLead=useCallback(f=>{
-    const isNew=!leads.some(l=>l.id===f.id);
-    setLeads(p=>p.some(l=>l.id===f.id)?p.map(l=>l.id===f.id?f:l):[...p,f]);
-    if(isNew){addNotif(`🆕 Yangi lead qo'shildi: ${f.name}`);}
-    else {
-      const old=leads.find(l=>l.id===f.id);
-      if(old&&old.status!==f.status)addNotif(`📌 ${f.name}: ${old.status} → ${f.status}`);
-    }
-    setDrawer(null);
+  const saveLead=useCallback(async f=>{
+  const isNew=!leads.some(l=>l.id===f.id);
+  setLeads(p=>p.some(l=>l.id===f.id)?p.map(l=>l.id===f.id?f:l):[...p,f]);
+  if(isNew) addNotif(`🆕 Yangi lead: ${f.name}`);
+  else { const old=leads.find(l=>l.id===f.id); if(old&&old.status!==f.status)addNotif(`📌 ${f.name}: ${old.status} → ${f.status}`); }
+  setDrawer(null);
+  try {
+    await leadsAPI.save({
+      id:f.id, name:f.name, phone:f.phone, telegram:f.telegram,
+      status:f.status, country:f.country, sector:f.sector, position:f.position,
+      source:f.source, gender:f.gender, comment:f.comment, note:f.note,
+      ownerSales:f.ownerSales||null, ownerConsult:f.ownerConsult||null, ownerDocs:f.ownerDocs||null,
+      q1:f.q1, q2:f.q2, q3:f.q3, xba:f.xba,
+      kpiSales:f.kpiSales, kpiConsult:f.kpiConsult, kpiDocs:f.kpiDocs,
+      cv:f.cv, docs:f.docs, history:f.history, sofFoyda:f.sofFoyda||null,
+      });
+    } catch(err){ console.warn("Lead sync failed:", err.message); }
   },[leads,addNotif]);
   const addTask=useCallback(t=>{setTasks(p=>[...p,t]);addNotif(`📋 Yangi vazifa: ${t.title}`);},[addNotif]);
   const openLead=l=>setDrawer(l||{id:`NO-${Math.floor(Math.random()*9000)+1000}`,name:"",phone:"",telegram:"",status:"Yangi",country:"",sector:"",position:"",ownerSales:null,ownerConsult:null,ownerDocs:null,source:user?.role==="partner"?user.name:"",gender:"",comment:"",q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,q1R:null,q2R:null,q3R:null,xbaR:null,cv:{},history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)});
@@ -53,6 +70,97 @@ export default function App() {
   const myNotif=user?tasks.filter(t=>t.assignee===user.id&&t.status!=="done"&&(isOD(t.due)||isSoon(t.due))).length:0;
   const newLeadNotifs=notifs.filter(n=>n.at>=(new Date(Date.now()-300000)).toISOString());
   const totalNotif=myNotif+newLeadNotifs.length;
+
+// ── Restore session on page refresh ────────────────────────────────────────
+  useEffect(()=>{
+    const tok = getToken();
+    if(!tok || user) return; // already logged in or no token
+
+    // Re-authenticate using saved token
+    usersAPI.getAll().then(users=>{
+      // Token is valid — restore session from JWT payload
+      const payload = JSON.parse(atob(tok.split('.')[1]));
+      const me = users.find(u=>u.id===payload.id);
+      if(me) setUser({...me, token:tok, password:me.username});
+    }).catch(()=>{ clearToken(); }); // token expired — stay on login
+  }, []);
+
+  // ── Load all data when user is set ─────────────────────────────────────────
+  useEffect(()=>{
+    if(!user) return;
+
+    const mapLead = l => ({
+      id:l.id, name:l.name||"", phone:l.phone||"", telegram:l.telegram||"",
+      status:l.status||"Yangi", country:l.country||"", sector:l.sector||"",
+      position:l.position||"", source:l.source||"", gender:l.gender||"",
+      comment:l.comment||"", note:l.note||"",
+      ownerSales:l.owner_sales, ownerConsult:l.owner_consult, ownerDocs:l.owner_docs,
+      q1:l.q1||false, q2:l.q2||false, q3:l.q3||false, xba:l.xba||false,
+      kpiSales:l.kpi_sales||false, kpiConsult:l.kpi_consult||false, kpiDocs:l.kpi_docs||false,
+      sofFoyda:l.sof_foyda||null, docs:l.docs||{}, cv:l.cv||{}, history:l.history||[],
+      createdAt:l.created_at?.slice(0,10)||"",
+      lastCall:l.last_contact?.slice(0,10)||"",
+      shartnomaSana:l.contract_date?.slice(0,10)||"",
+      officeSuhbat:l.interview_date?.slice(0,10)||"",
+      docsStage:l.docs_stage||null, archived:l.archived||false,
+      reklamaName:l.reklama_name||"",
+    });
+
+    const loadAll = async () => {
+      setAppLoading(true);
+      try {
+        const [leadsRes, tasksRes, txnsRes, usersRes] = await Promise.all([
+          leadsAPI.getAll({ limit: 2000 }),
+          tasksAPI.getAll(),
+          txnAPI.getAll(),
+          usersAPI.getAll(),
+        ]);
+        setLeads((leadsRes.leads||leadsRes||[]).map(mapLead));
+        setTasks((tasksRes||[]).map(t=>({
+          id:String(t.id), title:t.title, desc:t.description||"",
+          assignee:t.assignee, leadId:t.lead_id,
+          priority:t.priority||"medium", status:t.status||"todo",
+          due:t.due_date?.slice(0,10)||"",
+        })));
+        setTxns((txnsRes||[]).map(t=>({
+          id:String(t.id), leadId:t.lead_id, type:t.type,
+          cat:t.category||"", desc:t.description||"",
+          amount:Number(t.amount)||0, date:t.date?.slice(0,10)||"",
+          empId:t.emp_id||null, empName:t.emp_name||"", by:t.created_by,
+        })));
+        if(usersRes?.length) setTeam(usersRes.map(u=>({
+          id:u.id, username:u.username, name:u.name, role:u.role,
+          avatar:u.avatar||"", color:u.color||"#6366f1",
+          phone:u.phone||"", active:u.active!==false, password:u.username,
+        })));
+      } catch(err){
+        console.error("Load failed:", err.message);
+        // Fallback to hardcoded data if API unreachable
+        setLeads(INIT_LEADS); setTasks(INIT_TASKS); setTxns(INIT_TXN);
+      } finally { setAppLoading(false); }
+    };
+
+    loadAll();
+
+    // Poll every 30s for new leads from Tally/Meta
+    const poll = setInterval(async ()=>{
+      try {
+        const r = await leadsAPI.getAll({ since: lastPollRef.current, limit: 50 });
+        const fresh = (r.leads||r||[]).map(mapLead);
+        if(fresh.length){
+          setLeads(p=>{
+            const ids=new Set(p.map(x=>x.id));
+            const newOnes=fresh.filter(l=>!ids.has(l.id));
+            return newOnes.length ? [...newOnes,...p] : p;
+          });
+          addNotif(`📥 ${fresh.length} ta yangi lead!`);
+          lastPollRef.current=new Date().toISOString();
+        }
+      } catch(e){}
+    }, 30000);
+
+    return ()=>clearInterval(poll);
+  }, [user?.id]);
 
   if(!user)return <Login onLogin={u=>{setUser(u);setPage("pipeline");}} team={team} roles={roles}/>;
   const perm=roles[user.role]||{};
@@ -68,7 +176,10 @@ export default function App() {
 
   return <ThemeCtx.Provider value={T}>
     <div style={{display:"flex",minHeight:"100vh",background:T.bg,fontFamily:"'Segoe UI',system-ui,sans-serif",color:T.text}}>
-      <Sidebar user={user} pg={page} go={setPage} logout={()=>setUser(null)} notif={totalNotif} roles={roles} dark={dark} setDark={setDark} col={col} setCol={setCol}/>
+      <Sidebar user={user} pg={page} go={setPage} 
+      logout={()=>{ clearToken(); setUser(null); setLeads([]); setTasks([]); setTxns([]); }}
+      notif={totalNotif} 
+      roles={roles} dark={dark} setDark={setDark} col={col} setCol={setCol}/>
       <div style={{flex:1,overflow:"auto",minWidth:0,display:"flex",flexDirection:"column"}}>
         {/* Topbar */}
         <div style={{background:T.card,borderBottom:`1px solid ${T.border}`,padding:"7px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:200,flexShrink:0}}>

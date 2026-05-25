@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ThemeCtx, useT, mkT } from "./theme.js";
 import { inp, I, Av } from "./helpers.jsx";
+import { authAPI, setToken, getToken } from "./api.js";
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol}) {
@@ -81,7 +82,20 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
 function Login({onLogin, team, roles}) {
   const T=mkT(true);
   const [u,su]=useState(""); const [p,sp]=useState(""); const [e,se]=useState("");
-  const go=()=>{const x=team.find(t=>t.username===u&&t.password===p&&t.active!==false);x?onLogin(x):se("Login yoki parol noto'g'ri");};
+  const [loading,setLoading]=useState(false);
+  const go=async()=>{
+    if(!u||!p) return;
+    setLoading(true); se("");
+    try {
+      const data = await authAPI.login(u, p);
+      setToken(data.token);
+      onLogin({...data.user, token: data.token});
+    } catch(err) {
+      const x=team.find(t=>t.username===u&&t.password===p&&t.active!==false);
+      if(x){ onLogin(x); }
+      else se(err.message||"Login yoki parol noto'g'ri");
+    } finally { setLoading(false); }
+};
   const inpS={...inp(T),marginBottom:0};
   return <ThemeCtx.Provider value={T}>
     <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
@@ -93,7 +107,7 @@ function Login({onLogin, team, roles}) {
         <div style={{marginBottom:11}}><label style={{color:T.muted,fontSize:10,fontWeight:600,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:"0.05em"}}>Login</label><input value={u} onChange={ev=>su(ev.target.value)} onKeyDown={ev=>ev.key==="Enter"&&go()} style={inpS} placeholder="username"/></div>
         <div style={{marginBottom:14}}><label style={{color:T.muted,fontSize:10,fontWeight:600,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:"0.05em"}}>Parol</label><input value={p} onChange={ev=>sp(ev.target.value)} type="password" onKeyDown={ev=>ev.key==="Enter"&&go()} style={inpS} placeholder="••••••••"/></div>
         {e&&<p style={{color:T.red,fontSize:11,marginBottom:10,textAlign:"center"}}>{e}</p>}
-        <button onClick={go} style={{width:"100%",padding:"10px",borderRadius:8,background:T.accent,color:"#fff",fontWeight:700,fontSize:13,border:"none",cursor:"pointer",marginBottom:18}}>Kirish →</button>
+        <button onClick={go} disabled={loading} style={{width:"100%",padding:"10px",borderRadius:8,background:T.accent,color:"#fff",fontWeight:700,fontSize:13,border:"none",cursor:"pointer",marginBottom:18}}>{loading?"Yuklanmoqda...":"Kirish"}</button>
         <div style={{borderTop:`1px solid ${T.border}`,paddingTop:14}}>
           <p style={{color:T.muted,fontSize:9,textAlign:"center",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em"}}>Tez kirish</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
