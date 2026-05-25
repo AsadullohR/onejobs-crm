@@ -406,24 +406,18 @@ app.post('/api/webhook/lead', async (req, res) => {
   const data = req.body;
   const id = data.id || `NO-WH-${Date.now()}`;
   try {
-    // await pool.query(
-    //   `INSERT INTO leads (id,name,phone,status,country,source,comment,telegram)
-    //    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-    //    ON CONFLICT (id) DO NOTHING`,
-    //   [id, data.name||data.full_name||'', data.phone||'', data.status||'Yangi',
-    //    data.country||'', data.source||'Onlayn Ariza', data.comment||data.message||'',
-    //    data.telegram||'']
-    // );
     await pool.query(
-  `INSERT INTO leads (id, name, phone, status, country, source, comment, telegram)
-   VALUES ($1, $2, $3, 'Yangi', $4, 'Meta Ads', $5, '')
-   ON CONFLICT (id) DO NOTHING`,
-  [id,
-   f.full_name || f.name || 'Noma\'lum',
-   f.phone_number || f.phone || '',
-   f.country || f.city || '',
-   `Ad: ${change.value.ad_name || ''} | ID: ${change.value.ad_id || ''}`]
-);
+      `INSERT INTO leads (id, name, phone, status, country, source, comment, telegram)
+       VALUES ($1, $2, $3, 'Yangi', $4, $5, $6, $7)
+       ON CONFLICT (id) DO NOTHING`,
+      [id,
+       data.full_name || data.name || 'Noma\'lum',
+       data.phone_number || data.phone || '',
+       data.country || data.city || '',
+       data.source || 'Webhook',
+       data.comment || data.message || '',
+       data.telegram || '']
+    );
     res.json({ ok: true, id });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -446,37 +440,39 @@ if (process.env.NODE_ENV === 'production') {
 
 // ─── TALLY FORMS ──────────────────────────────────────────
 app.post('/api/webhook/tally', async (req, res) => {
-  res.sendStatus(200);
+  res.sendStatus(200); // respond fast so Tally doesn't retry
 
   try {
     const payload = req.body;
     console.log('Tally payload:', JSON.stringify(payload).slice(0, 500));
 
-    if (!payload?.data?.fields) {
-      console.log('No fields found in payload');
+    // Support both Tally v1 (payload.fields) and v2 (payload.data.fields)
+    const fields = payload?.data?.fields || payload?.fields || [];
+
+    if (!fields.length) {
+      console.log('No fields found in Tally payload. Raw:', JSON.stringify(payload).slice(0, 300));
       return;
     }
 
     const get = (label) => {
-      const f = payload.data.fields.find(f =>
+      const f = fields.find(f =>
         f.label?.toLowerCase().includes(label.toLowerCase())
       );
       if (!f) return '';
-      return Array.isArray(f.value) ? f.value.join(', ') : (f.value || '');
+      return Array.isArray(f.value) ? f.value.join(', ') : (f.value ?? '');
     };
 
     const name    = get('ism') || get('name') || get('full') || 'Noma\'lum';
     const phone   = get('telefon') || get('phone') || get('tel') || '';
     const country = get('mamlaket') || get('country') || get('davlat') || '';
     const comment = get('izoh') || get('comment') || get('xabar') || '';
-    const source  = payload.data.fields.find(f =>
+    const source  = fields.find(f =>
                       f.label?.toLowerCase().includes('hamkor') ||
                       f.label?.toLowerCase().includes('partner')
                     )?.value || 'Tally Form';
 
     const id = 'TALLY-' + Date.now();
 
-    // Only use columns that exist in your schema
     await pool.query(
       `INSERT INTO leads (id, name, phone, status, country, source, comment, telegram)
        VALUES ($1, $2, $3, 'Yangi', $4, $5, $6, '')

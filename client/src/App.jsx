@@ -54,14 +54,17 @@ export default function App() {
   setDrawer(null);
   try {
     await leadsAPI.save({
-      id:f.id, name:f.name, phone:f.phone, telegram:f.telegram,
-      status:f.status, country:f.country, sector:f.sector, position:f.position,
-      source:f.source, gender:f.gender, comment:f.comment, note:f.note,
-      ownerSales:f.ownerSales||null, ownerConsult:f.ownerConsult||null, ownerDocs:f.ownerDocs||null,
-      q1:f.q1, q2:f.q2, q3:f.q3, xba:f.xba,
-      kpiSales:f.kpiSales, kpiConsult:f.kpiConsult, kpiDocs:f.kpiDocs,
-      cv:f.cv, docs:f.docs, history:f.history, sofFoyda:f.sofFoyda||null,
-      });
+  id:f.id, name:f.name, phone:f.phone, telegram:f.telegram,
+  status:f.status, country:f.country, sector:f.sector, position:f.position,
+  source:f.source, gender:f.gender, comment:f.comment, note:f.note,
+  ownerSales:f.ownerSales||null, ownerConsult:f.ownerConsult||null, ownerDocs:f.ownerDocs||null,
+  q1:f.q1, q2:f.q2, q3:f.q3, xba:f.xba,
+  kpiSales:f.kpiSales, kpiConsult:f.kpiConsult, kpiDocs:f.kpiDocs,
+  cv:f.cv, docs:f.docs, history:f.history, sofFoyda:f.sofFoyda||null,
+  lastContact:f.lastCall||null,
+  contractDate:f.shartnomaSana||null,
+  interviewDate:f.officeSuhbat||null,
+  });
     } catch(err){ console.warn("Lead sync failed:", err.message); }
   },[leads,addNotif]);
   const addTask=useCallback(t=>{setTasks(p=>[...p,t]);addNotif(`📋 Yangi vazifa: ${t.title}`);},[addNotif]);
@@ -73,17 +76,27 @@ export default function App() {
 
 // ── Restore session on page refresh ────────────────────────────────────────
   useEffect(()=>{
-    const tok = getToken();
-    if(!tok || user) return; // already logged in or no token
+  const tok = getToken();
+  if(!tok || user) return;
 
-    // Re-authenticate using saved token
-    usersAPI.getAll().then(users=>{
-      // Token is valid — restore session from JWT payload
-      const payload = JSON.parse(atob(tok.split('.')[1]));
-      const me = users.find(u=>u.id===payload.id);
-      if(me) setUser({...me, token:tok, password:me.username});
-    }).catch(()=>{ clearToken(); }); // token expired — stay on login
-  }, []);
+  // base64url → base64 (replace URL-safe chars before atob)
+  const decodeJWT = (token) => {
+    try {
+      const base64url = token.split('.')[1];
+      const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(base64));
+    } catch { return null; }
+  };
+
+  const payload = decodeJWT(tok);
+  if (!payload) { clearToken(); return; }
+
+  usersAPI.getAll().then(users=>{
+    const me = users.find(u=>u.id===payload.id);
+    if(me) setUser({...me, token:tok, password:me.username});
+    else clearToken();
+  }).catch(()=>{ clearToken(); });
+}, []);
 
   // ── Load all data when user is set ─────────────────────────────────────────
   useEffect(()=>{
