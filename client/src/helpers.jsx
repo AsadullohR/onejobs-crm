@@ -99,9 +99,4 @@ function SearchSelect({items,value,onChange,placeholder}) {
 function inp(T) { return {width:"100%",padding:"8px 10px",borderRadius:7,border:`1px solid ${T.border}`,background:T.inp,color:T.text,fontSize:12,outline:"none",boxSizing:"border-box"}; }
 function lab(T) { return {fontSize:10,fontWeight:600,color:T.muted,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:"0.05em"}; }
 
-export {
-uid, fmtM, fmtMs, fmtD,
-isOD, isSoon, dateRange,
-inp, lab, gS,
-I, Pill, Av, StatCard, Modal, SearchSelect
-};
+export { uid, fmtM, fmtMs, fmtD, isOD, isSoon, dateRange, inp, lab, gS, I, Pill, Av, Modal, SearchSelect };
