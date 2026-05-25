@@ -23,7 +23,10 @@ const pool = new Pool({
 });
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
-app.use(cors({ origin: process.env.FRONTEND_URL || '*', credentials: true }));
+app.use(cors({
+  origin: (origin, cb) => cb(null, true), // allow all origins (needed for Tally/Meta)
+  credentials: true
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -403,14 +406,24 @@ app.post('/api/webhook/lead', async (req, res) => {
   const data = req.body;
   const id = data.id || `NO-WH-${Date.now()}`;
   try {
+    // await pool.query(
+    //   `INSERT INTO leads (id,name,phone,status,country,source,comment,telegram)
+    //    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    //    ON CONFLICT (id) DO NOTHING`,
+    //   [id, data.name||data.full_name||'', data.phone||'', data.status||'Yangi',
+    //    data.country||'', data.source||'Onlayn Ariza', data.comment||data.message||'',
+    //    data.telegram||'']
+    // );
     await pool.query(
-      `INSERT INTO leads (id,name,phone,status,country,source,comment,telegram)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       ON CONFLICT (id) DO NOTHING`,
-      [id, data.name||data.full_name||'', data.phone||'', data.status||'Yangi',
-       data.country||'', data.source||'Onlayn Ariza', data.comment||data.message||'',
-       data.telegram||'']
-    );
+  `INSERT INTO leads (id, name, phone, status, country, source, comment, telegram)
+   VALUES ($1, $2, $3, 'Yangi', $4, 'Meta Ads', $5, '')
+   ON CONFLICT (id) DO NOTHING`,
+  [id,
+   f.full_name || f.name || 'Noma\'lum',
+   f.phone_number || f.phone || '',
+   f.country || f.city || '',
+   `Ad: ${change.value.ad_name || ''} | ID: ${change.value.ad_id || ''}`]
+);
     res.json({ ok: true, id });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -433,11 +446,16 @@ if (process.env.NODE_ENV === 'production') {
 
 // ─── TALLY FORMS ──────────────────────────────────────────
 app.post('/api/webhook/tally', async (req, res) => {
-  res.sendStatus(200); // Tally ga darhol javob bering
+  res.sendStatus(200);
 
   try {
     const payload = req.body;
-    if (!payload?.data?.fields) return;
+    console.log('Tally payload:', JSON.stringify(payload).slice(0, 500));
+
+    if (!payload?.data?.fields) {
+      console.log('No fields found in payload');
+      return;
+    }
 
     const get = (label) => {
       const f = payload.data.fields.find(f =>
@@ -450,24 +468,26 @@ app.post('/api/webhook/tally', async (req, res) => {
     const name    = get('ism') || get('name') || get('full') || 'Noma\'lum';
     const phone   = get('telefon') || get('phone') || get('tel') || '';
     const country = get('mamlaket') || get('country') || get('davlat') || '';
-    const pos     = get('lavozim') || get('position') || get('kasb') || '';
-    const comment = get('izoh') || get('comment') || '';
-    // Agar formda "hamkor" yoki "partner" maydoni bo'lsa, source shu bo'ladi
+    const comment = get('izoh') || get('comment') || get('xabar') || '';
     const source  = payload.data.fields.find(f =>
                       f.label?.toLowerCase().includes('hamkor') ||
                       f.label?.toLowerCase().includes('partner')
                     )?.value || 'Tally Form';
 
     const id = 'TALLY-' + Date.now();
+
+    // Only use columns that exist in your schema
     await pool.query(
-      `INSERT INTO leads (id,name,phone,status,country,position,source,reklama_name,comment,created_at)
-       VALUES ($1,$2,$3,'Yangi',$4,$5,$6,$7,$8,NOW())
+      `INSERT INTO leads (id, name, phone, status, country, source, comment, telegram)
+       VALUES ($1, $2, $3, 'Yangi', $4, $5, $6, '')
        ON CONFLICT (id) DO NOTHING`,
-      [id, name, phone, country, pos, source, payload.formName||'', comment]
+      [id, name, phone, country, source, comment]
     );
-    console.log('✅ Tally lead:', id, name, phone);
+
+    console.log('✅ Tally lead saved:', id, name, phone);
   } catch (err) {
-    console.error('Tally error:', err.message);
+    console.error('❌ Tally error:', err.message);
+    console.error(err.stack);
   }
 });
 

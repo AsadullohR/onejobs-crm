@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useT } from "./theme.js";
 import { STAGES, DONE, LOST } from "./constants.js";
-import { uid, fmtM, fmtMs, fmtD, isOD, inp, lab, I, Pill, Av, Modal, SearchSelect } from "./helpers.jsx";
+import { uid, fmtM, fmtMs, fmtD, isOD, inp, lab, I, Pill, Av, Modal, SearchSelect, gS } from "./helpers.jsx";
 
 // ─── LEAD DRAWER ──────────────────────────────────────────────────────────────
 function Drawer({lead, user, team, leads, tasks, onSave, onClose, onAddTask, config, roles, addNotif}) {

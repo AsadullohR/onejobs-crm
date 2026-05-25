@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useT } from "./theme.js";
-import { uid, fmtD, isOD, isSoon, inp, lab, I, Av, Modal } from "./helpers.jsx";
+import { uid, fmtD, isOD, isSoon, inp, lab, I, Av, Modal, SearchSelect} from "./helpers.jsx";
 
 // ─── TASKS PAGE ───────────────────────────────────────────────────────────────
 function Tasks({tasks, setTasks, leads, user, team, roles}) {
