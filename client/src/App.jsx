@@ -138,7 +138,10 @@ export default function App() {
     const me = users.find(u=>u.id===payload.id);
     if(me) setUser({...me, token:tok, password:me.username});
     else clearToken();
-  }).catch(()=>{ clearToken(); });
+  }).catch((err)=>{
+  console.error("Session restore failed:", err.message);
+  clearToken();
+  });
 }, []);
 
   // ── Load all data when user is set ─────────────────────────────────────────

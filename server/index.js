@@ -440,13 +440,51 @@ if (process.env.NODE_ENV === 'production') {
 
 // ─── TALLY FORMS ──────────────────────────────────────────
 app.post('/api/webhook/tally', async (req, res) => {
-  try {
-    console.log('TALLY BODY:', JSON.stringify(req.body, null, 2));
+  res.sendStatus(200);
 
-    res.json({ ok: true });
+  try {
+    const payload = req.body;
+    console.log('TALLY RAW:', JSON.stringify(payload, null, 2).slice(0, 3000));
+
+    const fields = payload?.data?.fields || payload?.fields || [];
+
+    const get = (...labels) => {
+      for (const label of labels) {
+        const f = fields.find(x =>
+          String(x.label || x.key || x.name || '')
+            .toLowerCase()
+            .includes(label.toLowerCase())
+        );
+        if (f) {
+          if (Array.isArray(f.value)) return f.value.join(', ');
+          return f.value ?? '';
+        }
+      }
+      return '';
+    };
+
+    const name = get('ism', 'fio', 'full name', 'name') || "Noma'lum";
+    const phone = get('telefon', 'phone', 'tel', 'raqam');
+    const telegram = get('telegram', 'username');
+    const country = get('mamlakat', 'davlat', 'country', 'koreya') || 'Janubiy Koreya';
+    const sector = get('kasb', 'yo‘nalish', 'yonalish', 'faoliyat');
+    const source = get('qayerdan', 'biz haqimizda', 'source') || 'Tally Form';
+    const comment = get('izoh', 'comment', 'xabar', 'tillar') || JSON.stringify(fields);
+
+    const id = 'TALLY-' + Date.now();
+
+    await pool.query(
+      `INSERT INTO leads
+       (id, name, phone, telegram, status, country, sector, source, comment, cv, docs, history)
+       VALUES
+       ($1, $2, $3, $4, 'Yangi', $5, $6, $7, $8, '{}', '{}', '[]')`,
+      [id, name, phone, telegram, country, sector, source, comment]
+    );
+
+    console.log('✅ Tally lead saved:', id, name, phone);
   } catch (err) {
-    console.error('Tally webhook error:', err);
-    res.status(500).json({ error: err.message });
+    console.error('❌ Tally webhook error:', err.message);
+    console.error(err.stack);
   }
 });
 
