@@ -444,47 +444,53 @@ app.post('/api/webhook/tally', async (req, res) => {
 
   try {
     const payload = req.body;
-    console.log('TALLY RAW:', JSON.stringify(payload, null, 2).slice(0, 3000));
-
     const fields = payload?.data?.fields || payload?.fields || [];
+
+    const norm = s => String(s || "")
+      .toLowerCase()
+      .replace(/ʻ/g, "'")
+      .replace(/‘/g, "'")
+      .replace(/`/g, "'");
 
     const get = (...labels) => {
       for (const label of labels) {
-        const f = fields.find(x =>
-          String(x.label || x.key || x.name || '')
-            .toLowerCase()
-            .includes(label.toLowerCase())
-        );
-        if (f) {
-          if (Array.isArray(f.value)) return f.value.join(', ');
-          return f.value ?? '';
+        const f = fields.find(x => norm(x.label).includes(norm(label)));
+        if (!f) continue;
+
+        if (Array.isArray(f.value)) {
+          return f.value.map(v => {
+            const opt = f.options?.find(o => o.id === v);
+            return opt ? opt.text : v;
+          }).join(", ");
         }
+
+        return f.value || "";
       }
-      return '';
+      return "";
     };
 
-    const name = get('ism', 'fio', 'full name', 'name') || "Noma'lum";
+    const id = 'TALLY-' + Date.now();
+
+    const name = get('isim', 'ism', 'familya', 'fio', 'full name', 'name') || "Noma'lum";
     const phone = get('telefon', 'phone', 'tel', 'raqam');
     const telegram = get('telegram', 'username');
-    const country = get('mamlakat', 'davlat', 'country', 'koreya') || 'Janubiy Koreya';
-    const sector = get('kasb', 'yo‘nalish', 'yonalish', 'faoliyat');
+    const country = get('davlat', 'mamlakat', 'country', 'qaysi davlat') || 'Janubiy Koreya';
+    const sector = get('kasb', "yo'nalish", 'yonalish', 'faoliyat');
     const source = get('qayerdan', 'biz haqimizda', 'source') || 'Tally Form';
-    const comment = get('izoh', 'comment', 'xabar', 'tillar') || JSON.stringify(fields);
-
-    const id = 'TALLY-' + Date.now();
+    const comment = get('izoh', 'comment', 'xabar', 'tillar');
 
     await pool.query(
       `INSERT INTO leads
        (id, name, phone, telegram, status, country, sector, source, comment, cv, docs, history)
        VALUES
-       ($1, $2, $3, $4, 'Yangi', $5, $6, $7, $8, '{}', '{}', '[]')`,
+       ($1,$2,$3,$4,'Yangi',$5,$6,$7,$8,'{}','{}','[]')
+       ON CONFLICT (id) DO NOTHING`,
       [id, name, phone, telegram, country, sector, source, comment]
     );
 
     console.log('✅ Tally lead saved:', id, name, phone);
   } catch (err) {
     console.error('❌ Tally webhook error:', err.message);
-    console.error(err.stack);
   }
 });
 

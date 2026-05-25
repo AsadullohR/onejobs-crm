@@ -91,9 +91,7 @@ function Login({onLogin, team, roles}) {
       setToken(data.token);
       onLogin({...data.user, token: data.token});
     } catch(err) {
-      const x=team.find(t=>t.username===u&&t.password===p&&t.active!==false);
-      if(x){ onLogin(x); }
-      else se(err.message||"Login yoki parol noto'g'ri");
+        se(err.message || "Login yoki parol noto'g'ri");
     } finally { setLoading(false); }
 };
   const inpS={...inp(T),marginBottom:0};
