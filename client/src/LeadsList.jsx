@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
-import { uid, fmtMs, isOD, inp, I, Pill, Av } from "./helpers.jsx";
+import { uid, fmtMs, isOD, inp, I, Pill, Av, fmtD } from "./helpers.jsx";
 
 // ─── LEADS LIST ─────────────────────────────────────────────────────────────
 function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setLeads, addNotif}) {

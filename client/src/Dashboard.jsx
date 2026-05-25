@@ -1,6 +1,6 @@
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
-import { fmtMs, isOD, isSoon, I, Pill, Av } from "./helpers.jsx";
+import { fmtMs, isOD, isSoon, I, Pill, Av,fmtD } from "./helpers.jsx";
 
 // ─── SUPER DASHBOARD v2 (Business KPI) ────────────────────────────────────────
 function Dashboard({leads, tasks, user, team, txns, roles}) {

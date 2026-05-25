@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useT } from "./theme.js";
-import { uid, fmtMs, inp, I, Av } from "./helpers.jsx";
+import { uid, fmtMs, inp, I, Av, fmtD } from "./helpers.jsx";
 
 // ─── SALARY PAGE ─────────────────────────────────────────────────────────────
 function SalaryPage({team, txns, setTxns, user}) {

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ThemeCtx, useT, mkT } from "./theme.js";
-import { inp, I, Av } from "./helpers.jsx";
+import { inp, I, Av, fmtD } from "./helpers.jsx";
 import { authAPI, setToken, getToken } from "./api.js";
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────

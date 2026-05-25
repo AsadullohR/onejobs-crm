@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useT } from "./theme.js";
-import { uid, inp, lab, I, Av, Modal, fmtMs} from "./helpers.jsx";
+import { uid, inp, lab, I, Av, Modal, fmtMs, fmtD} from "./helpers.jsx";
 import { INIT_VISA } from "./constants.js";
 
 // ─── VISA, TEAM, SETTINGS (compact) ──────────────────────────────────────────

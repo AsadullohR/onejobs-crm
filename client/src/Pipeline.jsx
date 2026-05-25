@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useT } from "./theme.js";
 import { DONE } from "./constants.js";
-import { isOD, inp, I, Pill, Av } from "./helpers.jsx";
+import { isOD, inp, I, Pill, Av, fmtD } from "./helpers.jsx";
 
 // ─── PIPELINE ────────────────────────────────────────────────────────────────
 function Pipeline({leads, tasks, team, user, open, addLead, config, roles, stages, setStages}) {

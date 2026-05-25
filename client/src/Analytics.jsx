@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
-import { fmtMs, isOD, inp, I, Av } from "./helpers.jsx";
+import { fmtMs, isOD, inp, I, Av,fmtD } from "./helpers.jsx";
 
 // ─── ANALYTICS PAGE (Employee Productivity + Time Analysis) ─────────────────
 function Analytics({leads, tasks, team, txns, roles, user}) {
