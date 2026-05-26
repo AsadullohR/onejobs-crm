@@ -48,7 +48,8 @@ export default function App() {
 
 const addNotif=useCallback((msg,type="info")=>setNotifs(p=>[{id:uid(),msg,type,at:new Date().toISOString(),read:false},...p].slice(0,50)),[]);
 const markRead=(id)=>setNotifs(p=>p.map(n=>n.id===id?{...n,read:true}:n));
-const markAllRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));  const saveLead = useCallback(async f => {
+const markAllRead = () => setNotifs(p => p.map(n => ({...n, read: true}))); 
+const saveLead = useCallback(async f => {
     try {
 
       await leadsAPI.save({
@@ -225,20 +226,22 @@ const markAllRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));  const saveLea
 
     // Poll every 30s for new leads from Tally/Meta
     const poll = setInterval(async ()=>{
-      try {
-        const r = await leadsAPI.getAll({ since: lastPollRef.current, limit: 50 });
-        const fresh = (r.leads||r||[]).map(mapLead);
-        if(fresh.length){
-          setLeads(p=>{
-            const ids=new Set(p.map(x=>x.id));
-            const newOnes=fresh.filter(l=>!ids.has(l.id));
-            return newOnes.length ? [...newOnes,...p] : p;
-          });
-          addNotif(`📥 ${fresh.length} ta yangi lead!`);
-          lastPollRef.current=new Date().toISOString();
-        }
-      } catch(e){}
-    }, 30000);
+  try {
+    const since = lastPollRef.current;
+    const r = await leadsAPI.getAll({ since, limit: 50 });
+    const fresh = (r.leads||r||[]).map(mapLead);
+    const newOnes = fresh.filter(l => new Date(l.createdAt) >= new Date(since));
+    if(newOnes.length){
+      setLeads(p=>{
+        const ids=new Set(p.map(x=>x.id));
+        const brandNew=newOnes.filter(l=>!ids.has(l.id));
+        return brandNew.length ? [...brandNew,...p] : p;
+      });
+      addNotif(`📥 ${newOnes.length} ta yangi lead!`);
+      lastPollRef.current=new Date().toISOString();
+    }
+  } catch(e){}
+}, 30000);
 
     return ()=>clearInterval(poll);
   }, [user?.id]);
@@ -326,6 +329,7 @@ const markAllRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));  const saveLea
           {page==="visa"       && <Visa user={user} roles={roles}/>}
           {page==="team"       && <TeamPage user={user} team={team} setTeam={setTeam} roles={roles}/>}
           {page==="settings"   && <Settings user={user} config={config} setConfig={setConfig} roles={roles} setRoles={setRoles}/>}
+          {page==="finance"    && <Finance leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts}/>}
         </div>
       </div>
       {drawer&&<Drawer lead={drawer} user={user} team={team} leads={leads} tasks={tasks} onSave={saveLead} onClose={()=>setDrawer(null)} onAddTask={addTask} config={config} roles={roles} addNotif={addNotif}/>}
