@@ -22,6 +22,7 @@ import { SalaryPage } from "./SalaryPage.jsx";
 import { DebtsPage } from "./DebtsPage.jsx";
 import { Analytics } from "./Analytics.jsx";
 import { leadsAPI, tasksAPI, txnAPI, usersAPI, getToken, clearToken } from "./api.js";
+import { Vacancies } from "./Vacancies.jsx";
 
 export default function App() {
   const [dark,setDark]=useState(false); 
@@ -321,7 +322,7 @@ const markAllRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));  const saveLea
           {page==="salary"     && user.role==="admin" && <SalaryPage team={team} txns={txns} setTxns={setTxns} user={user}/>}
           {page==="debts"      && perm.canFin && <DebtsPage debts={debts} setDebts={setDebts} user={user}/>}
           {page==="docspipe"  && <DocsPipeline leads={leads} tasks={tasks} team={team} user={user} open={openLead} config={config} roles={roles} setLeads={setLeads}/>}
-
+          {page==="vacancies" && <Vacancies leads={visibleLeads} user={user} team={team} roles={roles}/>}
           {page==="visa"       && <Visa user={user} roles={roles}/>}
           {page==="team"       && <TeamPage user={user} team={team} setTeam={setTeam} roles={roles}/>}
           {page==="settings"   && <Settings user={user} config={config} setConfig={setConfig} roles={roles} setRoles={setRoles}/>}

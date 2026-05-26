@@ -12,6 +12,7 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     {k:"pipeline",  l:"Pipeline",            ic:I.pipe},
     {k:"leads",     l:"Mijozlar",            ic:I.list},
     {k:"tasks",     l:"Vazifalar",           ic:I.task},
+    {k:"vacancies", l:"Vakansiyalar",        ic:"💼"},
     {k:"finance",   l:"Moliya",              ic:I.money},
     {k:"salary",    l:"Xodim Xarajatlari",   ic:I.salary},
     {k:"docspipe",  l:"Konsultant Pipeline", ic:I.flag},
