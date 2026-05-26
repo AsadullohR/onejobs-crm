@@ -45,8 +45,9 @@ export default function App() {
   const [showNotif,setShowNotif]=useState(false);
   const T=mkT(dark);
 
-  const addNotif=useCallback((msg,type="info")=>setNotifs(p=>[{id:uid(),msg,type,at:new Date().toISOString()},...p].slice(0,50)),[]);
-  const saveLead = useCallback(async f => {
+const addNotif=useCallback((msg,type="info")=>setNotifs(p=>[{id:uid(),msg,type,at:new Date().toISOString(),read:false},...p].slice(0,50)),[]);
+const markRead=(id)=>setNotifs(p=>p.map(n=>n.id===id?{...n,read:true}:n));
+const markAllRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));  const saveLead = useCallback(async f => {
     try {
 
       await leadsAPI.save({
@@ -104,7 +105,24 @@ export default function App() {
       alert("Lead saqlanmadi!");
     }
 }, [leads]);
-  const addTask=useCallback(t=>{setTasks(p=>[...p,t]);addNotif(`📋 Yangi vazifa: ${t.title}`);},[addNotif]);
+  const addTask=useCallback(async t=>{
+    // Optimistically add to local state
+    setTasks(p=>[...p,t]);
+    addNotif(`📋 Yangi vazifa: ${t.title} → ${team.find(u=>u.id===t.assignee)?.name||'?'}`);
+    try {
+      const saved = await tasksAPI.create({
+        title:t.title, description:t.desc||'',
+        assignee:t.assignee, leadId:t.leadId||null,
+        priority:t.priority||'medium', status:t.status||'todo',
+        dueDate:t.due||null,
+      });
+      // Replace temp task with real DB id
+      setTasks(p=>p.map(x=>x.id===t.id ? {
+        ...x,
+        id:String(saved.id),
+      } : x));
+    } catch(err){ console.warn('Task save failed:', err.message); }
+  },[addNotif, team]);
   const openLead=l=>setDrawer(l||{id:`NO-${Math.floor(Math.random()*9000)+1000}`,name:"",phone:"",telegram:"",status:"Yangi",country:"",sector:"",position:"",ownerSales:null,ownerConsult:null,ownerDocs:null,source:user?.role==="partner"?user.name:"",gender:"",comment:"",q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,q1R:null,q2R:null,q3R:null,xbaR:null,cv:{},history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)});
 
   const myNotif=user?tasks.filter(t=>t.assignee===user.id&&t.status!=="done"&&(isOD(t.due)||isSoon(t.due))).length:0;
@@ -265,25 +283,32 @@ export default function App() {
                 {I.bell}
                 {totalNotif>0&&<span style={{position:"absolute",top:-3,right:-3,background:T.red,color:"#fff",borderRadius:10,fontSize:7,fontWeight:700,padding:"0 3px",minWidth:13,textAlign:"center"}}>{totalNotif}</span>}
               </button>
-              {showNotif&&<div style={{position:"absolute",top:"110%",right:0,width:290,background:T.card,border:`1px solid ${T.border}`,borderRadius:11,boxShadow:T.shadow,zIndex:500,padding:12,maxHeight:380,overflowY:"auto"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
-                  <span style={{fontSize:12,fontWeight:700,color:T.text}}>🔔 Eslatmalar</span>
+            {showNotif&&<div style={{position:"absolute",top:"110%",right:0,width:300,background:T.card,border:`1px solid ${T.border}`,borderRadius:11,boxShadow:T.shadow,zIndex:500,padding:12,maxHeight:400,overflowY:"auto"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
+                <span style={{fontSize:12,fontWeight:700,color:T.text}}>🔔 Eslatmalar</span>
+                <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                  {newLeadNotifs.length>0&&<button onClick={markAllRead} style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,cursor:"pointer",fontWeight:600}}>Barchasini o'qildi</button>}
                   <button onClick={()=>setShowNotif(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}>{I.x}</button>
                 </div>
-                {newLeadNotifs.map(n=>(
-                  <div key={n.id} style={{background:`${T.accent}15`,border:`1px solid ${T.accent}44`,borderRadius:6,padding:"7px 9px",marginBottom:5,borderLeft:`3px solid ${T.accent}`}}>
+              </div>
+              {newLeadNotifs.map(n=>(
+                <div key={n.id} style={{background:`${T.accent}15`,border:`1px solid ${T.accent}44`,borderRadius:6,padding:"7px 9px",marginBottom:5,borderLeft:`3px solid ${T.accent}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
+                  <div style={{flex:1}}>
                     <div style={{fontSize:11,color:T.text}}>{n.msg}</div>
                     <div style={{fontSize:9,color:T.muted,marginTop:2}}>{fmtD(n.at)}</div>
                   </div>
-                ))}
-                {tasks.filter(t=>t.assignee===user.id&&t.status!=="done"&&(isOD(t.due)||isSoon(t.due))).map(t=>{const od=isOD(t.due);const lead=leads.find(l=>l.id===t.leadId);return(
-                  <div key={t.id} onClick={()=>{setPage("tasks");setShowNotif(false);}} style={{background:od?`${T.red}15`:`${T.yellow}15`,border:`1px solid ${od?T.red:T.yellow}44`,borderRadius:6,padding:"7px 9px",marginBottom:5,cursor:"pointer",borderLeft:`3px solid ${od?T.red:T.yellow}`}}>
-                    <div style={{fontSize:11,fontWeight:600,color:T.text}}>{t.title}</div>
-                    <div style={{display:"flex",gap:6,alignItems:"center",marginTop:2}}><span style={{fontSize:9,color:od?T.red:T.yellow,fontWeight:700}}>{od?"⚠️ O'tdi":"⏰ "+fmtD(t.due)}</span>{lead&&<span style={{fontSize:9,color:T.accent}}>{lead.name}</span>}</div>
-                  </div>
-                );})}
-                {totalNotif===0&&<div style={{color:T.muted,fontSize:11,textAlign:"center",padding:12}}>Eslatma yo'q ✅</div>}
-              </div>}
+                  <button onClick={()=>markRead(n.id)} title="O'qildi deb belgilash"
+                    style={{background:"none",border:"none",cursor:"pointer",color:T.green,fontSize:14,lineHeight:1,flexShrink:0,padding:0}}>✓</button>
+                </div>
+              ))}
+              {tasks.filter(t=>t.assignee===user.id&&t.status!=="done"&&(isOD(t.due)||isSoon(t.due))).map(t=>{const od=isOD(t.due);const lead=leads.find(l=>l.id===t.leadId);return(
+                <div key={t.id} onClick={()=>{setPage("tasks");setShowNotif(false);}} style={{background:od?`${T.red}15`:`${T.yellow}15`,border:`1px solid ${od?T.red:T.yellow}44`,borderRadius:6,padding:"7px 9px",marginBottom:5,cursor:"pointer",borderLeft:`3px solid ${od?T.red:T.yellow}`}}>
+                  <div style={{fontSize:11,fontWeight:600,color:T.text}}>{t.title}</div>
+                  <div style={{display:"flex",gap:6,alignItems:"center",marginTop:2}}><span style={{fontSize:9,color:od?T.red:T.yellow,fontWeight:700}}>{od?"⚠️ O'tdi":"⏰ "+fmtD(t.due)}</span>{lead&&<span style={{fontSize:9,color:T.accent}}>{lead.name}</span>}</div>
+                </div>
+              );})}
+              {totalNotif===0&&<div style={{color:T.muted,fontSize:11,textAlign:"center",padding:12}}>Eslatma yo'q ✅</div>}
+            </div>}
             </div>
           </div>
         </div>
@@ -292,8 +317,7 @@ export default function App() {
           {page==="analytics"  && (user.role==="admin"||user.role==="manager") && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user}/>}
           {page==="pipeline"   && <Pipeline {...PROPS} tasks={tasks} addLead={()=>openLead(null)} stages={stages} setStages={setStages}/>}
           {page==="leads"      && <LeadsList {...PROPS} tasks={tasks} addLead={()=>openLead(null)} setLeads={setLeads} addNotif={addNotif}/>}
-          {page==="tasks"      && <Tasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles}/>}
-          {page==="finance"    && perm.canFin && <Finance leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts}/>}
+          {page==="tasks"      && <Tasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif}/>}
           {page==="salary"     && user.role==="admin" && <SalaryPage team={team} txns={txns} setTxns={setTxns} user={user}/>}
           {page==="debts"      && perm.canFin && <DebtsPage debts={debts} setDebts={setDebts} user={user}/>}
           {page==="docspipe"  && <DocsPipeline leads={leads} tasks={tasks} team={team} user={user} open={openLead} config={config} roles={roles} setLeads={setLeads}/>}

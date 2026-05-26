@@ -18,7 +18,7 @@ const searchRef = useRef(null);
 useEffect(() => {
   const handler = (e) => {
     // Ctrl+F or Cmd+F  →  focus search
-    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
       e.preventDefault();
       searchRef.current?.focus();
       searchRef.current?.select();
