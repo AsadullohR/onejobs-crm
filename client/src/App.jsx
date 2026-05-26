@@ -313,14 +313,14 @@ const markAllRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));  const saveLea
             </div>
           </div>
         </div>
-        <div style={{flex:1,padding:(page==="finance"||page==="docspipe")?0:"14px 18px",overflow:(page==="finance"||page==="docspipe")?"hidden":"auto"}}>
+        <div style={{flex:1,padding:(page==="finance"||page==="docspipe")?0:"14px 18px",overflow:(page==="finance"||page==="docspipe")?"hidden":"auto",display:"flex",flexDirection:"column",minHeight:0}}>
           {page==="dashboard"  && <Dashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
           {page==="analytics"  && (user.role==="admin"||user.role==="manager") && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user}/>}
           {page==="pipeline"   && <Pipeline {...PROPS} tasks={tasks} addLead={()=>openLead(null)} stages={stages} setStages={setStages}/>}
           {page==="leads"      && <LeadsList {...PROPS} tasks={tasks} addLead={()=>openLead(null)} setLeads={setLeads} addNotif={addNotif}/>}
           {page==="tasks"      && <Tasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif}/>}
           {page==="salary"     && user.role==="admin" && <SalaryPage team={team} txns={txns} setTxns={setTxns} user={user}/>}
-          {page==="debts"      && perm.canFin && <DebtsPage debts={debts} setDebts={setDebts} user={user}/>}
+          {page==="debts"     && <DebtsPage debts={debts} setDebts={setDebts} user={user} leads={leads}/>}
           {page==="docspipe"  && <DocsPipeline leads={leads} tasks={tasks} team={team} user={user} open={openLead} config={config} roles={roles} setLeads={setLeads}/>}
           {page==="vacancies" && <Vacancies leads={visibleLeads} user={user} team={team} roles={roles}/>}
           {page==="visa"       && <Visa user={user} roles={roles}/>}

@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useT } from "./theme.js";
-import { uid, fmtMs, fmtD, isOD, inp, lab, I, Modal } from "./helpers.jsx";
+import { uid, fmtMs, fmtD, isOD, inp, lab, I, Modal, SearchSelect} from "./helpers.jsx";
 
 // ─── DEBTS PAGE ───────────────────────────────────────────────────────────────
-function DebtsPage({debts, setDebts, user}) {
+function DebtsPage({debts, setDebts, user, leads}) {
   const T=useT();
   const [tab,setTab]=useState("client");
   const [modal,setModal]=useState(null); const [form,setForm]=useState({});
@@ -76,7 +76,21 @@ function DebtsPage({debts, setDebts, user}) {
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><h3 style={{margin:0,fontSize:13,fontWeight:800,color:T.text}}>Yangi qarz</h3><button onClick={()=>setModal(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:18}}>✕</button></div>
         <div style={{display:"grid",gap:8}}>
           <div><label style={labS}>Tur</label><select value={form.type||"client"} onChange={e=>f("type",e.target.value)} style={inpS}><option value="client">👤 Mijoz qarzi (bizga qarzdor)</option><option value="company">🏢 Kompaniya qarzi (biz qarzdormiz)</option></select></div>
-          <div><label style={labS}>Ism / Kompaniya *</label><input value={form.name||""} onChange={e=>f("name",e.target.value)} style={inpS} placeholder="Kim qarzdor..."/></div>
+          <div>
+            <label style={labS}>Mijozdan tanlang</label>
+            <SearchSelect
+              items={[{value:"",label:"– Mavjud mijoz emas",id:"",phone:""},...leads.map(l=>({value:l.id,label:l.name,id:l.id,phone:l.phone}))]}
+              value={form.leadId||""}
+              onChange={v=>{
+                const lead=leads.find(l=>l.id===v);
+                setForm(p=>({...p,leadId:v,name:lead?lead.name:p.name}));
+              }}
+              placeholder="Mijozni qidiring..."
+            />
+          </div>
+          <div><label style={labS}>Ism / Kompaniya *</label>
+            <input value={form.name||""} onChange={e=>f("name",e.target.value)} style={inpS} placeholder="Yoki qo'lda kiriting..."/>
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
             <div><label style={labS}>Miqdor *</label><input type="number" value={form.amount||""} onChange={e=>f("amount",e.target.value)} style={inpS} placeholder="1000000"/></div>
             <div><label style={labS}>Muddat</label><input type="date" value={form.dueDate||""} onChange={e=>f("dueDate",e.target.value)} style={inpS}/></div>

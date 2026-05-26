@@ -179,9 +179,12 @@ function VacancyDetail({ v, leads, team, user, roles, onClose, onSave, onDelete,
     <Modal onClose={onClose} width={820}>
       <div style={{background:T.card,borderRadius:12,overflow:"hidden"}}>
         {/* Tab bar */}
-        <div style={{display:"flex",background:T.card2,borderBottom:`1px solid ${T.border}`,padding:"8px 8px 0"}}>
-          {tabBtn("info","📋 JOB POSTING INFORMATION")}
-          {tabBtn("candidates",`👥 CANDIDATES (${candidates.length})`)}
+        <div style={{display:"flex",background:T.card2,borderBottom:`1px solid ${T.border}`,padding:"8px 8px 0",alignItems:"center"}}>
+          <div style={{flex:1,display:"flex"}}>
+            {tabBtn("info","📋 JOB POSTING INFORMATION")}
+            {tabBtn("candidates",`👥 CANDIDATES (${candidates.length})`)}
+          </div>
+          <button onClick={onClose} style={{marginRight:8,marginBottom:4,background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:18,lineHeight:1,padding:"0 4px"}}>✕</button>
         </div>
 
         <div style={{padding:24,maxHeight:"75vh",overflowY:"auto"}}>

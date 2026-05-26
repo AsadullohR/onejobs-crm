@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useT } from "./theme.js";
-import { inp, I, lab, Pill, Av, Modal,fmtD } from "./helpers.jsx";
+import { inp, I, lab, Pill, Av, Modal,fmtD, gS} from "./helpers.jsx";
 
 // ─── DOCS PIPELINE ───────────────────────────────────────────────────────────
 function DocsPipeline({leads, tasks, team, user, open, config, roles, setLeads}) {

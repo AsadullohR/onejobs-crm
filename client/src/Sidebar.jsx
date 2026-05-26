@@ -22,12 +22,12 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     {k:"settings",  l:"Sozlamalar",          ic:I.gear},
   ];
   const allowed={
-    admin:  NAV.map(n=>n.k),
-    manager:["dashboard","pipeline","leads","tasks","finance","debts","visa","team","settings","docspipe","analytics"],
-    sales:  ["dashboard","pipeline","leads","tasks"],
-    docs:   ["dashboard","pipeline","leads","tasks","docspipe","visa"],
-    partner:["leads","pipeline"],
-  };
+  admin:  NAV.map(n=>n.k),
+  manager:["dashboard","pipeline","leads","tasks","finance","debts","visa","team","settings","docspipe","analytics","vacancies"],
+  sales:  ["dashboard","pipeline","leads","tasks","vacancies"],
+  docs:   ["dashboard","pipeline","leads","tasks","docspipe","visa","vacancies"],
+  partner:["leads","pipeline","vacancies"],
+};
   const perm=roles[user.role]||{};
   let vis=NAV.filter(n=>(allowed[user.role]||[]).includes(n.k));
   const W=col?46:192;

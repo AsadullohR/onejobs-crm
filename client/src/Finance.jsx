@@ -20,6 +20,8 @@ function Finance({leads, setLeads, team, user, txns, setTxns, config, addNotif, 
   const [colMap,setColMap]=useState({});
   const fileRef=useRef(); const csvRef=useRef();
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const [debtForm,setDebtForm]=useState({amt:"",due:"",cat:"1-Qism",desc:""});
+  const df=(k,v)=>setDebtForm(p=>({...p,[k]:v}));
 
   const lf=(id)=>({
     inc:txns.filter(t=>t.leadId===id&&t.type==="income").reduce((s,t)=>s+t.amount,0),
@@ -149,7 +151,7 @@ function Finance({leads, setLeads, team, user, txns, setTxns, config, addNotif, 
   const inpS=inp(T); const labS=lab(T);
   const FIELD_NAMES={id:"ID (No)",name:"Ism",totalIncome:"Kirim",totalExpense:"Chiqim",netBalance:"Balans",dest:"Yo'nalish",note:"Izoh",status:"Holat",createdAt:"Sana"};
 
-  return <div style={{display:"flex",height:"calc(100vh - 52px)",overflow:"hidden"}}>
+  return <div style={{display:"flex",flex:1,height:"calc(100vh - 52px)",overflow:"hidden",minHeight:0}}>
     {/* ── Left panel ── */}
     <div style={{width:260,borderRight:`1px solid ${T.border}`,display:"flex",flexDirection:"column",flexShrink:0,background:T.card}}>
       {/* KPI header */}
@@ -341,33 +343,33 @@ function Finance({leads, setLeads, team, user, txns, setTxns, config, addNotif, 
     </div>
 
     {/* Transaction modal */}
-    {modal==="form"&&<Modal onClose={()=>setModal(null)} width={420}>
+    {modal==="debt"&&<Modal onClose={()=>setModal(null)} width={400}>
       <div style={{padding:18}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
-          <h3 style={{margin:0,fontSize:13,fontWeight:800,color:T.text}}><span style={{color:form.type==="income"?T.green:T.red}}>{form.type==="income"?"💚 Kirim":"🔴 Chiqim"}</span></h3>
+          <h3 style={{margin:0,fontSize:13,fontWeight:800,color:T.text}}>⚠️ Qarz qo'shish — {cur?.name}</h3>
           <button onClick={()=>setModal(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}>{I.x}</button>
         </div>
         <div style={{display:"grid",gap:8}}>
-          <div><label style={labS}>Turi</label><select value={form.type||"income"} onChange={e=>{f("type",e.target.value);f("cat",(e.target.value==="income"?config.txnInc:config.txnExp)[0]);}} style={inpS}><option value="income">💚 Kirim</option><option value="expense">🔴 Chiqim</option></select></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
-            <div><label style={labS}>Miqdor *</label><input type="number" value={form.amount||""} onChange={e=>f("amount",e.target.value)} style={inpS} placeholder="1000000"/></div>
-            <div><label style={labS}>Sana</label><input type="date" value={form.date||""} onChange={e=>f("date",e.target.value)} style={inpS}/></div>
+            <div><label style={labS}>Summa (so'm) *</label><input type="number" value={debtForm.amt} onChange={e=>df("amt",e.target.value)} style={inpS} placeholder="1000000"/></div>
+            <div><label style={labS}>Muddat</label><input type="date" value={debtForm.due} onChange={e=>df("due",e.target.value)} style={inpS}/></div>
           </div>
-          <div><label style={labS}>Kategoriya</label><select value={form.cat||""} onChange={e=>f("cat",e.target.value)} style={inpS}>{(form.type==="income"?config.txnInc:config.txnExp).map(c=><option key={c}>{c}</option>)}</select></div>
-          <div><label style={labS}>Izoh *</label><input value={form.desc||""} onChange={e=>f("desc",e.target.value)} style={inpS} placeholder="To'lov sababi..."/></div>
-          <div><label style={labS}>Bog'liq mijoz</label><SearchSelect items={[{value:"",label:"–",id:"",phone:""},...leads.map(l=>({value:l.id,label:l.name,id:l.id,phone:l.phone}))]} value={form.leadId||""} onChange={v=>f("leadId",v)} placeholder="Tanlang"/></div>
-          <div><label style={labS}>Kvitansiya</label>
-            <input type="file" accept="image/*,.pdf" ref={fileRef} style={{display:"none"}} onChange={e=>{const fi=e.target.files[0];if(!fi)return;const r=new FileReader();r.onload=ev=>f("receipt",ev.target.result);r.readAsDataURL(fi);}}/>
-            <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              <button onClick={()=>fileRef.current.click()} style={{padding:"4px 9px",borderRadius:5,background:T.card2,color:T.text,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:9}}>{I.up} Yuklash</button>
-              {form.receipt&&<span style={{display:"inline-flex",gap:4}}><button onClick={()=>window.open(form.receipt,"_blank")} style={{fontSize:8,color:T.green,background:`${T.green}22`,border:`1px solid ${T.green}44`,borderRadius:3,padding:"2px 6px",cursor:"pointer"}}>📎 Ko'r</button><button onClick={()=>f("receipt",null)} style={{fontSize:8,color:T.red,background:`${T.red}22`,border:`1px solid ${T.red}44`,borderRadius:3,padding:"2px 6px",cursor:"pointer"}}>✕</button></span>}
-            </div>
+          <div><label style={labS}>Kategoriya</label>
+            <select value={debtForm.cat} onChange={e=>df("cat",e.target.value)} style={inpS}>
+              {["1-Qism","2-Qism","3-Qism","XBA To'lov","Konsultatsiya","Hujjat xizmati","Boshqa"].map(c=><option key={c}>{c}</option>)}
+            </select>
           </div>
+          <div><label style={labS}>Tavsif</label><input value={debtForm.desc} onChange={e=>df("desc",e.target.value)} style={inpS} placeholder="Qarz sababi..."/></div>
         </div>
         <div style={{display:"flex",gap:6,justifyContent:"flex-end",marginTop:12}}>
-          {txns.some(t=>t.id===form.id)&&<button onClick={()=>{setTxns(p=>p.filter(t=>t.id!==form.id));setModal(null);}} style={{padding:"5px 9px",borderRadius:5,background:`${T.red}22`,color:T.red,border:`1px solid ${T.red}44`,cursor:"pointer",fontSize:9,fontWeight:600}}>O'chirish</button>}
-          <button onClick={()=>setModal(null)} style={{padding:"5px 10px",borderRadius:5,background:T.card2,color:T.text,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:10,fontWeight:600}}>Bekor</button>
-          <button onClick={save} style={{padding:"5px 14px",borderRadius:5,background:form.type==="income"?T.green:T.red,color:"#fff",fontWeight:700,border:"none",cursor:"pointer",fontSize:10}}>Qo'shish</button>
+          <button onClick={()=>setModal(null)} style={{padding:"5px 10px",borderRadius:5,background:T.card2,color:T.text,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:10}}>Bekor</button>
+          <button onClick={()=>{
+            const amt=parseFloat(debtForm.amt)||0;
+            if(!amt)return;
+            setDebts(p=>[...p,{id:uid(),leadId:cur.id,name:cur.name,type:"client",category:debtForm.cat,dueDate:debtForm.due,desc:debtForm.desc,amount:amt,paid:false,createdAt:new Date().toISOString().slice(0,10),by:user.id}]);
+            setDebtForm({amt:"",due:"",cat:"1-Qism",desc:""});
+            setModal(null);
+          }} style={{padding:"5px 14px",borderRadius:5,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:"pointer",fontSize:10}}>💾 Saqlash</button>
         </div>
       </div>
     </Modal>}
