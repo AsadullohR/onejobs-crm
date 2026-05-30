@@ -56,7 +56,7 @@ function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setL
       if(!name)return;
       const existing=leads.find(l=>l.id===id||l.name===name);
       if(existing){setLeads(p=>p.map(l=>l.id===existing.id?{...l,source:get("source")||l.source,country:get("country")||get("mamlakat")||l.country}:l));updated++;}
-      else{const nid=id||`IMP-${Date.now()}-${added}`;setLeads(p=>[...p,{id:nid,name,phone:get("phone")||get("tel"),status:"Yangi",country:get("country")||get("mamlakat"),sector:"",source:get("source")||"Import",gender:"",ownerSales:null,ownerConsult:null,ownerDocs:null,comment:get("comment")||get("izoh"),q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)}]);added++;}
+      else{const nid=id||`IMP-${Date.now()}-${added}`;setLeads(p=>[...p,{id:nid,name,phone:get("phone")||get("tel"),status:get("status") || get("holat") || "Yangi",country:get("country")||get("mamlakat"),sector:"",source:get("source")||"Import",gender:"",ownerSales:null,ownerConsult:null,ownerDocs:null,comment:get("comment")||get("izoh"),q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)}]);added++;}
     });
     setCsvResult(`✅ Yangi: ${added}, Yangilandi: ${updated}`);addNotif&&addNotif(`📥 Import: ${added} yangi, ${updated} yangilandi`);
     setTimeout(()=>{setShowImport(false);setCsvTxt("");setCsvResult(null);},2000);
