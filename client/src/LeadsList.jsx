@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
 import { uid, fmtMs, isOD, inp, I, Pill, Av, fmtD } from "./helpers.jsx";
+import { leadsAPI } from "./api.js";
 
 // ─── LEADS LIST ─────────────────────────────────────────────────────────────
 function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setLeads, deleteLead, addNotif}) {
@@ -44,23 +45,64 @@ function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setL
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([h+"\n"+rows.join("\n")],{type:"text/csv"}));a.download="mijozlar.csv";a.click();
   };
 
-  const importCSV=()=>{
-    const rows=csvTxt.trim().split("\n").filter(Boolean);
-    if(rows.length<2){setCsvResult("Kamida 2 qator kerak");return;}
-    const headers=rows[0].split(",").map(h=>h.trim().toLowerCase());
-    let added=0,updated=0;
-    rows.slice(1).forEach(row=>{
-      const cols=row.split(",").map(c=>c.trim().replace(/^"|"$/g,""));
-      const get=k=>{const i=headers.indexOf(k);return i>=0?cols[i]||"":"";};
-      const id=get("id")||get("uid"); const name=get("name")||get("ism");
-      if(!name)return;
-      const existing=leads.find(l=>l.id===id||l.name===name);
-      if(existing){setLeads(p=>p.map(l=>l.id===existing.id?{...l,source:get("source")||l.source,country:get("country")||get("mamlakat")||l.country}:l));updated++;}
-      else{const nid=id||`IMP-${Date.now()}-${added}`;setLeads(p=>[...p,{id:nid,name,phone:get("phone")||get("tel"),status:get("status") || get("holat") || "Yangi",country:get("country")||get("mamlakat"),sector:"",source:get("source")||"Import",gender:"",ownerSales:null,ownerConsult:null,ownerDocs:null,comment:get("comment")||get("izoh"),q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)}]);added++;}
-    });
-    setCsvResult(`✅ Yangi: ${added}, Yangilandi: ${updated}`);addNotif&&addNotif(`📥 Import: ${added} yangi, ${updated} yangilandi`);
-    setTimeout(()=>{setShowImport(false);setCsvTxt("");setCsvResult(null);},2000);
-  };
+  const importCSV = async () => {
+  try {
+    const rows = csvTxt.trim().split("\n").filter(Boolean);
+
+    if (rows.length < 2) {
+      setCsvResult("Kamida 2 qator kerak");
+      return;
+    }
+
+    const headers = rows[0].split(",").map(h => h.trim().toLowerCase());
+
+    const leadsToImport = rows.slice(1).map((row, index) => {
+      const cols = row.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+
+      const get = k => {
+        const i = headers.indexOf(k);
+        return i >= 0 ? cols[i] || "" : "";
+      };
+
+      const name = get("name") || get("ism");
+      if (!name) return null;
+
+      return {
+        id: get("id") || `IMP-${Date.now()}-${index}`,
+        name,
+        phone: get("phone") || get("tel"),
+        telegram: get("telegram"),
+        status: get("status") || get("holat") || "Yangi",
+        country: get("country") || get("mamlakat"),
+        sector: get("sector") || get("soha"),
+        position: get("position") || get("lavozim"),
+        source: get("source") || get("manba") || "CSV Import",
+        gender: get("gender") || get("jinsi"),
+        comment: get("comment") || get("izoh"),
+        note: get("note") || ""
+      };
+    }).filter(Boolean);
+
+    const result = await leadsAPI.bulkImport(leadsToImport);
+
+    setCsvResult(`✅ Import qilindi: ${result.inserted} yangi, ${result.updated} yangilandi`);
+
+    const fresh = await leadsAPI.getAll({ limit: 10000 });
+    setLeads(fresh.leads || fresh || []);
+
+    addNotif && addNotif(`📥 Import: ${result.inserted} yangi, ${result.updated} yangilandi`);
+
+    setTimeout(() => {
+      setShowImport(false);
+      setCsvTxt("");
+      setCsvResult(null);
+    }, 2000);
+
+  } catch (err) {
+    console.error(err);
+    setCsvResult("❌ Import xatosi: " + err.message);
+  }
+};
 
   return <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 52px)",overflow:"hidden"}}>
     {/* Toolbar */}
