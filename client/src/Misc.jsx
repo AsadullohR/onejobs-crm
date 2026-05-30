@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useT } from "./theme.js";
 import { uid, inp, lab, I, Av, Modal, fmtMs, fmtD} from "./helpers.jsx";
 import { INIT_VISA } from "./constants.js";
+import { usersAPI } from "./api.js";
 
 // ─── VISA, TEAM, SETTINGS (compact) ──────────────────────────────────────────
 function Visa({user, roles}) {
@@ -66,12 +67,49 @@ function TeamPage({user, team, setTeam, roles}) {
   const T=useT(); const [modal,setModal]=useState(null); const [form,setForm]=useState({});
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const COLORS=["#6366f1","#22c55e","#f97316","#eab308","#ef4444","#06b6d4","#a855f7","#10b981","#3b82f6"];
-  const save=()=>{if(!form.name||!form.username)return;setTeam(p=>p.some(t=>t.id===form.id)?p.map(t=>t.id===form.id?form:t):[...p,{...form,salItems:[]}]);setModal(null);};
+  const save = async () => {
+  if (!form.name || !form.username) return;
+
+  try {
+    const payload = {
+      username: form.username,
+      password: form.password,
+      name: form.name,
+      role: form.role,
+      avatar: form.av || form.avatar || "",
+      color: form.color,
+      phone: form.phone,
+      email: form.email || "",
+      active: form.active !== false,
+      salary: Number(form.salary || 0),
+      salary_type: form.salType || form.salary_type || "fixed",
+      salary_pct: Number(form.pct || form.salary_pct || 0),
+    };
+
+    let saved;
+
+    if (form.id && !String(form.id).startsWith("id")) {
+      saved = await usersAPI.update(form.id, payload);
+    } else {
+      saved = await usersAPI.save(payload);
+    }
+
+    setTeam(p =>
+      p.some(t => t.id === saved.id)
+        ? p.map(t => t.id === saved.id ? saved : t)
+        : [...p, saved]
+    );
+
+    setModal(null);
+  } catch (err) {
+    alert("Xodim saqlanmadi: " + err.message);
+  }
+};
   const inpS=inp(T); const labS=lab(T);
   return <div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
       <h1 style={{fontSize:18,fontWeight:900,color:T.text,margin:0}}>Jamoa</h1>
-      {user.role==="admin"&&<button onClick={()=>{setForm({id:uid(),name:"",username:"",role:"sales",password:"",av:"",color:COLORS[0],phone:"",email:"",active:true,salary:0,salType:"fixed",pct:5,salItems:[]});setModal("form");}} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 11px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,fontSize:11,border:"none",cursor:"pointer"}}>{I.plus} Qo'shish</button>}
+      {user.role==="admin"&&<button onClick={()=>{setForm({id:uid(),name:"",username:"",role:"sales",password:"",av:"",color:COLORS[0],phone:"",email:"",active:true,salary:0,salary_type:"fixed", salary_pct:5, salItems:[]});setModal("form");}} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 11px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,fontSize:11,border:"none",cursor:"pointer"}}>{I.plus} Qo'shish</button>}
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
       {team.map(m=>(
@@ -82,13 +120,38 @@ function TeamPage({user, team, setTeam, roles}) {
             <div style={{fontSize:10,color:T.muted,marginBottom:4}}>@{m.username} · {m.phone}</div>
             <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
               <span style={{background:`${roles[m.role]?.color||T.accent}22`,color:roles[m.role]?.color||T.accent,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:20}}>{roles[m.role]?.label||m.role}</span>
-              {(user.role==="admin"||user.role==="manager")&&<select value={m.role} onChange={e=>setTeam(p=>p.map(t=>t.id===m.id?{...t,role:e.target.value}:t))} style={{...inpS,width:"auto",fontSize:9,padding:"2px 5px"}}>{Object.keys(roles).map(r=><option key={r} value={r}>{roles[r].label}</option>)}</select>}
+              {(user.role==="admin"||user.role==="manager")&&<select value={m.role} onChange={async e => {
+              const role = e.target.value;
+
+              try {
+                const updated = await usersAPI.update(m.id, { ...m, role });
+
+                setTeam(p =>
+                  p.map(t => t.id === m.id ? updated : t)
+                );
+              } catch (err) {
+                alert("Rol saqlanmadi: " + err.message);
+              }
+            }} style={{...inpS,width:"auto",fontSize:9,padding:"2px 5px"}}>{Object.keys(roles).map(r=><option key={r} value={r}>{roles[r].label}</option>)}</select>}
             </div>
             <div style={{fontSize:9,color:T.muted,marginTop:3}}>{m.salType==="fixed"?`Maosh: ${fmtMs(m.salary||0)} so'm`:`${m.pct||0}% komissiya`}</div>
           </div>
           {user.role==="admin"&&<div style={{display:"flex",gap:4,flexShrink:0}}>
             <button onClick={()=>{setForm({...m});setModal("form");}} style={{padding:"3px 6px",borderRadius:4,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,cursor:"pointer",fontSize:10}}>{I.edit}</button>
-            {m.id!==user.id&&<button onClick={()=>setTeam(p=>p.map(t=>t.id===m.id?{...t,active:!t.active}:t))} style={{padding:"3px 6px",borderRadius:4,background:m.active===false?`${T.green}22`:`${T.yellow}22`,color:m.active===false?T.green:T.yellow,border:`1px solid ${m.active===false?T.green:T.yellow}44`,cursor:"pointer",fontSize:9}}>{m.active===false?"Faol":"To'xtat"}</button>}
+            {m.id!==user.id&&<button onClick={async () => {
+          try {
+            const updated = await usersAPI.update(m.id, {
+              ...m,
+              active: m.active === false
+            });
+          
+            setTeam(p =>
+              p.map(t => t.id === m.id ? updated : t)
+            );
+          } catch (err) {
+            alert("Status saqlanmadi: " + err.message);
+          }
+}} style={{padding:"3px 6px",borderRadius:4,background:m.active===false?`${T.green}22`:`${T.yellow}22`,color:m.active===false?T.green:T.yellow,border:`1px solid ${m.active===false?T.green:T.yellow}44`,cursor:"pointer",fontSize:9}}>{m.active===false?"Faol":"To'xtat"}</button>}
           </div>}
         </div>
       ))}
