@@ -107,17 +107,24 @@ const saveLead = useCallback(async f => {
       alert("Lead saqlanmadi!");
     }
 }, [leads]);
-const deleteLead = useCallback(async (id, ask = true) => {
-  if (ask && !confirm("Bu leadni o‘chirishni xohlaysizmi?")) return;
+const deleteLead = useCallback(async (id) => {
+  if (!confirm("Bu leadni o‘chirishni xohlaysizmi?")) return;
 
-  await leadsAPI.delete(id);
+  try {
+    await leadsAPI.delete(id);
 
-  setLeads(prev => prev.filter(l => l.id !== id));
+    setLeads(prev => prev.filter(l => l.id !== id));
 
-  if (drawer?.id === id) {
-    setDrawer(null);
+    if (drawer?.id === id) {
+      setDrawer(null);
+    }
+
+    addNotif("🗑 Lead o‘chirildi");
+  } catch (err) {
+    console.error(err);
+    alert("Lead o‘chirilmadi: " + err.message);
   }
-}, [drawer]);
+}, [drawer, addNotif]);
 
   const addTask=useCallback(async t=>{
     // Optimistically add to local state
@@ -332,14 +339,14 @@ const deleteLead = useCallback(async (id, ask = true) => {
           {page==="dashboard"  && <Dashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
           {page==="analytics"  && (user.role==="admin"||user.role==="manager") && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user}/>}
           {page==="pipeline"   && <Pipeline {...PROPS} tasks={tasks} addLead={()=>openLead(null)} stages={stages} setStages={setStages}/>}
-          <LeadsList
-          {...PROPS}
-          tasks={tasks}
-          addLead={() => openLead(null)}
-          setLeads={setLeads}
-          deleteLead={deleteLead}
-          addNotif={addNotif}
-          />
+          {page==="leads"      && <LeadsList
+            {...PROPS}
+            tasks={tasks}
+            addLead={() => openLead(null)}
+            setLeads={setLeads}
+            deleteLead={deleteLead}
+            addNotif={addNotif}
+          />}
           {page==="tasks"      && <Tasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif}/>}
           {page==="salary"     && user.role==="admin" && <SalaryPage team={team} txns={txns} setTxns={setTxns} user={user}/>}
           {page==="debts"     && <DebtsPage debts={debts} setDebts={setDebts} user={user} leads={leads}/>}
