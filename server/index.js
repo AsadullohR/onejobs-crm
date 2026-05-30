@@ -177,37 +177,74 @@ app.delete('/api/leads/:id', auth, adminOnly, async (req, res) => {
 
 // ─── BULK CSV IMPORT ──────────────────────────────────────────────────────────
 app.post('/api/leads/bulk', auth, async (req, res) => {
-  const { leads } = req.body; // array of lead objects
-  if (!Array.isArray(leads) || !leads.length)
-    return res.status(400).json({ error: 'leads array required' });
-
-  let added = 0, updated = 0, errors = [];
   const client = await pool.connect();
+
   try {
-    await client.query('BEGIN');
-    for (const l of leads) {
-      const id = l.id || `NO-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      try {
-        const existing = await client.query('SELECT id FROM leads WHERE id=$1', [id]);
-        if (existing.rows.length) { updated++; } else { added++; }
-        await client.query(
-          `INSERT INTO leads (id,name,phone,status,country,sector,source,gender,comment,note,q1,q2,q3,xba)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-           ON CONFLICT (id) DO UPDATE SET
-             name=$2,phone=$3,status=$4,country=$5,sector=$6,source=$7,gender=$8,comment=$9,note=$10,
-             q1=$11,q2=$12,q3=$13,xba=$14,updated_at=NOW()`,
-          [id,l.name||'',l.phone||'',l.status||'Yangi',l.country||'',l.sector||'',
-           l.source||'',l.gender||'',l.comment||'',l.note||'',
-           !!l.q1,!!l.q2,!!l.q3,!!l.xba]
-        );
-      } catch (e) { errors.push(`${id}: ${e.message}`); }
+    const leads = req.body.leads || [];
+
+    if (!Array.isArray(leads)) {
+      return res.status(400).json({ error: 'leads must be an array' });
     }
+
+    await client.query('BEGIN');
+
+    let inserted = 0;
+    let updated = 0;
+
+    for (const l of leads) {
+      const id = l.id || `IMP-${Date.now()}-${Math.floor(Math.random() * 999999)}`;
+
+      const result = await client.query(
+        `
+        INSERT INTO leads
+        (id, name, phone, telegram, status, country, sector, position, source, gender, comment, note, cv, docs, history)
+        VALUES
+        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'{}','{}','[]')
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          phone = EXCLUDED.phone,
+          telegram = EXCLUDED.telegram,
+          status = EXCLUDED.status,
+          country = EXCLUDED.country,
+          sector = EXCLUDED.sector,
+          position = EXCLUDED.position,
+          source = EXCLUDED.source,
+          gender = EXCLUDED.gender,
+          comment = EXCLUDED.comment,
+          note = EXCLUDED.note,
+          updated_at = NOW()
+        RETURNING xmax
+        `,
+        [
+          id,
+          l.name || '',
+          l.phone || '',
+          l.telegram || '',
+          l.status || 'Yangi',
+          l.country || '',
+          l.sector || '',
+          l.position || '',
+          l.source || 'CSV Import',
+          l.gender || '',
+          l.comment || '',
+          l.note || '',
+        ]
+      );
+
+      if (result.rows[0].xmax === '0') inserted++;
+      else updated++;
+    }
+
     await client.query('COMMIT');
-    res.json({ added, updated, errors: errors.slice(0, 10) });
+
+    res.json({ ok: true, inserted, updated });
   } catch (err) {
     await client.query('ROLLBACK');
+    console.error('Bulk import error:', err);
     res.status(500).json({ error: err.message });
-  } finally { client.release(); }
+  } finally {
+    client.release();
+  }
 });
 
 // ─── TRANSACTIONS ──────────────────────────────────────────────────────────────
