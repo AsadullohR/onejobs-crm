@@ -2,7 +2,7 @@
 const STAGES = [
   {key:"Yangi",                         label:"Yangi",                          c:"#6366f1"},
   {key:"Qilindi",                       label:"Qilindi",                        c:"#8b5cf6"},
-  {key:"Bog'landi",                     label:"Bog'landi",                      c:"#f59e0b"},
+  {key:"Boglanildi",                     label:"Boglanildi",                      c:"#f59e0b"},
   {key:"Onlayn Suhbat Uchun",           label:"Onlayn Suhbat Uchun",           c:"#06b6d4"},
   {key:"Onlayn Suhbat",                 label:"Onlayn Suhbat",                 c:"#0ea5e9"},
   {key:"Suhbat",                        label:"Suhbat",                         c:"#10b981"},

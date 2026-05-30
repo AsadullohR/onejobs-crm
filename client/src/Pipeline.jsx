@@ -77,7 +77,7 @@ useEffect(() => {
       <div><h1 style={{fontSize:18,fontWeight:900,color:T.text,margin:0}}>Pipeline</h1><p style={{color:T.muted,margin:"1px 0 0",fontSize:10}}>{flt.length} ta · {stages.length} bosqich</p></div>
       <div style={{marginLeft:"auto",display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
         <div style={{position:"relative"}}><span style={{position:"absolute",left:7,top:"50%",transform:"translateY(-50%)",color:T.muted}}>{I.search}</span>
-          <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Qidirish... (Ctrl+F)" style={{...inpS,paddingLeft:23,width:150,fontSize:11}}/></div>
+          <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Qidirish... (Ctrl+A)" style={{...inpS,paddingLeft:23,width:150,fontSize:11}}/></div>
         <button onClick={()=>setShowFilters(f=>!f)} style={{padding:"7px 11px",borderRadius:7,border:`1px solid ${showFilters?T.accent:T.border}`,background:showFilters?`${T.accent}22`:"transparent",color:showFilters?T.accent:T.muted,cursor:"pointer",fontSize:11,fontWeight:showFilters?700:400}}>🔍 Filtr</button>
         {(perm.canCfg||perm.canEdit)&&<button onClick={()=>setEditMode(e=>!e)} style={{padding:"7px 11px",borderRadius:7,border:`1px solid ${editMode?T.accent:T.border}`,background:editMode?`${T.accent}22`:"transparent",color:editMode?T.accent:T.muted,cursor:"pointer",fontSize:11,fontWeight:editMode?700:400}}>⚙️ Bosqichlar</button>}
         <button onClick={exportPipelineCSV} style={{padding:"7px 11px",borderRadius:7,border:`1px solid ${T.border}`,background:T.card,color:T.muted,cursor:"pointer",fontSize:11}}>📥 CSV</button>
