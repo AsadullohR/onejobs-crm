@@ -88,7 +88,7 @@ function TeamPage({user, team, setTeam, roles}) {
 
     let saved;
 
-    if (form.id && !String(form.id).startsWith("id")) {
+    if (form.id) {
       saved = await usersAPI.update(form.id, payload);
     } else {
       saved = await usersAPI.save(payload);
@@ -109,7 +109,7 @@ function TeamPage({user, team, setTeam, roles}) {
   return <div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
       <h1 style={{fontSize:18,fontWeight:900,color:T.text,margin:0}}>Jamoa</h1>
-      {user.role==="admin"&&<button onClick={()=>{setForm({id:uid(),name:"",username:"",role:"sales",password:"",av:"",color:COLORS[0],phone:"",email:"",active:true,salary:0,salary_type:"fixed", salary_pct:5, salItems:[]});setModal("form");}} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 11px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,fontSize:11,border:"none",cursor:"pointer"}}>{I.plus} Qo'shish</button>}
+      {user.role==="admin"&&<button onClick={()=>{setForm({name:"",username:"",role:"sales",password:"",av:"",color:COLORS[0],phone:"",email:"",active:true,salary:0,salary_type:"fixed", salary_pct:5, salItems:[]});setModal("form");}} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 11px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,fontSize:11,border:"none",cursor:"pointer"}}>{I.plus} Qo'shish</button>}
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
       {team.map(m=>(
