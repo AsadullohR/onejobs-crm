@@ -4,7 +4,7 @@ import { DONE, LOST } from "./constants.js";
 import { uid, fmtMs, isOD, inp, I, Pill, Av, fmtD } from "./helpers.jsx";
 
 // ─── LEADS LIST ─────────────────────────────────────────────────────────────
-function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setLeads, addNotif}) {
+function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setLeads, deleteLead, addNotif}) {
   const T=useT();
   const perm=roles[user.role]||{};
   const canBulk=user.role==="admin"||user.role==="manager";
@@ -117,7 +117,25 @@ function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setL
     {canBulk&&sel.size>0&&<div style={{flexShrink:0,display:"flex",gap:8,alignItems:"center",padding:"6px 14px",background:`${T.accent}15`,borderBottom:`1px solid ${T.accent}33`}}>
       <span style={{fontSize:11,fontWeight:700,color:T.accent}}>{sel.size} ta tanlandi</span>
       <button onClick={()=>{const ids=[...sel];const cnt=ids.length;if(!cnt)return;if(!window.confirm(cnt+" ta arxivlansinmi?"))return;setLeads(p=>p.map(l=>ids.includes(l.id)?{...l,archived:true}:l));setSel(new Set());addNotif&&addNotif("📦 "+cnt+" ta arxivlandi");}} style={{padding:"4px 10px",borderRadius:5,background:`${T.yellow}22`,color:T.yellow,border:`1px solid ${T.yellow}44`,cursor:"pointer",fontSize:9,fontWeight:600}}>📦 Arxivlash</button>
-      <button onClick={()=>{const ids=[...sel];const cnt=ids.length;if(!cnt)return;if(!window.confirm(cnt+" ta o'chirilsinmi? Bu amalni qaytarib bo'lmaydi!"))return;setLeads(p=>p.filter(l=>!ids.includes(l.id)));setSel(new Set());addNotif&&addNotif("🗑️ "+cnt+" ta o'chirildi");}} style={{padding:"4px 10px",borderRadius:5,background:`${T.red}22`,color:T.red,border:`1px solid ${T.red}44`,cursor:"pointer",fontSize:9,fontWeight:600}}>🗑️ O'chirish</button>
+      <button onClick={async () => {
+          const ids = [...sel];
+          const cnt = ids.length;
+
+          if (!cnt) return;
+
+          if (!window.confirm(cnt + " ta o'chirilsinmi? Bu amalni qaytarib bo'lmaydi!")) return;
+
+          try {
+            for (const id of ids) {
+              await deleteLead(id, false);
+            }
+
+            setSel(new Set());
+            addNotif && addNotif("🗑️ " + cnt + " ta o'chirildi");
+          } catch (err) {
+            alert("O'chirishda xatolik: " + err.message);
+          }
+        }} style={{padding:"4px 10px",borderRadius:5,background:`${T.red}22`,color:T.red,border:`1px solid ${T.red}44`,cursor:"pointer",fontSize:9,fontWeight:600}}>🗑️ O'chirish</button>
       <button onClick={()=>setSel(new Set())} style={{padding:"4px 8px",borderRadius:5,background:T.card2,color:T.muted,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:9}}>✕</button>
     </div>}
     {/* Table */}
