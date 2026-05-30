@@ -188,19 +188,27 @@ ON CONFLICT (key) DO NOTHING;
 -- ─── DEFAULT ADMIN USER ───────────────────────────────────────────────────────
 -- Password: admin123 (bcrypt)
 INSERT INTO users (username, password, name, role, avatar, color, phone, salary, salary_type)
-VALUES ('admin', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Admin Akbar', 'admin', 'AA', '#6366f1', '+998901234567', 5000000, 'fixed')
+VALUES ('admin', '19772512Yangi.', 'Admin', 'admin', 'AS', '#6366f1', '+998976763377', 0, 'fixed')
 ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO users (username, password, name, role, avatar, color, phone, salary, salary_type)
-VALUES ('xusanxon', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Xusanxon', 'manager', 'XS', '#22c55e', '+998901234568', 4000000, 'fixed')
-ON CONFLICT (username) DO NOTHING;
-
-INSERT INTO users (username, password, name, role, avatar, color, phone, salary_type, salary_pct)
-VALUES ('sarvar', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Sarvarbek', 'sales', 'SB', '#f97316', '+998901234569', 'percent', 5)
+VALUES ('xusanxon', 'Xusanxon.2007', 'Xusanxon', 'manager', 'XS', '#22c55e', '+998901234568', 3000000, 'fixed')
 ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO users (username, password, name, role, avatar, color, phone, salary, salary_type)
-VALUES ('asad', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Asadulloh', 'docs', 'AS', '#06b6d4', '+998901234571', 2500000, 'fixed')
+VALUES ('mrizo', 'Mrizo.2007', 'Muhammad Rizo', 'sales', 'MR', '#f97316', '+998952571775', 2400000, 'fixed')
+ON CONFLICT (username) DO NOTHING;
+
+INSERT INTO users (username, password, name, role, avatar, color, phone, salary, salary_type)
+VALUES ('mayub', 'Mayub.2007', 'Muhammadayub', 'sales', 'MA', '#5a0b5a', '+998952571775', 2000000, 'fixed')
+ON CONFLICT (username) DO NOTHING;
+
+INSERT INTO users (username, password, name, role, avatar, color, phone, salary, salary_type)
+VALUES ('rahmatulloh', 'Rahmatulloh.2002', 'Rahmatulloh', 'sales', 'RA', '#5a0b5a', '+998952571775', 2000000, 'fixed')
+ON CONFLICT (username) DO NOTHING;
+
+INSERT INTO users (username, password, name, role, avatar, color, phone, salary, salary_type)
+VALUES ('mirsaid', 'Mirsaid.2007', 'Mirsaidxoja', 'docs', 'MS', '#06b6d4', '+998901234571', 2400000, 'fixed')
 ON CONFLICT (username) DO NOTHING;
 
 INSERT INTO users (username, password, name, role, avatar, color, phone, salary_type)

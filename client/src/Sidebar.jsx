@@ -107,7 +107,7 @@ function Login({onLogin, team, roles}) {
         <div style={{marginBottom:14}}><label style={{color:T.muted,fontSize:10,fontWeight:600,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:"0.05em"}}>Parol</label><input value={p} onChange={ev=>sp(ev.target.value)} type="password" onKeyDown={ev=>ev.key==="Enter"&&go()} style={inpS} placeholder="••••••••"/></div>
         {e&&<p style={{color:T.red,fontSize:11,marginBottom:10,textAlign:"center"}}>{e}</p>}
         <button onClick={go} disabled={loading} style={{width:"100%",padding:"10px",borderRadius:8,background:T.accent,color:"#fff",fontWeight:700,fontSize:13,border:"none",cursor:"pointer",marginBottom:18}}>{loading?"Yuklanmoqda...":"Kirish"}</button>
-        <div style={{borderTop:`1px solid ${T.border}`,paddingTop:14}}>
+        {/* <div style={{borderTop:`1px solid ${T.border}`,paddingTop:14}}>
           <p style={{color:T.muted,fontSize:9,textAlign:"center",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em"}}>Tez kirish</p>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
             {team.map(x=>(
@@ -117,7 +117,7 @@ function Login({onLogin, team, roles}) {
               </div>
             ))}
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   </ThemeCtx.Provider>;
