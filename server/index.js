@@ -3,35 +3,43 @@
  * Node.js + PostgreSQL backend
  */
 
-const express = require('express');
-const { Pool } = require('pg');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const cors = require('cors');
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const express = require("express");
+const { Pool } = require("pg");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const cors = require("cors");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'onejobs-secret-change-in-production';
+const JWT_SECRET =
+  process.env.JWT_SECRET || "onejobs-secret-change-in-production";
 
 // ─── DATABASE CONNECTION ──────────────────────────────────────────────────────
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/onejobs',
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionString:
+    process.env.DATABASE_URL ||
+    "postgresql://postgres:password@localhost:5432/onejobs",
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? { rejectUnauthorized: false }
+      : false,
 });
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
-app.use(cors({
-  origin: (origin, cb) => cb(null, true), // allow all origins (needed for Tally/Meta)
-  credentials: true
-}));
-app.use(express.json({ limit: '10mb' }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(
+  cors({
+    origin: (origin, cb) => cb(null, true), // allow all origins (needed for Tally/Meta)
+    credentials: true,
+  }),
+);
+app.use(express.json({ limit: "10mb" }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 const upload = multer({
-  dest: path.join(__dirname, 'uploads'),
+  dest: path.join(__dirname, "uploads"),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: (req, file, cb) => {
     const allowed = /jpeg|jpg|png|gif|pdf/;
@@ -41,38 +49,44 @@ const upload = multer({
 
 // ─── AUTH MIDDLEWARE ──────────────────────────────────────────────────────────
 const auth = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Token required' });
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Token required" });
   try {
     req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {
-    res.status(401).json({ error: 'Invalid token' });
+    res.status(401).json({ error: "Invalid token" });
   }
 };
 
 const adminOnly = (req, res, next) => {
-  if (!['admin', 'manager'].includes(req.user.role))
-    return res.status(403).json({ error: 'Admin only' });
+  if (!["admin", "manager"].includes(req.user.role))
+    return res.status(403).json({ error: "Admin only" });
   next();
 };
 
 // ─── AUTH ROUTES ──────────────────────────────────────────────────────────────
-app.post('/api/auth/login', async (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   const { username, password } = req.body;
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM users WHERE username = $1 AND active = TRUE',
-      [username]
+      "SELECT * FROM users WHERE username = $1 AND active = TRUE",
+      [username],
     );
-    if (!rows[0]) return res.status(401).json({ error: 'Foydalanuvchi topilmadi' });
+    if (!rows[0])
+      return res.status(401).json({ error: "Foydalanuvchi topilmadi" });
     const valid = await bcrypt.compare(password, rows[0].password);
-    if (!valid) return res.status(401).json({ error: 'Parol noto\'g\'ri' });
+    if (!valid) return res.status(401).json({ error: "Parol noto'g'ri" });
 
     const token = jwt.sign(
-      { id: rows[0].id, username: rows[0].username, role: rows[0].role, name: rows[0].name },
+      {
+        id: rows[0].id,
+        username: rows[0].username,
+        role: rows[0].role,
+        name: rows[0].name,
+      },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: "7d" },
     );
     const { password: _, ...user } = rows[0];
     res.json({ token, user });
@@ -82,22 +96,46 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ─── LEADS ROUTES ─────────────────────────────────────────────────────────────
-app.get('/api/leads', auth, async (req, res) => {
-  const { status, country, source, owner, search, page = 1, limit = 100 } = req.query;
+app.get("/api/leads", auth, async (req, res) => {
+  const {
+    status,
+    country,
+    source,
+    owner,
+    search,
+    page = 1,
+    limit = 100,
+  } = req.query;
   const offset = (page - 1) * limit;
   const conditions = [];
   const params = [];
 
-  if (status) { conditions.push(`l.status = $${params.length+1}`); params.push(status); }
-  if (country) { conditions.push(`l.country ILIKE $${params.length+1}`); params.push(`%${country}%`); }
-  if (source) { conditions.push(`l.source = $${params.length+1}`); params.push(source); }
-  if (owner) { conditions.push(`(u_s.name ILIKE $${params.length+1} OR u_c.name ILIKE $${params.length+1} OR u_d.name ILIKE $${params.length+1})`); params.push(`%${owner}%`); }
+  if (status) {
+    conditions.push(`l.status = $${params.length + 1}`);
+    params.push(status);
+  }
+  if (country) {
+    conditions.push(`l.country ILIKE $${params.length + 1}`);
+    params.push(`%${country}%`);
+  }
+  if (source) {
+    conditions.push(`l.source = $${params.length + 1}`);
+    params.push(source);
+  }
+  if (owner) {
+    conditions.push(
+      `(u_s.name ILIKE $${params.length + 1} OR u_c.name ILIKE $${params.length + 1} OR u_d.name ILIKE $${params.length + 1})`,
+    );
+    params.push(`%${owner}%`);
+  }
   if (search) {
-    conditions.push(`(l.name ILIKE $${params.length+1} OR l.phone ILIKE $${params.length+1} OR l.id ILIKE $${params.length+1} OR l.comment ILIKE $${params.length+1})`);
+    conditions.push(
+      `(l.name ILIKE $${params.length + 1} OR l.phone ILIKE $${params.length + 1} OR l.id ILIKE $${params.length + 1} OR l.comment ILIKE $${params.length + 1})`,
+    );
     params.push(`%${search}%`);
   }
 
-  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+  const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
 
   try {
     const query = `
@@ -111,22 +149,30 @@ app.get('/api/leads', auth, async (req, res) => {
       LEFT JOIN users u_d ON l.owner_docs = u_d.id
       ${where}
       ORDER BY l.created_at DESC
-      LIMIT $${params.length+1} OFFSET $${params.length+2}
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
     params.push(limit, offset);
 
     const [leads, count] = await Promise.all([
       pool.query(query, params),
-      pool.query(`SELECT COUNT(*) FROM leads l LEFT JOIN users u_s ON l.owner_sales = u_s.id LEFT JOIN users u_c ON l.owner_consult = u_c.id LEFT JOIN users u_d ON l.owner_docs = u_d.id ${where}`, params.slice(0, -2)),
+      pool.query(
+        `SELECT COUNT(*) FROM leads l LEFT JOIN users u_s ON l.owner_sales = u_s.id LEFT JOIN users u_c ON l.owner_consult = u_c.id LEFT JOIN users u_d ON l.owner_docs = u_d.id ${where}`,
+        params.slice(0, -2),
+      ),
     ]);
 
-    res.json({ leads: leads.rows, total: parseInt(count.rows[0].count), page: parseInt(page), limit: parseInt(limit) });
+    res.json({
+      leads: leads.rows,
+      total: parseInt(count.rows[0].count),
+      page: parseInt(page),
+      limit: parseInt(limit),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/api/leads/:id', auth, async (req, res) => {
+app.get("/api/leads/:id", auth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT l.*, 
@@ -135,17 +181,22 @@ app.get('/api/leads/:id', auth, async (req, res) => {
        LEFT JOIN users u_s ON l.owner_sales = u_s.id
        LEFT JOIN users u_c ON l.owner_consult = u_c.id
        LEFT JOIN users u_d ON l.owner_docs = u_d.id
-       WHERE l.id = $1`, [req.params.id]);
-    if (!rows[0]) return res.status(404).json({ error: 'Lead topilmadi' });
+       WHERE l.id = $1`,
+      [req.params.id],
+    );
+    if (!rows[0]) return res.status(404).json({ error: "Lead topilmadi" });
     res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post('/api/leads', auth, async (req, res) => {
+app.post("/api/leads", auth, async (req, res) => {
   const l = req.body;
   const id = l.id || `NO-${Date.now()}`;
   try {
-    const { rows } = await pool.query(`
+    const { rows } = await pool.query(
+      `
       INSERT INTO leads (id, name, phone, telegram, status, country, sector, position, source, gender,
         comment, note, owner_sales, owner_consult, owner_docs, q1, q2, q3, xba,
         kpi_sales, kpi_consult, kpi_docs, cv, docs, history,
@@ -157,42 +208,73 @@ app.post('/api/leads', auth, async (req, res) => {
         kpi_sales=$20, kpi_consult=$21, kpi_docs=$22, cv=$23, docs=$24, history=$25,
         last_contact=$26, contract_date=$27, interview_date=$28, dest=$29, sof_foyda=$30, updated_at=NOW()
       RETURNING *`,
-      [id, l.name, l.phone, l.telegram, l.status, l.country, l.sector, l.position, l.source, l.gender,
-       l.comment, l.note, l.ownerSales||null, l.ownerConsult||null, l.ownerDocs||null,
-       l.q1||false, l.q2||false, l.q3||false, l.xba||false,
-       l.kpiSales||false, l.kpiConsult||false, l.kpiDocs||false,
-       JSON.stringify(l.cv||{}), JSON.stringify(l.docs||{}), JSON.stringify(l.history||[]),
-       l.lastContact||null, l.contractDate||null, l.interviewDate||null, l.dest||null, l.sofFoyda||null]
+      [
+        id,
+        l.name,
+        l.phone,
+        l.telegram,
+        l.status,
+        l.country,
+        l.sector,
+        l.position,
+        l.source,
+        l.gender,
+        l.comment,
+        l.note,
+        l.ownerSales || null,
+        l.ownerConsult || null,
+        l.ownerDocs || null,
+        l.q1 || false,
+        l.q2 || false,
+        l.q3 || false,
+        l.xba || false,
+        l.kpiSales || false,
+        l.kpiConsult || false,
+        l.kpiDocs || false,
+        JSON.stringify(l.cv || {}),
+        JSON.stringify(l.docs || {}),
+        JSON.stringify(l.history || []),
+        l.lastContact || null,
+        l.contractDate || null,
+        l.interviewDate || null,
+        l.dest || null,
+        l.sofFoyda || null,
+      ],
     );
     res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.delete('/api/leads/:id', auth, adminOnly, async (req, res) => {
+app.delete("/api/leads/:id", auth, adminOnly, async (req, res) => {
   try {
-    await pool.query('DELETE FROM leads WHERE id = $1', [req.params.id]);
+    await pool.query("DELETE FROM leads WHERE id = $1", [req.params.id]);
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── BULK CSV IMPORT ──────────────────────────────────────────────────────────
-app.post('/api/leads/bulk', auth, async (req, res) => {
+app.post("/api/leads/bulk", auth, async (req, res) => {
   const client = await pool.connect();
 
   try {
     const leads = req.body.leads || [];
 
     if (!Array.isArray(leads)) {
-      return res.status(400).json({ error: 'leads must be an array' });
+      return res.status(400).json({ error: "leads must be an array" });
     }
 
-    await client.query('BEGIN');
+    await client.query("BEGIN");
 
     let inserted = 0;
     let updated = 0;
 
     for (const l of leads) {
-      const id = l.id || `IMP-${Date.now()}-${Math.floor(Math.random() * 999999)}`;
+      const id =
+        l.id || `IMP-${Date.now()}-${Math.floor(Math.random() * 999999)}`;
 
       const result = await client.query(
         `
@@ -217,30 +299,30 @@ app.post('/api/leads/bulk', auth, async (req, res) => {
         `,
         [
           id,
-          l.name || '',
-          l.phone || '',
-          l.telegram || '',
-          l.status || 'Yangi',
-          l.country || '',
-          l.sector || '',
-          l.position || '',
-          l.source || 'CSV Import',
-          l.gender || '',
-          l.comment || '',
-          l.note || '',
-        ]
+          l.name || "",
+          l.phone || "",
+          l.telegram || "",
+          l.status || "Yangi",
+          l.country || "",
+          l.sector || "",
+          l.position || "",
+          l.source || "CSV Import",
+          l.gender || "",
+          l.comment || "",
+          l.note || "",
+        ],
       );
 
-      if (result.rows[0].xmax === '0') inserted++;
+      if (result.rows[0].xmax === "0") inserted++;
       else updated++;
     }
 
-    await client.query('COMMIT');
+    await client.query("COMMIT");
 
     res.json({ ok: true, inserted, updated });
   } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Bulk import error:', err);
+    await client.query("ROLLBACK");
+    console.error("Bulk import error:", err);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
@@ -248,197 +330,317 @@ app.post('/api/leads/bulk', auth, async (req, res) => {
 });
 
 // ─── TRANSACTIONS ──────────────────────────────────────────────────────────────
-app.get('/api/transactions', auth, async (req, res) => {
+app.get("/api/transactions", auth, async (req, res) => {
   const { lead_id, type, month } = req.query;
-  const conditions = [], params = [];
-  if (lead_id) { conditions.push(`t.lead_id=$${params.length+1}`); params.push(lead_id); }
-  if (type) { conditions.push(`t.type=$${params.length+1}`); params.push(type); }
-  if (month) { conditions.push(`TO_CHAR(t.date,'YYYY-MM')=$${params.length+1}`); params.push(month); }
-  const where = conditions.length ? 'WHERE '+conditions.join(' AND ') : '';
+  const conditions = [],
+    params = [];
+  if (lead_id) {
+    conditions.push(`t.lead_id=$${params.length + 1}`);
+    params.push(lead_id);
+  }
+  if (type) {
+    conditions.push(`t.type=$${params.length + 1}`);
+    params.push(type);
+  }
+  if (month) {
+    conditions.push(`TO_CHAR(t.date,'YYYY-MM')=$${params.length + 1}`);
+    params.push(month);
+  }
+  const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
   try {
     const { rows } = await pool.query(
       `SELECT t.*, l.name as lead_name, u.name as created_by_name
        FROM transactions t
        LEFT JOIN leads l ON t.lead_id = l.id
        LEFT JOIN users u ON t.created_by = u.id
-       ${where} ORDER BY t.date DESC, t.created_at DESC`, params);
+       ${where} ORDER BY t.date DESC, t.created_at DESC`,
+      params,
+    );
     res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post('/api/transactions', auth, async (req, res) => {
+app.post("/api/transactions", auth, async (req, res) => {
   const t = req.body;
   try {
     const { rows } = await pool.query(
       `INSERT INTO transactions (lead_id, date, type, category, description, amount, currency, receipt_url, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [t.leadId||null, t.date||new Date().toISOString().slice(0,10), t.type, t.category, t.description,
-       t.amount, t.currency||'UZS', t.receiptUrl||null, req.user.id]
+      [
+        t.leadId || null,
+        t.date || new Date().toISOString().slice(0, 10),
+        t.type,
+        t.category,
+        t.description,
+        t.amount,
+        t.currency || "UZS",
+        t.receiptUrl || null,
+        req.user.id,
+      ],
     );
     res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.put('/api/transactions/:id', auth, async (req, res) => {
+app.put("/api/transactions/:id", auth, async (req, res) => {
   const t = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE transactions SET lead_id=$1,date=$2,type=$3,category=$4,description=$5,amount=$6,receipt_url=$7
        WHERE id=$8 RETURNING *`,
-      [t.leadId||null, t.date, t.type, t.category, t.description, t.amount, t.receiptUrl||null, req.params.id]
+      [
+        t.leadId || null,
+        t.date,
+        t.type,
+        t.category,
+        t.description,
+        t.amount,
+        t.receiptUrl || null,
+        req.params.id,
+      ],
     );
     res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.delete('/api/transactions/:id', auth, async (req, res) => {
+app.delete("/api/transactions/:id", auth, async (req, res) => {
   try {
-    await pool.query('DELETE FROM transactions WHERE id=$1', [req.params.id]);
+    await pool.query("DELETE FROM transactions WHERE id=$1", [req.params.id]);
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── TASKS ────────────────────────────────────────────────────────────────────
-app.get('/api/tasks', auth, async (req, res) => {
+app.get("/api/tasks", auth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT t.*, l.name as lead_name, u.name as assignee_name, u.color as assignee_color, u.avatar as assignee_av
        FROM tasks t
        LEFT JOIN leads l ON t.lead_id = l.id
        LEFT JOIN users u ON t.assignee = u.id
-       ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC`
+       ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC`,
     );
     res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post('/api/tasks', auth, async (req, res) => {
+app.post("/api/tasks", auth, async (req, res) => {
   const t = req.body;
   try {
     const { rows } = await pool.query(
       `INSERT INTO tasks (title, description, assignee, lead_id, priority, status, due_date, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [t.title, t.description||null, t.assignee||null, t.leadId||null,
-       t.priority||'medium', t.status||'todo', t.dueDate||null, req.user.id]
+      [
+        t.title,
+        t.description || null,
+        t.assignee || null,
+        t.leadId || null,
+        t.priority || "medium",
+        t.status || "todo",
+        t.dueDate || null,
+        req.user.id,
+      ],
     );
     res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.put('/api/tasks/:id', auth, async (req, res) => {
+app.put("/api/tasks/:id", auth, async (req, res) => {
   const t = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE tasks SET title=$1,description=$2,assignee=$3,lead_id=$4,priority=$5,status=$6,due_date=$7
        WHERE id=$8 RETURNING *`,
-      [t.title,t.description||null,t.assignee||null,t.leadId||null,
-       t.priority||'medium',t.status||'todo',t.dueDate||null,req.params.id]
+      [
+        t.title,
+        t.description || null,
+        t.assignee || null,
+        t.leadId || null,
+        t.priority || "medium",
+        t.status || "todo",
+        t.dueDate || null,
+        req.params.id,
+      ],
     );
     res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.delete('/api/tasks/:id', auth, async (req, res) => {
+app.delete("/api/tasks/:id", auth, async (req, res) => {
   try {
-    await pool.query('DELETE FROM tasks WHERE id=$1', [req.params.id]);
+    await pool.query("DELETE FROM tasks WHERE id=$1", [req.params.id]);
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
-app.get('/api/users', async (req, res) => {
+app.get("/api/users", async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,salary_items FROM users ORDER BY id'
+      "SELECT id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,salary_items FROM users ORDER BY id",
     );
     res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.post('/api/users', auth, adminOnly, async (req, res) => {
+app.post("/api/users", auth, adminOnly, async (req, res) => {
   const u = req.body;
-  const hash = await bcrypt.hash(u.password || 'password123', 10);
+  const hash = await bcrypt.hash(u.password || "password123", 10);
   try {
     const { rows } = await pool.query(
       `INSERT INTO users (username,password,name,role,avatar,color,phone,email,salary,salary_type,salary_pct)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        ON CONFLICT (username) DO UPDATE SET name=$3,role=$4,avatar=$5,color=$6,phone=$7,email=$8,salary=$9,salary_type=$10,salary_pct=$11
        RETURNING id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct`,
-      [u.username,hash,u.name,u.role||'sales',u.avatar||'',u.color||'#6366f1',
-       u.phone||null,u.email||null,u.salary||0,u.salaryType||'fixed',u.salaryPct||0]
+      [
+        u.username,
+        hash,
+        u.name,
+        u.role || "sales",
+        u.avatar || "",
+        u.color || "#6366f1",
+        u.phone || null,
+        u.email || null,
+        u.salary || 0,
+        u.salaryType || "fixed",
+        u.salaryPct || 0,
+      ],
     );
     res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.put('/api/users/:id', auth, adminOnly, async (req, res) => {
+app.put("/api/users/:id", auth, adminOnly, async (req, res) => {
   const u = req.body;
   try {
     const updates = [];
     const params = [];
-    const fields = {name:'name',role:'role',avatar:'avatar',color:'color',phone:'phone',email:'email',active:'active',salary:'salary',salaryType:'salary_type',salaryPct:'salary_pct',salaryItems:'salary_items'};
-    Object.entries(fields).forEach(([k,col]) => {
-      if (u[k] !== undefined) { params.push(u[k] === null ? null : (k==='salaryItems'?JSON.stringify(u[k]):u[k])); updates.push(`${col}=$${params.length}`); }
+    const fields = {
+      name: "name",
+      role: "role",
+      avatar: "avatar",
+      color: "color",
+      phone: "phone",
+      email: "email",
+      active: "active",
+      salary: "salary",
+      salaryType: "salary_type",
+      salaryPct: "salary_pct",
+      salaryItems: "salary_items",
+    };
+    Object.entries(fields).forEach(([k, col]) => {
+      if (u[k] !== undefined) {
+        params.push(
+          u[k] === null
+            ? null
+            : k === "salaryItems"
+              ? JSON.stringify(u[k])
+              : u[k],
+        );
+        updates.push(`${col}=$${params.length}`);
+      }
     });
-    if (u.password) { params.push(await bcrypt.hash(u.password, 10)); updates.push(`password=$${params.length}`); }
+    if (u.password) {
+      params.push(await bcrypt.hash(u.password, 10));
+      updates.push(`password=$${params.length}`);
+    }
     if (!updates.length) return res.json({ ok: true });
     params.push(req.params.id);
     const { rows } = await pool.query(
-      `UPDATE users SET ${updates.join(',')} WHERE id=$${params.length} RETURNING id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,salary_items`,
-      params
+      `UPDATE users SET ${updates.join(",")} WHERE id=$${params.length} RETURNING id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,salary_items`,
+      params,
     );
     res.json(rows[0]);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-app.get('/api/config', auth, async (req, res) => {
+app.get("/api/config", auth, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT key, value FROM config');
+    const { rows } = await pool.query("SELECT key, value FROM config");
     const cfg = {};
-    rows.forEach(r => { cfg[r.key] = r.value; });
+    rows.forEach((r) => {
+      cfg[r.key] = r.value;
+    });
     res.json(cfg);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-app.put('/api/config/:key', auth, async (req, res) => {
+app.put("/api/config/:key", auth, async (req, res) => {
   try {
     await pool.query(
       `INSERT INTO config (key, value) VALUES ($1, $2)
        ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()`,
-      [req.params.key, JSON.stringify(req.body.value)]
+      [req.params.key, JSON.stringify(req.body.value)],
     );
     res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── FILE UPLOAD ──────────────────────────────────────────────────────────────
-app.post('/api/upload', auth, upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file' });
-  res.json({ url: `/uploads/${req.file.filename}`, originalName: req.file.originalname });
+app.post("/api/upload", auth, upload.single("file"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file" });
+  res.json({
+    url: `/uploads/${req.file.filename}`,
+    originalName: req.file.originalname,
+  });
 });
 
 // ─── STATS ────────────────────────────────────────────────────────────────────
-app.get('/api/stats', auth, async (req, res) => {
+app.get("/api/stats", auth, async (req, res) => {
   try {
     const [counts, finance, sources] = await Promise.all([
-      pool.query(`SELECT status, COUNT(*) as count FROM leads GROUP BY status ORDER BY count DESC`),
-      pool.query(`SELECT type, SUM(amount) as total FROM transactions GROUP BY type`),
-      pool.query(`SELECT source, COUNT(*) as count FROM leads WHERE source IS NOT NULL AND source != '' GROUP BY source ORDER BY count DESC LIMIT 10`),
+      pool.query(
+        `SELECT status, COUNT(*) as count FROM leads GROUP BY status ORDER BY count DESC`,
+      ),
+      pool.query(
+        `SELECT type, SUM(amount) as total FROM transactions GROUP BY type`,
+      ),
+      pool.query(
+        `SELECT source, COUNT(*) as count FROM leads WHERE source IS NOT NULL AND source != '' GROUP BY source ORDER BY count DESC LIMIT 10`,
+      ),
     ]);
     res.json({
       statusCounts: counts.rows,
       finance: finance.rows,
       sources: sources.rows,
     });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── WEBHOOK (Make.com / Tally / Meta) ───────────────────────────────────────
-app.post('/api/webhook/lead', async (req, res) => {
-  const apiKey = req.headers['x-api-key'];
+app.post("/api/webhook/lead", async (req, res) => {
+  const apiKey = req.headers["x-api-key"];
   if (apiKey !== process.env.WEBHOOK_KEY && process.env.WEBHOOK_KEY) {
-    return res.status(401).json({ error: 'Invalid API key' });
+    return res.status(401).json({ error: "Invalid API key" });
   }
   const data = req.body;
   const id = data.id || `NO-WH-${Date.now()}`;
@@ -447,58 +649,64 @@ app.post('/api/webhook/lead', async (req, res) => {
       `INSERT INTO leads (id, name, phone, status, country, source, comment, telegram)
        VALUES ($1, $2, $3, 'Yangi', $4, $5, $6, $7)
        ON CONFLICT (id) DO NOTHING`,
-      [id,
-       data.full_name || data.name || 'Noma\'lum',
-       data.phone_number || data.phone || '',
-       data.country || data.city || '',
-       data.source || 'Webhook',
-       data.comment || data.message || '',
-       data.telegram || '']
+      [
+        id,
+        data.full_name || data.name || "Noma'lum",
+        data.phone_number || data.phone || "",
+        data.country || data.city || "",
+        data.source || "Webhook",
+        data.comment || data.message || "",
+        data.telegram || "",
+      ],
     );
     res.json({ ok: true, id });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── SERVE FRONTEND ───────────────────────────────────────────────────────────
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === "production") {
   // app.use(express.static(path.join(__dirname, '../client/dist')));
   // app.get('*', (req, res) => {
   //   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
   // });
-  app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'OneJobs CRM API is running' });
-});
+  app.get("/", (req, res) => {
+    res.json({ status: "ok", message: "OneJobs CRM API is running" });
+  });
 }
-
 
 // ═══════════════════════════════════════════════════════════
 // WEBHOOK ENDPOINTS — Tally + Meta Ads + Make.com
 // ═══════════════════════════════════════════════════════════
 
 // ─── TALLY FORMS ──────────────────────────────────────────
-app.post('/api/webhook/tally', async (req, res) => {
+app.post("/api/webhook/tally", async (req, res) => {
   res.sendStatus(200);
 
   try {
     const payload = req.body;
     const fields = payload?.data?.fields || payload?.fields || [];
 
-    const norm = s => String(s || "")
-      .toLowerCase()
-      .replace(/ʻ/g, "'")
-      .replace(/‘/g, "'")
-      .replace(/`/g, "'");
+    const norm = (s) =>
+      String(s || "")
+        .toLowerCase()
+        .replace(/ʻ/g, "'")
+        .replace(/‘/g, "'")
+        .replace(/`/g, "'");
 
     const get = (...labels) => {
       for (const label of labels) {
-        const f = fields.find(x => norm(x.label).includes(norm(label)));
+        const f = fields.find((x) => norm(x.label).includes(norm(label)));
         if (!f) continue;
 
         if (Array.isArray(f.value)) {
-          return f.value.map(v => {
-            const opt = f.options?.find(o => o.id === v);
-            return opt ? opt.text : v;
-          }).join(", ");
+          return f.value
+            .map((v) => {
+              const opt = f.options?.find((o) => o.id === v);
+              return opt ? opt.text : v;
+            })
+            .join(", ");
         }
 
         return f.value || "";
@@ -506,15 +714,17 @@ app.post('/api/webhook/tally', async (req, res) => {
       return "";
     };
 
-    const id = 'TALLY-' + Date.now();
+    const id = "TALLY-" + Date.now();
 
-    const name = get('isim', 'ism', 'familya', 'fio', 'full name', 'name') || "Noma'lum";
-    const phone = get('telefon', 'phone', 'tel', 'raqam');
-    const telegram = get('telegram', 'username');
-    const country = get('davlat', 'mamlakat', 'country', 'qaysi davlat') || 'Janubiy Koreya';
-    const sector = get('kasb', "yo'nalish", 'yonalish', 'faoliyat');
-    const source = get('qayerdan', 'biz haqimizda', 'source') || 'Tally Form';
-    const comment = get('izoh', 'comment', 'xabar', 'tillar');
+    const name =
+      get("isim", "ism", "familya", "fio", "full name", "name") || "Noma'lum";
+    const phone = get("telefon", "phone", "tel", "raqam");
+    const telegram = get("telegram", "username");
+    const country =
+      get("davlat", "mamlakat", "country", "qaysi davlat") || "Janubiy Koreya";
+    const sector = get("kasb", "yo'nalish", "yonalish", "faoliyat");
+    const source = get("qayerdan", "biz haqimizda", "source") || "Tally Form";
+    const comment = get("izoh", "comment", "xabar", "tillar");
 
     await pool.query(
       `INSERT INTO leads
@@ -522,88 +732,125 @@ app.post('/api/webhook/tally', async (req, res) => {
        VALUES
        ($1,$2,$3,$4,'Yangi',$5,$6,$7,$8,'{}','{}','[]')
        ON CONFLICT (id) DO NOTHING`,
-      [id, name, phone, telegram, country, sector, source, comment]
+      [id, name, phone, telegram, country, sector, source, comment],
     );
 
-    console.log('✅ Tally lead saved:', id, name, phone);
+    console.log("✅ Tally lead saved:", id, name, phone);
   } catch (err) {
-    console.error('❌ Tally webhook error:', err.message);
+    console.error("❌ Tally webhook error:", err.message);
   }
 });
 
 // ─── META ADS — Verification ──────────────────────────────
-app.get('/api/webhook/meta', (req, res) => {
-  const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'onejobs2026';
-  if (req.query['hub.mode'] === 'subscribe' &&
-      req.query['hub.verify_token'] === VERIFY_TOKEN) {
-    res.send(req.query['hub.challenge']);
-    console.log('✅ Meta webhook tasdiqlandi');
+app.get("/api/webhook/meta", (req, res) => {
+  const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || "onejobs2026";
+  if (
+    req.query["hub.mode"] === "subscribe" &&
+    req.query["hub.verify_token"] === VERIFY_TOKEN
+  ) {
+    res.send(req.query["hub.challenge"]);
+    console.log("✅ Meta webhook tasdiqlandi");
   } else {
     res.sendStatus(403);
   }
 });
 
 // ─── META ADS — New Lead ──────────────────────────────────
-app.post('/api/webhook/meta', async (req, res) => {
+app.post("/api/webhook/meta", async (req, res) => {
   res.sendStatus(200);
 
   try {
     for (const entry of req.body.entry || []) {
       for (const change of entry.changes || []) {
-        if (change.field !== 'leadgen') continue;
+        if (change.field !== "leadgen") continue;
 
         const leadgenId = change.value.leadgen_id;
 
         // Meta Graph API dan to'liq ma'lumot olinadi
         const r = await fetch(
-          `https://graph.facebook.com/v19.0/${leadgenId}?access_token=${process.env.META_PAGE_TOKEN}`
+          `https://graph.facebook.com/v19.0/${leadgenId}?access_token=${process.env.META_PAGE_TOKEN}`,
         );
         const data = await r.json();
-        if (data.error) { console.error('Meta API:', data.error); continue; }
+        if (data.error) {
+          console.error("Meta API:", data.error);
+          continue;
+        }
 
         const f = {};
         for (const field of data.field_data || []) {
-          f[field.name] = field.values?.[0] || '';
+          f[field.name] = field.values?.[0] || "";
         }
 
-        const id = 'META-' + leadgenId;
+        const id = "META-" + leadgenId;
         await pool.query(
           `INSERT INTO leads (id,name,phone,status,country,source,reklama_name,comment,created_at)
            VALUES ($1,$2,$3,'Yangi',$4,'Meta Ads',$5,$6,NOW())
            ON CONFLICT (id) DO NOTHING`,
-          [id,
-           f.full_name || f.name || 'Noma\'lum',
-           f.phone_number || f.phone || '',
-           f.country || f.city || '',
-           change.value.ad_name || '',
-           `Ad: ${change.value.ad_id||''}`]
+          [
+            id,
+            f.full_name || f.name || "Noma'lum",
+            f.phone_number || f.phone || "",
+            f.country || f.city || "",
+            change.value.ad_name || "",
+            `Ad: ${change.value.ad_id || ""}`,
+          ],
         );
-        console.log('✅ Meta lead:', id, f.full_name, f.phone_number);
+        console.log("✅ Meta lead:", id, f.full_name, f.phone_number);
       }
     }
   } catch (err) {
-    console.error('Meta error:', err.message);
+    console.error("Meta error:", err.message);
   }
 });
 // ═══════════════════════════════════════════════════════════
 // New leads since timestamp (for 30-second polling)
-app.get('/api/leads/new', auth, async (req, res) => {
+app.get("/api/leads/new", auth, async (req, res) => {
   try {
     const since = req.query.since || new Date(0).toISOString();
     const { rows } = await pool.query(
-      'SELECT * FROM leads WHERE created_at > $1 ORDER BY created_at DESC LIMIT 50',
-      [since]
+      "SELECT * FROM leads WHERE created_at > $1 ORDER BY created_at DESC LIMIT 50",
+      [since],
     );
     res.json({ leads: rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+//-------Vacancies (Job Openings) ─────────────────────────────────────────────────
+app.get("/api/vacancies", auth, async (req, res) => {
+  const r = await pool.query(
+    "SELECT * FROM vacancies ORDER BY created_at DESC",
+  );
+  res.json(r.rows.map((v) => ({ ...v.data, id: v.id })));
+});
+
+app.post("/api/vacancies", auth, async (req, res) => {
+  const v = req.body;
+  const id = v.id || `VAC-${Date.now()}`;
+
+  await pool.query(
+    `INSERT INTO vacancies (id, data)
+     VALUES ($1, $2)
+     ON CONFLICT (id) DO UPDATE SET data = $2, updated_at = NOW()`,
+    [id, { ...v, id }],
+  );
+
+  res.json({ ...v, id });
+});
+
+app.delete("/api/vacancies/:id", auth, async (req, res) => {
+  await pool.query("DELETE FROM vacancies WHERE id = $1", [req.params.id]);
+  res.json({ ok: true });
+});
+
 // ─── START SERVER ─────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`🚀 OneJobs CRM API running on port ${PORT}`);
-  console.log(`   Database: ${process.env.DATABASE_URL ? 'Connected' : 'Using default localhost'}`);
-  console.log(`   Env: ${process.env.NODE_ENV || 'development'}`);
+  console.log(
+    `   Database: ${process.env.DATABASE_URL ? "Connected" : "Using default localhost"}`,
+  );
+  console.log(`   Env: ${process.env.NODE_ENV || "development"}`);
 });
 
 module.exports = app;
