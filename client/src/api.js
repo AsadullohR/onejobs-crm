@@ -92,6 +92,30 @@ export const statsAPI = {
 
 export const vacanciesAPI = {
   getAll: () => req("GET", "/api/vacancies"),
-  save: (vacancy) => req("POST", "/api/vacancies", vacancy),
+  create: (v) => req("POST", "/api/vacancies", v),
+  update: (id, v) => req("PUT", `/api/vacancies/${id}`, v),
   delete: (id) => req("DELETE", `/api/vacancies/${id}`),
+  getCandidates: (id) => req("GET", `/api/vacancies/${id}/candidates`),
+};
+
+export const candidatesAPI = {
+  create: (c) => req("POST", "/api/candidates", c),
+  update: (id, c) => req("PUT", `/api/candidates/${id}`, c),
+  delete: (id) => req("DELETE", `/api/candidates/${id}`),
+};
+
+export const notifAPI = {
+  getAll: () => req("GET", "/api/notifications"),
+  create: (message, type) => req("POST", "/api/notifications", { message, type }),
+  markRead: (id) => req("PUT", `/api/notifications/${id}/read`, {}),
+  markAllRead: () => req("PUT", "/api/notifications/read-all", {}),
+  delete: (id) => req("DELETE", `/api/notifications/${id}`),
+  clearRead: () => req("DELETE", "/api/notifications"),
+};
+
+export const extExpAPI = {
+  getAll: () => req("GET", "/api/external-expenses"),
+  create: (e) => req("POST", "/api/external-expenses", e),
+  update: (id, e) => req("PUT", `/api/external-expenses/${id}`, e),
+  delete: (id) => req("DELETE", `/api/external-expenses/${id}`),
 };

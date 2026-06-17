@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useT } from "./theme.js";
 import { inp, lab, I, Modal, SearchSelect, Av } from "./helpers.jsx";
-import { vacanciesAPI } from "./api.js";
+import { vacanciesAPI, candidatesAPI } from "./api.js";
 // ─── STATUS CONFIG ────────────────────────────────────────────────────────────
 const V_STATUS = {
   active: { label: "Active", c: "#16a34a", bg: "#dcfce7" },
@@ -59,9 +59,7 @@ function fmtDate(d) {
 // ─── VACANCY CARD ─────────────────────────────────────────────────────────────
 function VacancyCard({ v, leads, onClick, T }) {
   const st = V_STATUS[v.status] || V_STATUS.active;
-  const filled = (v.candidates || []).filter((c) =>
-    ["approved", "hired"].includes(c.status),
-  ).length;
+  const filled = v.hiredCount || 0;
   const total = v.positions || 1;
 
   return (
@@ -315,45 +313,50 @@ function VacancyDetail({
   const inpS = inp(T);
   const labS = lab(T);
 
-  // Candidate management
+  // Candidate management — loaded from DB
+  const [candidates, setCandidates] = useState([]);
+  const [candLoading, setCandLoading] = useState(false);
   const [candModal, setCandModal] = useState(false);
-  const [candForm, setCandForm] = useState({
-    leadId: "",
-    status: "submitted",
-    note: "",
-  });
+  const [candForm, setCandForm] = useState({ leadId: "", status: "submitted", note: "" });
   const cf = (k, val) => setCandForm((p) => ({ ...p, [k]: val }));
-  const candidates = v.candidates || [];
 
-  const addCandidate = () => {
+  useEffect(() => {
+    setCandLoading(true);
+    vacanciesAPI.getCandidates(v.id)
+      .then(r => { setCandidates(r || []); setCandLoading(false); })
+      .catch(() => setCandLoading(false));
+  }, [v.id]);
+
+  const addCandidate = async () => {
     if (!candForm.leadId) return;
     const lead = leads.find((l) => l.id === candForm.leadId);
-    const newC = {
-      id: uid(),
-      leadId: candForm.leadId,
-      leadName: lead?.name || "Unknown",
-      status: candForm.status || "submitted",
-      note: candForm.note || "",
-      addedBy: user.id,
-      addedByName: user.name,
-      addedAt: new Date().toISOString().slice(0, 10),
-    };
-    onSave({ ...v, candidates: [...candidates, newC] });
-    setCandModal(false);
-    setCandForm({ leadId: "", status: "submitted", note: "" });
+    try {
+      const saved = await candidatesAPI.create({
+        vacancy_id: v.id,
+        lead_id: candForm.leadId,
+        name: lead?.name || "Unknown",
+        phone: lead?.phone || "",
+        status: candForm.status || "submitted",
+        note: candForm.note || "",
+      });
+      setCandidates(p => [saved, ...p]);
+      setCandModal(false);
+      setCandForm({ leadId: "", status: "submitted", note: "" });
+    } catch (err) { alert("Xato: " + err.message); }
   };
 
-  const updateCandStatus = (cId, newStatus) => {
-    onSave({
-      ...v,
-      candidates: candidates.map((c) =>
-        c.id === cId ? { ...c, status: newStatus } : c,
-      ),
-    });
+  const updateCandStatus = async (cId, newStatus) => {
+    const cand = candidates.find(c => c.id === cId);
+    try {
+      const saved = await candidatesAPI.update(cId, { ...cand, status: newStatus });
+      setCandidates(p => p.map(c => c.id === cId ? { ...c, status: newStatus } : c));
+    } catch (err) { alert("Xato: " + err.message); }
   };
 
-  const removeCandidate = (cId) => {
-    onSave({ ...v, candidates: candidates.filter((c) => c.id !== cId) });
+  const removeCandidate = async (cId) => {
+    if (!confirm("O'chirilsinmi?")) return;
+    await candidatesAPI.delete(cId);
+    setCandidates(p => p.filter(c => c.id !== cId));
   };
 
   const saveEdit = () => {
@@ -402,7 +405,7 @@ function VacancyDetail({
         >
           <div style={{ flex: 1, display: "flex" }}>
             {tabBtn("info", "📋 JOB POSTING INFORMATION")}
-            {tabBtn("candidates", `👥 CANDIDATES (${candidates.length})`)}
+            {tabBtn("candidates", `👥 CANDIDATES (${candLoading ? "…" : candidates.length})`)}
           </div>
           <button
             onClick={onClose}
@@ -537,12 +540,8 @@ function VacancyDetail({
                   </div>
                   <div style={{ fontSize: 10, color: T.muted }}>
                     👥{" "}
-                    {
-                      candidates.filter((c) =>
-                        ["approved", "hired"].includes(c.status),
-                      ).length
-                    }{" "}
-                    / {v.positions || 1} approved candidates
+                    {candidates.filter(c => ["approved","hired"].includes(c.status)).length}
+                    {" "}/ {v.positions || 1} approved candidates
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -973,10 +972,10 @@ function VacancyDetail({
               >
                 <div>
                   <div style={{ fontSize: 16, fontWeight: 900, color: T.text }}>
-                    Candidates for the advertisement
+                    Candidates for this vacancy
                   </div>
                   <div style={{ fontSize: 11, color: T.muted }}>
-                    Total {candidates.length} candidates
+                    Jami {candLoading ? "…" : candidates.length} ta nomzod
                   </div>
                 </div>
                 <button
@@ -1322,14 +1321,16 @@ function Vacancies({ leads, user, team, roles }) {
 
   const saveVacancy = async (vac) => {
     try {
-      const saved = await vacanciesAPI.save(vac);
+      const isExisting = vacancies.some(x => x.id === vac.id);
+      const saved = isExisting
+        ? await vacanciesAPI.update(vac.id, vac)
+        : await vacanciesAPI.create(vac);
 
       setVacancies((p) =>
         p.some((x) => x.id === saved.id)
           ? p.map((x) => (x.id === saved.id ? saved : x))
           : [...p, saved],
       );
-
       setSelected(saved);
     } catch (err) {
       alert("Vakansiya saqlanmadi: " + err.message);
@@ -1350,16 +1351,12 @@ function Vacancies({ leads, user, team, roles }) {
 
   const createVacancy = async () => {
     if (!newForm.title) return;
-
     const vac = {
       ...newForm,
-      candidates: [],
       postedDate: new Date().toISOString().slice(0, 10),
       status: newForm.status || "active",
     };
-
     await saveVacancy(vac);
-
     setShowForm(false);
     setNewForm({});
   };
@@ -1371,15 +1368,8 @@ function Vacancies({ leads, user, team, roles }) {
       active: vacancies.filter((v) => v.status === "active").length,
       filled: vacancies.filter((v) => v.status === "filled").length,
       totalPos: vacancies.reduce((s, v) => s + (v.positions || 1), 0),
-      hired: vacancies.reduce(
-        (s, v) =>
-          s +
-          (v.candidates || []).filter((c) =>
-            ["approved", "hired"].includes(c.status),
-          ).length,
-        0,
-      ),
-      submitted: vacancies.reduce((s, v) => s + (v.candidates || []).length, 0),
+      hired: vacancies.reduce((s, v) => s + (v.hiredCount || 0), 0),
+      submitted: vacancies.reduce((s, v) => s + (v.candidateCount || 0), 0),
     }),
     [vacancies],
   );
@@ -1753,9 +1743,7 @@ function Vacancies({ leads, user, team, roles }) {
             <tbody>
               {filtered.map((v, i) => {
                 const st = V_STATUS[v.status] || V_STATUS.active;
-                const hired = (v.candidates || []).filter((c) =>
-                  ["approved", "hired"].includes(c.status),
-                ).length;
+                const hired = v.hiredCount || 0;
                 return (
                   <tr
                     key={v.id}
@@ -1801,7 +1789,7 @@ function Vacancies({ leads, user, team, roles }) {
                       {hired}/{v.positions || 1}
                     </td>
                     <td style={{ padding: "10px 12px", color: T.muted }}>
-                      {(v.candidates || []).length}
+                      {v.candidateCount || 0}
                     </td>
                     <td style={{ padding: "10px 12px" }}>
                       <StatusBadge status={v.status} T={T} />

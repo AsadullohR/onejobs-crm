@@ -576,6 +576,59 @@ app.put("/api/users/:id", auth, adminOnly, async (req, res) => {
   }
 });
 
+// ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
+app.get("/api/notifications", auth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT * FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100",
+      [req.user.id],
+    );
+    res.json(rows.map(r => ({
+      id: String(r.id), msg: r.message, type: r.type,
+      read: r.read, at: r.created_at,
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/notifications", auth, async (req, res) => {
+  const { message, type } = req.body;
+  try {
+    const { rows } = await pool.query(
+      "INSERT INTO notifications (user_id, message, type) VALUES ($1,$2,$3) RETURNING *",
+      [req.user.id, message, type || "info"],
+    );
+    res.json({ id: String(rows[0].id), msg: rows[0].message, type: rows[0].type, read: false, at: rows[0].created_at });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/notifications/:id/read", auth, async (req, res) => {
+  try {
+    await pool.query("UPDATE notifications SET read=TRUE WHERE id=$1 AND user_id=$2", [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/notifications/read-all", auth, async (req, res) => {
+  try {
+    await pool.query("UPDATE notifications SET read=TRUE WHERE user_id=$1", [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete("/api/notifications/:id", auth, async (req, res) => {
+  try {
+    await pool.query("DELETE FROM notifications WHERE id=$1 AND user_id=$2", [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete("/api/notifications", auth, async (req, res) => {
+  try {
+    await pool.query("DELETE FROM notifications WHERE user_id=$1 AND read=TRUE", [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 app.get("/api/config", auth, async (req, res) => {
   try {
@@ -817,31 +870,176 @@ app.get("/api/leads/new", auth, async (req, res) => {
   }
 });
 
-//-------Vacancies (Job Openings) ─────────────────────────────────────────────────
+// ─── VACANCIES ───────────────────────────────────────────────────────────────
+const vacRow = (r) => ({
+  id: r.id, title: r.title, company: r.company, country: r.country,
+  jobType: r.job_type, contractType: r.contract_type, salary: r.salary,
+  additionalPay: r.additional_pay, workingHours: r.working_hours,
+  positions: r.positions, accommodation: r.accommodation,
+  foodVouchers: r.food_vouchers, logo: r.logo,
+  description: r.description, requirements: r.requirements,
+  otherDesc: r.other_desc, postedDate: r.posted_date?.toISOString?.()?.slice(0,10) || r.posted_date,
+  status: r.status, createdAt: r.created_at,
+  candidateCount: Number(r.candidate_count || 0),
+  hiredCount: Number(r.hired_count || 0),
+});
+
 app.get("/api/vacancies", auth, async (req, res) => {
-  const r = await pool.query(
-    "SELECT * FROM vacancies ORDER BY created_at DESC",
-  );
-  res.json(r.rows.map((v) => ({ ...v.data, id: v.id })));
+  try {
+    const { rows } = await pool.query(
+      `SELECT v.*,
+        COUNT(c.id) FILTER (WHERE c.id IS NOT NULL) as candidate_count,
+        COUNT(c.id) FILTER (WHERE c.status IN ('hired','approved')) as hired_count
+       FROM vacancies v LEFT JOIN candidates c ON c.vacancy_id = v.id
+       GROUP BY v.id ORDER BY v.created_at DESC`,
+    );
+    res.json(rows.map(vacRow));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post("/api/vacancies", auth, async (req, res) => {
-  const v = req.body;
-  const id = v.id || `VAC-${Date.now()}`;
+  const b = req.body;
+  const id = b.id || `VAC-${Date.now()}`;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO vacancies (id, title, company, country, job_type, contract_type, salary,
+         additional_pay, working_hours, positions, accommodation, food_vouchers, logo,
+         description, requirements, other_desc, posted_date, status, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       ON CONFLICT (id) DO UPDATE SET
+         title=$2, company=$3, country=$4, job_type=$5, contract_type=$6, salary=$7,
+         additional_pay=$8, working_hours=$9, positions=$10, accommodation=$11,
+         food_vouchers=$12, logo=$13, description=$14, requirements=$15,
+         other_desc=$16, posted_date=$17, status=$18, updated_at=NOW()
+       RETURNING *`,
+      [id, b.title, b.company||null, b.country||null, b.jobType||null, b.contractType||null,
+       b.salary||null, b.additionalPay||null, b.workingHours||null, b.positions||1,
+       b.accommodation||null, b.foodVouchers||null, b.logo||null,
+       b.description||null, b.requirements||null, b.otherDesc||null,
+       b.postedDate||new Date().toISOString().slice(0,10), b.status||"active", req.user.id],
+    );
+    res.json(vacRow({ ...rows[0], candidate_count: 0, hired_count: 0 }));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
-  await pool.query(
-    `INSERT INTO vacancies (id, data)
-     VALUES ($1, $2)
-     ON CONFLICT (id) DO UPDATE SET data = $2, updated_at = NOW()`,
-    [id, { ...v, id }],
-  );
-
-  res.json({ ...v, id });
+app.put("/api/vacancies/:id", auth, async (req, res) => {
+  const b = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE vacancies SET title=$1, company=$2, country=$3, job_type=$4, contract_type=$5,
+         salary=$6, additional_pay=$7, working_hours=$8, positions=$9, accommodation=$10,
+         food_vouchers=$11, logo=$12, description=$13, requirements=$14, other_desc=$15,
+         posted_date=$16, status=$17, updated_at=NOW()
+       WHERE id=$18 RETURNING *`,
+      [b.title, b.company||null, b.country||null, b.jobType||null, b.contractType||null,
+       b.salary||null, b.additionalPay||null, b.workingHours||null, b.positions||1,
+       b.accommodation||null, b.foodVouchers||null, b.logo||null,
+       b.description||null, b.requirements||null, b.otherDesc||null,
+       b.postedDate||null, b.status||"active", req.params.id],
+    );
+    res.json(vacRow({ ...rows[0], candidate_count: 0, hired_count: 0 }));
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete("/api/vacancies/:id", auth, async (req, res) => {
-  await pool.query("DELETE FROM vacancies WHERE id = $1", [req.params.id]);
-  res.json({ ok: true });
+  try {
+    await pool.query("DELETE FROM vacancies WHERE id=$1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── CANDIDATES ──────────────────────────────────────────────────────────────
+app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT c.*, l.name as lead_name, l.phone as lead_phone,
+              u.name as added_by_name
+       FROM candidates c
+       LEFT JOIN leads l ON l.id=c.lead_id
+       LEFT JOIN users u ON u.id=(SELECT created_by FROM candidates WHERE id=c.id LIMIT 1)
+       WHERE c.vacancy_id=$1 ORDER BY c.created_at DESC`,
+      [req.params.id],
+    );
+    res.json(rows.map(r => ({
+      id: String(r.id), vacancyId: r.vacancy_id, leadId: r.lead_id,
+      leadName: r.lead_name || r.name, leadPhone: r.lead_phone || r.phone,
+      name: r.name, phone: r.phone, status: r.status, note: r.note,
+      appliedAt: r.applied_at, addedByName: r.added_by_name,
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/candidates", auth, async (req, res) => {
+  const { vacancy_id, lead_id, name, phone, status, note, applied_at } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO candidates (vacancy_id, lead_id, name, phone, status, note, applied_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [vacancy_id, lead_id||null, name, phone||null, status||"applied", note||null, applied_at||null],
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/candidates/:id", auth, async (req, res) => {
+  const { name, phone, status, note } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE candidates SET name=$1, phone=$2, status=$3, note=$4, updated_at=NOW()
+       WHERE id=$5 RETURNING *`,
+      [name, phone||null, status, note||null, req.params.id],
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete("/api/candidates/:id", auth, async (req, res) => {
+  try {
+    await pool.query("DELETE FROM candidates WHERE id=$1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── EXTERNAL EXPENSES ───────────────────────────────────────────────────────
+app.get("/api/external-expenses", auth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT * FROM external_expenses ORDER BY date DESC, created_at DESC",
+    );
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/external-expenses", auth, async (req, res) => {
+  const { date, category, description, amount, recurring } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO external_expenses (date, category, description, amount, recurring, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [date||new Date().toISOString().slice(0,10), category, description||null,
+       amount||0, recurring||false, req.user.id],
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/external-expenses/:id", auth, async (req, res) => {
+  const { date, category, description, amount, recurring } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE external_expenses SET date=$1, category=$2, description=$3, amount=$4, recurring=$5
+       WHERE id=$6 RETURNING *`,
+      [date, category, description||null, amount||0, recurring||false, req.params.id],
+    );
+    res.json(rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete("/api/external-expenses/:id", auth, async (req, res) => {
+  try {
+    await pool.query("DELETE FROM external_expenses WHERE id=$1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ─── START SERVER ─────────────────────────────────────────────────────────────

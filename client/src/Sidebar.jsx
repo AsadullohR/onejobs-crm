@@ -14,7 +14,6 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     {k:"tasks",     l:"Vazifalar",           ic:I.task},
     {k:"vacancies", l:"Vakansiyalar",        ic:"💼"},
     {k:"finance",   l:"Moliya",              ic:I.money},
-    {k:"salary",    l:"Xodim Xarajatlari",   ic:I.salary},
     {k:"docspipe",  l:"Konsultant Pipeline", ic:I.flag},
     {k:"debts",     l:"Qarzlar",             ic:I.money},
     {k:"visa",      l:"Viza",                ic:I.flag},
@@ -22,7 +21,7 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     {k:"settings",  l:"Sozlamalar",          ic:I.gear},
   ];
   const allowed={
-  admin:  NAV.map(n=>n.k),
+  admin:  NAV.filter(n=>n.k!=="salary").map(n=>n.k),
   manager:["dashboard","pipeline","leads","tasks","finance","debts","visa","team","settings","docspipe","analytics","vacancies"],
   sales:  ["dashboard","pipeline","leads","tasks","vacancies", "visa"],
   docs:   ["dashboard","pipeline","leads","tasks","docspipe","visa","vacancies"],

@@ -130,6 +130,64 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ─── VACANCIES ───────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS vacancies (
+  id              TEXT PRIMARY KEY,
+  title           TEXT NOT NULL,
+  company         TEXT,
+  country         TEXT,
+  job_type        TEXT,
+  contract_type   TEXT,
+  salary          TEXT,
+  additional_pay  TEXT,
+  working_hours   TEXT,
+  positions       INTEGER DEFAULT 1,
+  accommodation   TEXT,
+  food_vouchers   TEXT,
+  logo            TEXT,
+  description     TEXT,
+  requirements    TEXT,
+  other_desc      TEXT,
+  posted_date     DATE DEFAULT CURRENT_DATE,
+  status          TEXT DEFAULT 'active',
+  created_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_vacancies_status ON vacancies(status);
+
+-- ─── CANDIDATES ──────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS candidates (
+  id            BIGSERIAL PRIMARY KEY,
+  vacancy_id    TEXT REFERENCES vacancies(id) ON DELETE CASCADE,
+  lead_id       TEXT REFERENCES leads(id) ON DELETE SET NULL,
+  name          TEXT NOT NULL,
+  phone         TEXT,
+  status        TEXT DEFAULT 'applied',  -- 'applied'|'screening'|'interview'|'offer'|'hired'|'rejected'
+  note          TEXT,
+  applied_at    DATE DEFAULT CURRENT_DATE,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_candidates_vacancy ON candidates(vacancy_id);
+CREATE INDEX IF NOT EXISTS idx_candidates_status  ON candidates(status);
+
+-- ─── EXTERNAL EXPENSES ───────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS external_expenses (
+  id          BIGSERIAL PRIMARY KEY,
+  date        DATE NOT NULL DEFAULT CURRENT_DATE,
+  category    TEXT NOT NULL,  -- 'Ofis ijara' | 'Kommunal' | 'Marketing' | 'Transport' | 'Boshqa'
+  description TEXT,
+  amount      BIGINT NOT NULL DEFAULT 0,
+  recurring   BOOLEAN DEFAULT FALSE,
+  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ext_exp_date ON external_expenses(date DESC);
+
 -- ─── TRIGGER: auto-update updated_at ─────────────────────────────────────────
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$

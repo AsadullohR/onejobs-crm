@@ -14,14 +14,14 @@ import { Pipeline } from "./Pipeline.jsx";
 import { LeadsList } from "./LeadsList.jsx";
 import { Tasks } from "./Tasks.jsx";
 import { Finance } from "./Finance.jsx";
+import { FinanceHub } from "./FinanceHub.jsx";
 import { Visa, TeamPage, Settings } from "./Misc.jsx";
 import { Sidebar, Login } from "./Sidebar.jsx"
 import { DocsPipeline } from "./DocsPipeline.jsx";
 import { Dashboard } from "./Dashboard.jsx";
-import { SalaryPage } from "./SalaryPage.jsx";
 import { DebtsPage } from "./DebtsPage.jsx";
 import { Analytics } from "./Analytics.jsx";
-import { leadsAPI, tasksAPI, txnAPI, usersAPI, getToken, clearToken } from "./api.js";
+import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, getToken, clearToken } from "./api.js";
 import { Vacancies } from "./Vacancies.jsx";
 
 export default function App() {
@@ -46,9 +46,30 @@ export default function App() {
   const [showNotif,setShowNotif]=useState(false);
   const T=mkT(dark);
 
-const addNotif=useCallback((msg,type="info")=>setNotifs(p=>[{id:uid(),msg,type,at:new Date().toISOString(),read:false},...p].slice(0,50)),[]);
-const markRead=(id)=>setNotifs(p=>p.map(n=>n.id===id?{...n,read:true}:n));
-const markAllRead = () => setNotifs(p => p.map(n => ({...n, read: true}))); 
+const addNotif=useCallback((msg,type="info")=>{
+  const local={id:uid(),msg,type,at:new Date().toISOString(),read:false};
+  setNotifs(p=>[local,...p].slice(0,100));
+  // persist to DB if user is logged in
+  notifAPI.create(msg,type).then(saved=>{
+    setNotifs(p=>p.map(n=>n.id===local.id?{...n,id:saved.id}:n));
+  }).catch(()=>{});
+},[]);
+const markRead=(id)=>{
+  setNotifs(p=>p.map(n=>n.id===id?{...n,read:true}:n));
+  notifAPI.markRead(id).catch(()=>{});
+};
+const dismissNotif=(id)=>{
+  setNotifs(p=>p.filter(n=>n.id!==id));
+  notifAPI.delete(id).catch(()=>{});
+};
+const markAllRead=()=>{
+  setNotifs(p=>p.map(n=>({...n,read:true})));
+  notifAPI.markAllRead().catch(()=>{});
+};
+const clearReadNotifs=()=>{
+  setNotifs(p=>p.filter(n=>!n.read));
+  notifAPI.clearRead().catch(()=>{});
+}; 
 const saveLead = useCallback(async f => {
     try {
 
@@ -207,11 +228,12 @@ const deleteLead = useCallback(async (id) => {
     const loadAll = async () => {
       setAppLoading(true);
       try {
-        const [leadsRes, tasksRes, txnsRes, usersRes] = await Promise.all([
+        const [leadsRes, tasksRes, txnsRes, usersRes, notifsRes] = await Promise.all([
           leadsAPI.getAll({ limit: 10000 }),
           tasksAPI.getAll(),
           txnAPI.getAll(),
           usersAPI.getAll(),
+          notifAPI.getAll().catch(()=>[]),
         ]);
         setLeads((leadsRes.leads||leadsRes||[]).map(mapLead));
         setTasks((tasksRes||[]).map(t=>({
@@ -226,6 +248,7 @@ const deleteLead = useCallback(async (id) => {
           amount:Number(t.amount)||0, date:t.date?.slice(0,10)||"",
           empId:t.emp_id||null, empName:t.emp_name||"", by:t.created_by,
         })));
+        if(notifsRes?.length) setNotifs(notifsRes);
         if(usersRes?.length) setTeam(usersRes.map(u=>({
           id:u.id, username:u.username, name:u.name, role:u.role,
           avatar:u.avatar||"", color:u.color||"#6366f1",
@@ -306,32 +329,45 @@ const deleteLead = useCallback(async (id) => {
                 {I.bell}
                 {totalNotif>0&&<span style={{position:"absolute",top:-3,right:-3,background:T.red,color:"#fff",borderRadius:10,fontSize:7,fontWeight:700,padding:"0 3px",minWidth:13,textAlign:"center"}}>{totalNotif}</span>}
               </button>
-            {showNotif&&<div style={{position:"absolute",top:"110%",right:0,width:300,background:T.card,border:`1px solid ${T.border}`,borderRadius:11,boxShadow:T.shadow,zIndex:500,padding:12,maxHeight:400,overflowY:"auto"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:9}}>
-                <span style={{fontSize:12,fontWeight:700,color:T.text}}>🔔 Eslatmalar</span>
-                <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                  {newLeadNotifs.length>0&&<button onClick={markAllRead} style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,cursor:"pointer",fontWeight:600}}>Barchasini o'qildi</button>}
-                  <button onClick={()=>setShowNotif(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}>{I.x}</button>
-                </div>
-              </div>
-              {newLeadNotifs.map(n=>(
-                <div key={n.id} style={{background:`${T.accent}15`,border:`1px solid ${T.accent}44`,borderRadius:6,padding:"7px 9px",marginBottom:5,borderLeft:`3px solid ${T.accent}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:11,color:T.text}}>{n.msg}</div>
-                    <div style={{fontSize:9,color:T.muted,marginTop:2}}>{fmtD(n.at)}</div>
+            {showNotif&&(()=>{
+              const overdueTaskNotifs=tasks.filter(t=>t.assignee===user.id&&t.status!=="done"&&(isOD(t.due)||isSoon(t.due)));
+              const unreadNotifs=notifs.filter(n=>!n.read);
+              const hasRead=notifs.some(n=>n.read);
+              const allItems=[...notifs,...overdueTaskNotifs.map(t=>({_task:t}))];
+              return <div style={{position:"absolute",top:"110%",right:0,width:330,background:T.card,border:`1px solid ${T.border}`,borderRadius:11,boxShadow:T.shadow,zIndex:500,display:"flex",flexDirection:"column",maxHeight:480}}>
+                {/* Header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px 8px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
+                  <span style={{fontSize:12,fontWeight:700,color:T.text}}>🔔 Eslatmalar</span>
+                  <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                    {unreadNotifs.length>0&&<button onClick={markAllRead} style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,cursor:"pointer",fontWeight:600}}>Hammasi o'qildi</button>}
+                    {hasRead&&<button onClick={clearReadNotifs} style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:`${T.red}15`,color:T.red,border:`1px solid ${T.red}33`,cursor:"pointer",fontWeight:600}}>O'chirilganlarni tozalash</button>}
+                    <button onClick={()=>setShowNotif(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:16,lineHeight:1,padding:0}}>{I.x}</button>
                   </div>
-                  <button onClick={()=>markRead(n.id)} title="O'qildi deb belgilash"
-                    style={{background:"none",border:"none",cursor:"pointer",color:T.green,fontSize:14,lineHeight:1,flexShrink:0,padding:0}}>✓</button>
                 </div>
-              ))}
-              {tasks.filter(t=>t.assignee===user.id&&t.status!=="done"&&(isOD(t.due)||isSoon(t.due))).map(t=>{const od=isOD(t.due);const lead=leads.find(l=>l.id===t.leadId);return(
-                <div key={t.id} onClick={()=>{setPage("tasks");setShowNotif(false);}} style={{background:od?`${T.red}15`:`${T.yellow}15`,border:`1px solid ${od?T.red:T.yellow}44`,borderRadius:6,padding:"7px 9px",marginBottom:5,cursor:"pointer",borderLeft:`3px solid ${od?T.red:T.yellow}`}}>
-                  <div style={{fontSize:11,fontWeight:600,color:T.text}}>{t.title}</div>
-                  <div style={{display:"flex",gap:6,alignItems:"center",marginTop:2}}><span style={{fontSize:9,color:od?T.red:T.yellow,fontWeight:700}}>{od?"⚠️ O'tdi":"⏰ "+fmtD(t.due)}</span>{lead&&<span style={{fontSize:9,color:T.accent}}>{lead.name}</span>}</div>
+                {/* List */}
+                <div style={{overflowY:"auto",flex:1,padding:"8px 10px"}}>
+                  {notifs.map(n=>(
+                    <div key={n.id} style={{background:n.read?T.card2:`${T.accent}12`,border:`1px solid ${n.read?T.border:T.accent+"44"}`,borderRadius:7,padding:"7px 9px",marginBottom:5,borderLeft:`3px solid ${n.read?T.border:T.accent}`,display:"flex",alignItems:"flex-start",gap:6}}>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:11,color:n.read?T.muted:T.text,fontWeight:n.read?400:600}}>{n.msg}</div>
+                        <div style={{fontSize:9,color:T.muted,marginTop:2}}>{fmtD(n.at)}</div>
+                      </div>
+                      <div style={{display:"flex",gap:3,flexShrink:0}}>
+                        {!n.read&&<button onClick={()=>markRead(n.id)} title="O'qildi" style={{background:"none",border:"none",cursor:"pointer",color:T.green,fontSize:14,lineHeight:1,padding:0}}>✓</button>}
+                        <button onClick={()=>dismissNotif(n.id)} title="O'chirish" style={{background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:13,lineHeight:1,padding:0}}>{I.x}</button>
+                      </div>
+                    </div>
+                  ))}
+                  {overdueTaskNotifs.map(t=>{const od=isOD(t.due);const lead=leads.find(l=>l.id===t.leadId);return(
+                    <div key={t.id} onClick={()=>{setPage("tasks");setShowNotif(false);}} style={{background:od?`${T.red}15`:`${T.yellow}15`,border:`1px solid ${od?T.red:T.yellow}44`,borderRadius:6,padding:"7px 9px",marginBottom:5,cursor:"pointer",borderLeft:`3px solid ${od?T.red:T.yellow}`}}>
+                      <div style={{fontSize:11,fontWeight:600,color:T.text}}>{t.title}</div>
+                      <div style={{display:"flex",gap:6,alignItems:"center",marginTop:2}}><span style={{fontSize:9,color:od?T.red:T.yellow,fontWeight:700}}>{od?"⚠️ O'tdi":"⏰ "+fmtD(t.due)}</span>{lead&&<span style={{fontSize:9,color:T.accent}}>{lead.name}</span>}</div>
+                    </div>
+                  );})}
+                  {notifs.length===0&&overdueTaskNotifs.length===0&&<div style={{color:T.muted,fontSize:11,textAlign:"center",padding:20}}>Eslatma yo'q ✅</div>}
                 </div>
-              );})}
-              {totalNotif===0&&<div style={{color:T.muted,fontSize:11,textAlign:"center",padding:12}}>Eslatma yo'q ✅</div>}
-            </div>}
+              </div>;
+            })()}
             </div>
           </div>
         </div>
@@ -348,14 +384,13 @@ const deleteLead = useCallback(async (id) => {
             addNotif={addNotif}
           />}
           {page==="tasks"      && <Tasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif}/>}
-          {page==="salary"     && user.role==="admin" && <SalaryPage team={team} txns={txns} setTxns={setTxns} user={user}/>}
           {page==="debts"     && <DebtsPage debts={debts} setDebts={setDebts} user={user} leads={leads}/>}
           {page==="docspipe"  && <DocsPipeline leads={leads} tasks={tasks} team={team} user={user} open={openLead} config={config} roles={roles} setLeads={setLeads}/>}
           {page==="vacancies" && <Vacancies leads={visibleLeads} user={user} team={team} roles={roles}/>}
           {page==="visa"       && <Visa user={user} roles={roles}/>}
           {page==="team"       && <TeamPage user={user} team={team} setTeam={setTeam} roles={roles}/>}
           {page==="settings"   && <Settings user={user} config={config} setConfig={setConfig} roles={roles} setRoles={setRoles}/>}
-          {page==="finance"    && <Finance leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts}/>}
+          {page==="finance"    && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts}/>}
         </div>
       </div>
       {drawer&&<Drawer lead={drawer} user={user} team={team} leads={leads} tasks={tasks} onSave={saveLead} onClose={()=>setDrawer(null)} onAddTask={addTask} config={config} roles={roles} addNotif={addNotif}/>}
