@@ -46,14 +46,18 @@ function ExternalExpenses({ user, addNotif }) {
 
   const del = async (id) => {
     if (!confirm("O'chirilsinmi?")) return;
-    await extExpAPI.delete(id);
-    setItems(p => p.filter(i => i.id !== id));
+    try {
+      await extExpAPI.delete(id);
+      setItems(p => p.filter(i => i.id !== id));
+    } catch (e) { alert("O'chirishda xatolik: " + e.message); }
   };
 
   const saveEdit = async (id) => {
-    const saved = await extExpAPI.update(id, { ...items.find(i => i.id === id), ...editVal, amount: Number(editVal.amount) });
-    setItems(p => p.map(i => i.id === id ? saved : i));
-    setEditId(null); setEditVal({});
+    try {
+      const saved = await extExpAPI.update(id, { ...items.find(i => i.id === id), ...editVal, amount: Number(editVal.amount) });
+      setItems(p => p.map(i => i.id === id ? saved : i));
+      setEditId(null); setEditVal({});
+    } catch (e) { alert("Saqlashda xatolik: " + e.message); }
   };
 
   if (loading) return <div style={{ color: T.muted, padding: 40, textAlign: "center" }}>Yuklanmoqda...</div>;

@@ -96,6 +96,20 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 // ─── LEADS ROUTES ─────────────────────────────────────────────────────────────
+// New leads since timestamp — registered BEFORE /:id to avoid route shadowing
+app.get("/api/leads/new", auth, async (req, res) => {
+  try {
+    const since = req.query.since || new Date(0).toISOString();
+    const { rows } = await pool.query(
+      "SELECT * FROM leads WHERE created_at > $1 ORDER BY created_at DESC LIMIT 50",
+      [since],
+    );
+    res.json({ leads: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/leads", auth, async (req, res) => {
   const {
     status,
@@ -490,7 +504,7 @@ app.delete("/api/tasks/:id", auth, async (req, res) => {
 });
 
 // ─── USERS ────────────────────────────────────────────────────────────────────
-app.get("/api/users", async (req, res) => {
+app.get("/api/users", auth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       "SELECT id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,salary_items FROM users ORDER BY id",
@@ -855,21 +869,6 @@ app.post("/api/webhook/meta", async (req, res) => {
     console.error("Meta error:", err.message);
   }
 });
-// ═══════════════════════════════════════════════════════════
-// New leads since timestamp (for 30-second polling)
-app.get("/api/leads/new", auth, async (req, res) => {
-  try {
-    const since = req.query.since || new Date(0).toISOString();
-    const { rows } = await pool.query(
-      "SELECT * FROM leads WHERE created_at > $1 ORDER BY created_at DESC LIMIT 50",
-      [since],
-    );
-    res.json({ leads: rows });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ─── VACANCIES ───────────────────────────────────────────────────────────────
 const vacRow = (r) => ({
   id: r.id, title: r.title, company: r.company, country: r.country,
@@ -925,19 +924,27 @@ app.post("/api/vacancies", auth, async (req, res) => {
 app.put("/api/vacancies/:id", auth, async (req, res) => {
   const b = req.body;
   try {
-    const { rows } = await pool.query(
+    await pool.query(
       `UPDATE vacancies SET title=$1, company=$2, country=$3, job_type=$4, contract_type=$5,
          salary=$6, additional_pay=$7, working_hours=$8, positions=$9, accommodation=$10,
          food_vouchers=$11, logo=$12, description=$13, requirements=$14, other_desc=$15,
          posted_date=$16, status=$17, updated_at=NOW()
-       WHERE id=$18 RETURNING *`,
+       WHERE id=$18`,
       [b.title, b.company||null, b.country||null, b.jobType||null, b.contractType||null,
        b.salary||null, b.additionalPay||null, b.workingHours||null, b.positions||1,
        b.accommodation||null, b.foodVouchers||null, b.logo||null,
        b.description||null, b.requirements||null, b.otherDesc||null,
        b.postedDate||null, b.status||"active", req.params.id],
     );
-    res.json(vacRow({ ...rows[0], candidate_count: 0, hired_count: 0 }));
+    const { rows } = await pool.query(
+      `SELECT v.*,
+        COUNT(c.id) FILTER (WHERE c.id IS NOT NULL) as candidate_count,
+        COUNT(c.id) FILTER (WHERE c.status IN ('hired','approved')) as hired_count
+       FROM vacancies v LEFT JOIN candidates c ON c.vacancy_id = v.id
+       WHERE v.id=$1 GROUP BY v.id`,
+      [req.params.id],
+    );
+    res.json(vacRow(rows[0]));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -952,11 +959,9 @@ app.delete("/api/vacancies/:id", auth, async (req, res) => {
 app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT c.*, l.name as lead_name, l.phone as lead_phone,
-              u.name as added_by_name
+      `SELECT c.*, l.name as lead_name, l.phone as lead_phone
        FROM candidates c
        LEFT JOIN leads l ON l.id=c.lead_id
-       LEFT JOIN users u ON u.id=(SELECT created_by FROM candidates WHERE id=c.id LIMIT 1)
        WHERE c.vacancy_id=$1 ORDER BY c.created_at DESC`,
       [req.params.id],
     );
@@ -964,7 +969,7 @@ app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
       id: String(r.id), vacancyId: r.vacancy_id, leadId: r.lead_id,
       leadName: r.lead_name || r.name, leadPhone: r.lead_phone || r.phone,
       name: r.name, phone: r.phone, status: r.status, note: r.note,
-      appliedAt: r.applied_at, addedByName: r.added_by_name,
+      appliedAt: r.applied_at,
     })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

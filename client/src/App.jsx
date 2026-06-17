@@ -13,7 +13,6 @@ import { Drawer } from "./Drawer.jsx";
 import { Pipeline } from "./Pipeline.jsx";
 import { LeadsList } from "./LeadsList.jsx";
 import { Tasks } from "./Tasks.jsx";
-import { Finance } from "./Finance.jsx";
 import { FinanceHub } from "./FinanceHub.jsx";
 import { Visa, TeamPage, Settings } from "./Misc.jsx";
 import { Sidebar, Login } from "./Sidebar.jsx"
@@ -127,7 +126,7 @@ const saveLead = useCallback(async f => {
       console.error(err);
       alert("Lead saqlanmadi!");
     }
-}, [leads]);
+}, [leads, addNotif]);
 const deleteLead = useCallback(async (id) => {
   if (!confirm("Bu leadni o‘chirishni xohlaysizmi?")) return;
 
@@ -168,8 +167,7 @@ const deleteLead = useCallback(async (id) => {
   const openLead=l=>setDrawer(l||{id:`NO-${Math.floor(Math.random()*9000)+1000}`,name:"",phone:"",telegram:"",status:"Yangi",country:"",sector:"",position:"",ownerSales:null,ownerConsult:null,ownerDocs:null,source:user?.role==="partner"?user.name:"",gender:"",comment:"",q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,q1R:null,q2R:null,q3R:null,xbaR:null,cv:{},history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)});
 
   const myNotif=user?tasks.filter(t=>t.assignee===user.id&&t.status!=="done"&&(isOD(t.due)||isSoon(t.due))).length:0;
-  const newLeadNotifs=notifs.filter(n=>n.at>=(new Date(Date.now()-300000)).toISOString());
-  const totalNotif=myNotif+newLeadNotifs.length;
+  const totalNotif=myNotif+notifs.filter(n=>!n.read).length;
 
 // ── Restore session on page refresh ────────────────────────────────────────
   useEffect(()=>{
@@ -333,7 +331,6 @@ const deleteLead = useCallback(async (id) => {
               const overdueTaskNotifs=tasks.filter(t=>t.assignee===user.id&&t.status!=="done"&&(isOD(t.due)||isSoon(t.due)));
               const unreadNotifs=notifs.filter(n=>!n.read);
               const hasRead=notifs.some(n=>n.read);
-              const allItems=[...notifs,...overdueTaskNotifs.map(t=>({_task:t}))];
               return <div style={{position:"absolute",top:"110%",right:0,width:330,background:T.card,border:`1px solid ${T.border}`,borderRadius:11,boxShadow:T.shadow,zIndex:500,display:"flex",flexDirection:"column",maxHeight:480}}>
                 {/* Header */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px 8px",borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
