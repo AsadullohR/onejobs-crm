@@ -881,6 +881,7 @@ const vacRow = (r) => ({
   status: r.status, createdAt: r.created_at,
   candidateCount: Number(r.candidate_count || 0),
   hiredCount: Number(r.hired_count || 0),
+  approvedCount: Number(r.approved_count || 0),
 });
 
 app.get("/api/vacancies", auth, async (req, res) => {
@@ -888,7 +889,8 @@ app.get("/api/vacancies", auth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT v.*,
         COUNT(c.id) FILTER (WHERE c.id IS NOT NULL) as candidate_count,
-        COUNT(c.id) FILTER (WHERE c.status IN ('hired','approved')) as hired_count
+        COUNT(c.id) FILTER (WHERE c.status IN ('hired','approved')) as hired_count,
+        COUNT(c.id) FILTER (WHERE c.status = 'approved') as approved_count
        FROM vacancies v LEFT JOIN candidates c ON c.vacancy_id = v.id
        GROUP BY v.id ORDER BY v.created_at DESC`,
     );
@@ -939,7 +941,8 @@ app.put("/api/vacancies/:id", auth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT v.*,
         COUNT(c.id) FILTER (WHERE c.id IS NOT NULL) as candidate_count,
-        COUNT(c.id) FILTER (WHERE c.status IN ('hired','approved')) as hired_count
+        COUNT(c.id) FILTER (WHERE c.status IN ('hired','approved')) as hired_count,
+        COUNT(c.id) FILTER (WHERE c.status = 'approved') as approved_count
        FROM vacancies v LEFT JOIN candidates c ON c.vacancy_id = v.id
        WHERE v.id=$1 GROUP BY v.id`,
       [req.params.id],
@@ -956,6 +959,28 @@ app.delete("/api/vacancies/:id", auth, async (req, res) => {
 });
 
 // ─── CANDIDATES ──────────────────────────────────────────────────────────────
+
+// Get all candidacies for a specific lead (for client profile vacancy tab)
+app.get("/api/candidates", auth, async (req, res) => {
+  const { lead_id } = req.query;
+  if (!lead_id) return res.status(400).json({ error: "lead_id required" });
+  try {
+    const { rows } = await pool.query(
+      `SELECT c.*, v.title as vacancy_title, v.company, v.country
+       FROM candidates c
+       LEFT JOIN vacancies v ON v.id = c.vacancy_id
+       WHERE c.lead_id = $1 ORDER BY c.created_at DESC`,
+      [lead_id],
+    );
+    res.json(rows.map(r => ({
+      id: String(r.id), vacancyId: r.vacancy_id, leadId: r.lead_id,
+      vacancy_title: r.vacancy_title, company: r.company, country: r.country,
+      name: r.name, phone: r.phone, status: r.status, note: r.note,
+      appliedAt: r.applied_at,
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
   try {
     const { rows } = await pool.query(

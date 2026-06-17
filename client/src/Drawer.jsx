@@ -1,7 +1,8 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useT } from "./theme.js";
 import { STAGES, DONE, LOST } from "./constants.js";
 import { uid, fmtM, fmtMs, fmtD, isOD, inp, lab, I, Pill, Av, Modal, SearchSelect, gS } from "./helpers.jsx";
+import { candidatesAPI } from "./api.js";
 
 // ─── LEAD DRAWER ──────────────────────────────────────────────────────────────
 function Drawer({lead, user, team, leads, tasks, onSave, onClose, onAddTask, config, roles, addNotif}) {
@@ -51,6 +52,12 @@ const [form,setForm]=useState({
   const addTask=()=>{if(!tTitle.trim())return;onAddTask({id:uid(),title:tTitle,assignee:Number(tAsgn),leadId:form.id,priority:"medium",status:"todo",due:tDue,createdBy:user.id,at:new Date().toISOString(),desc:""});setTTitle("");setTDue("");};
   const teamOpts=team.filter(t=>t.active!==false&&t.role!=="partner").map(t=>({value:t.id,label:t.name,id:t.id,phone:t.phone}));
 
+  const [vacCands, setVacCands] = useState([]);
+  useEffect(() => {
+    if (!lead.id) return;
+    candidatesAPI.getByLead(lead.id).then(setVacCands).catch(() => {});
+  }, [lead.id]);
+
   const TABS=[
     {k:"info",l:"Ma'lumot"},
     {k:"owners",l:"Mas'ullar"},
@@ -58,6 +65,7 @@ const [form,setForm]=useState({
     {k:"pay",l:"To'lovlar"},
     {k:"docs",l:"Hujjatlar"},
     {k:"cv",l:"CV"},
+    {k:"vacancies",l:`Vakansiyalar(${vacCands.length})`},
     {k:"tasks",l:`Vazifalar(${leadTasks.length})`},
     {k:"notes",l:`Izohlar(${(form.history||[]).length})`},
   ];
@@ -165,15 +173,33 @@ const [form,setForm]=useState({
 
         {/* PAYMENTS */}
         {tab==="pay"&&!isPartner&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {[["q1","1-Qism","q1R","#ec4899"],["q2","2-Qism","q2R","#8b5cf6"],["q3","3-Qism","q3R","#3b82f6"],["xba","XBA","xbaR","#f97316"]].map(([k,lb,rk,c])=>(
+          {[["q1","1-Qism","q1R","#ec4899","q1Receipt"],["q2","2-Qism","q2R","#8b5cf6","q2Receipt"],["q3","3-Qism","q3R","#3b82f6","q3Receipt"],["xba","XBA","xbaR","#f97316","xbaReceipt"]].map(([k,lb,rk,c,rcp])=>(
             <div key={k} style={{background:form[k]?`${c}15`:T.card2,border:`1px solid ${form[k]?c+"44":T.border}`,borderRadius:9,padding:"12px 13px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:form[form[rk]]?6:0}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                 <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:700,color:form[k]?c:T.sub}}>
                   <input type="checkbox" checked={form[k]||false} onChange={e=>f(k,e.target.checked)} style={{width:16,height:16,accentColor:c}}/>{lb}
                 </label>
-                <div style={{display:"flex",gap:5,alignItems:"center"}}>
-                  <span style={{fontSize:16}}>{form[k]?"✅":"⬜"}</span>
-                </div>
+                <span style={{fontSize:16}}>{form[k]?"✅":"⬜"}</span>
+              </div>
+              {/* Receipt upload */}
+              <div style={{marginTop:4}}>
+                {form[rcp]?(
+                  <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                    <a href={form[rcp]} target="_blank" rel="noopener" style={{fontSize:9,color:c,textDecoration:"none",background:`${c}15`,border:`1px solid ${c}44`,borderRadius:4,padding:"2px 7px"}}>📎 Chek ko'rish</a>
+                    <button onClick={()=>f(rcp,null)} style={{fontSize:9,color:T.red,background:"none",border:"none",cursor:"pointer"}}>✕</button>
+                  </div>
+                ):(
+                  <label style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:9,color:T.muted,cursor:"pointer",background:T.card,border:`1px dashed ${T.border}`,borderRadius:4,padding:"3px 8px"}}>
+                    📎 Chek yuklash
+                    <input type="file" accept="image/*,application/pdf" style={{display:"none"}} onChange={e=>{
+                      const file=e.target.files[0];if(!file)return;
+                      const reader=new FileReader();
+                      reader.onload=ev=>f(rcp,ev.target.result);
+                      reader.readAsDataURL(file);
+                      e.target.value="";
+                    }}/>
+                  </label>
+                )}
               </div>
             </div>
           ))}
@@ -213,6 +239,32 @@ const [form,setForm]=useState({
               <div key={k} style={{gridColumn:"1/-1"}}><label style={labS}>{lb}</label><textarea value={(form.cv||{})[k]||""} onChange={e=>cv(k,e.target.value)} rows={2} style={{...inpS,resize:"vertical"}}/></div>
             ))}
           </div>
+        </div>}
+
+        {/* VACANCIES */}
+        {tab==="vacancies"&&<div>
+          <div style={{fontSize:11,color:T.muted,marginBottom:12}}>Bu mijoz qo'shilgan vakansiyalar</div>
+          {vacCands.length===0?(
+            <div style={{textAlign:"center",padding:"30px 0",color:T.muted,fontSize:12}}>Hech qanday vakansiyaga qo'shilmagan</div>
+          ):vacCands.map(c=>{
+            const CAND_COLORS={submitted:"#2563eb",approved:"#16a34a",rejected:"#dc2626",interview:"#d97706",hired:"#9333ea"};
+            const CAND_LABELS={submitted:"Yuborildi",approved:"Tasdiqlandi",rejected:"Rad etildi",interview:"Suhbat",hired:"Ishga olindi"};
+            const sc=CAND_COLORS[c.status]||"#6b7280";
+            return(
+              <div key={c.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 12px",marginBottom:8,borderLeft:`3px solid ${sc}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:T.text}}>{c.vacancy_title||c.vacancy_id}</div>
+                    <div style={{fontSize:9,color:T.muted}}>{c.company||""}{c.country?" · "+c.country:""}</div>
+                    {c.note&&<div style={{fontSize:9,color:T.muted,marginTop:2}}>{c.note}</div>}
+                  </div>
+                  <span style={{fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:10,background:`${sc}22`,color:sc,border:`1px solid ${sc}44`,flexShrink:0}}>
+                    {CAND_LABELS[c.status]||c.status}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>}
 
         {/* TASKS */}

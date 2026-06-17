@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
+import { txnAPI } from "./api.js";
 import {
   uid,
   fmtM,
@@ -141,19 +142,42 @@ function Finance({
 
     setModal("form");
   };
-  const save = () => {
-    if (!form.desc || !form.amount) return;
-    setTxns((p) =>
-      p.some((t) => t.id === form.id)
-        ? p.map((t) =>
-            t.id === form.id ? { ...form, amount: Number(form.amount) } : t,
-          )
-        : [
-            ...p,
-            { ...form, id: uid(), amount: Number(form.amount), by: user.id },
-          ],
-    );
-    setModal(null);
+  const save = async () => {
+    if (!form.amount || Number(form.amount) <= 0) return;
+    const payload = {
+      leadId: form.leadId || null,
+      date: form.date || new Date().toISOString().slice(0, 10),
+      type: form.type,
+      category: form.cat || "",
+      description: form.desc || "",
+      amount: Number(form.amount),
+    };
+    try {
+      const isEdit = txns.some((t) => t.id === form.id);
+      if (isEdit) {
+        const saved = await txnAPI.update(form.id, payload);
+        setTxns((p) => p.map((t) => t.id === form.id
+          ? { ...t, ...payload, id: form.id, cat: payload.category, desc: payload.description }
+          : t));
+      } else {
+        const saved = await txnAPI.create(payload);
+        setTxns((p) => [...p, {
+          id: String(saved.id), leadId: saved.lead_id, type: saved.type,
+          cat: saved.category || "", desc: saved.description || "",
+          amount: Number(saved.amount), date: saved.date?.slice(0, 10) || payload.date,
+          by: saved.created_by,
+        }]);
+      }
+      setModal(null);
+    } catch (err) { alert("Saqlanmadi: " + err.message); }
+  };
+
+  const deleteTxn = async (id) => {
+    if (!confirm("O'chirilsinmi?")) return;
+    try {
+      await txnAPI.delete(id);
+      setTxns((p) => p.filter((t) => t.id !== id));
+    } catch (err) { alert("O'chirishda xatolik: " + err.message); }
   };
 
   // CSV EXPORT – transactions
@@ -1192,18 +1216,24 @@ function Finance({
                             </div>
                           </div>
                         </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div
-                            style={{ fontSize: 11, fontWeight: 800, color: c }}
-                          >
-                            {type === "income" ? "+" : "-"}
-                            {t.amount.toLocaleString()} so'm
+                        <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 6 }}>
+                          <div>
+                            <div
+                              style={{ fontSize: 11, fontWeight: 800, color: c }}
+                            >
+                              {type === "income" ? "+" : "-"}
+                              {t.amount.toLocaleString()} so'm
+                            </div>
+                            {t.receipt && (
+                              <span style={{ fontSize: 8, color: T.green }}>
+                                📎
+                              </span>
+                            )}
                           </div>
-                          {t.receipt && (
-                            <span style={{ fontSize: 8, color: T.green }}>
-                              📎
-                            </span>
-                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteTxn(t.id); }}
+                            style={{ padding: "3px 7px", borderRadius: 4, background: `${T.red}15`, color: T.red, border: `1px solid ${T.red}33`, cursor: "pointer", fontSize: 10, flexShrink: 0 }}
+                          >🗑</button>
                         </div>
                       </div>
                     ))}
@@ -1601,7 +1631,68 @@ function Finance({
         )}
       </div>
 
-      {/* Transaction modal */}
+      {/* Transaction form modal */}
+      {modal === "form" && (
+        <Modal onClose={() => setModal(null)} width={420}>
+          <div style={{ padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: T.text }}>
+                {form.type === "income" ? "💚 Kirim qo'shish" : "🔴 Chiqim qo'shish"}
+                {form.leadId && cur ? ` — ${cur.name}` : ""}
+              </h3>
+              <button onClick={() => setModal(null)} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted }}>{I.x}</button>
+            </div>
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div>
+                  <label style={labS}>Tur</label>
+                  <select value={form.type} onChange={e => {
+                    const t2 = e.target.value;
+                    const cats2 = t2 === "income" ? (config?.txnInc || ["Asosiy kirim","XBA","Shartnoma","Boshqa"]) : (config?.txnExp || ["Xizmat","Transport","Hujjat","Maosh","Boshqa"]);
+                    setForm(p => ({ ...p, type: t2, cat: cats2[0] || "" }));
+                  }} style={inpS}>
+                    <option value="income">Kirim</option>
+                    <option value="expense">Chiqim</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={labS}>Sana</label>
+                  <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} style={inpS} />
+                </div>
+              </div>
+              <div>
+                <label style={labS}>Kategoriya</label>
+                <select value={form.cat} onChange={e => setForm(p => ({ ...p, cat: e.target.value }))} style={inpS}>
+                  {(form.type === "income" ? (config?.txnInc || ["Asosiy kirim","XBA","Shartnoma","Boshqa"]) : (config?.txnExp || ["Xizmat","Transport","Hujjat","Maosh","Boshqa"])).map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labS}>Tavsif</label>
+                <input value={form.desc} onChange={e => setForm(p => ({ ...p, desc: e.target.value }))} style={inpS} placeholder="Izoh (ixtiyoriy)" />
+              </div>
+              <div>
+                <label style={labS}>Mijoz</label>
+                <select value={form.leadId || ""} onChange={e => setForm(p => ({ ...p, leadId: e.target.value || null }))} style={inpS}>
+                  <option value="">— Mijoz tanlang —</option>
+                  {leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labS}>Summa (so'm) *</label>
+                <input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} style={{ ...inpS, textAlign: "right", fontSize: 16, fontWeight: 800 }} placeholder="0" onKeyDown={e => e.key === "Enter" && save()} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+              <button onClick={() => setModal(null)} style={{ padding: "6px 14px", borderRadius: 6, background: T.card2, color: T.text, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 11 }}>Bekor</button>
+              <button onClick={save} style={{ padding: "6px 18px", borderRadius: 6, background: form.type === "income" ? T.green : T.red, color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
+                💾 Saqlash
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Debt modal */}
       {modal === "debt" && (
         <Modal onClose={() => setModal(null)} width={400}>
           <div style={{ padding: 18 }}>
@@ -1735,147 +1826,6 @@ function Finance({
                     },
                   ]);
                   setDebtForm({ amt: "", due: "", cat: "1-Qism", desc: "" });
-                  setModal(null);
-                }}
-                style={{
-                  padding: "5px 14px",
-                  borderRadius: 5,
-                  background: T.accent,
-                  color: "#fff",
-                  fontWeight: 700,
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: 10,
-                }}
-              >
-                💾 Saqlash
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-      {/* Debt add modal */}
-      {modal === "debt" && (
-        <Modal onClose={() => setModal(null)} width={400}>
-          <div style={{ padding: 18 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: 12,
-              }}
-            >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: 13,
-                  fontWeight: 800,
-                  color: T.text,
-                }}
-              >
-                ⚠️ Qarz qo'shish — {cur?.name}
-              </h3>
-              <button
-                onClick={() => setModal(null)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: T.muted,
-                }}
-              >
-                {I.x}
-              </button>
-            </div>
-            <div style={{ display: "grid", gap: 8 }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 7,
-                }}
-              >
-                <div>
-                  <label style={labS}>Summa (so'm) *</label>
-                  <input
-                    type="number"
-                    id="damt"
-                    style={inpS}
-                    placeholder="1000000"
-                  />
-                </div>
-                <div>
-                  <label style={labS}>Muddat</label>
-                  <input type="date" id="ddue" style={inpS} />
-                </div>
-              </div>
-              <div>
-                <label style={labS}>Kategoriya</label>
-                <select id="dcat" style={inpS}>
-                  {[
-                    "1-Qism",
-                    "2-Qism",
-                    "3-Qism",
-                    "XBA To'lov",
-                    "Konsultatsiya",
-                    "Hujjat xizmati",
-                    "Boshqa",
-                  ].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={labS}>Tavsif</label>
-                <input id="ddesc" style={inpS} placeholder="Qarz sababi..." />
-              </div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 6,
-                justifyContent: "flex-end",
-                marginTop: 12,
-              }}
-            >
-              <button
-                onClick={() => setModal(null)}
-                style={{
-                  padding: "5px 10px",
-                  borderRadius: 5,
-                  background: T.card2,
-                  color: T.text,
-                  border: `1px solid ${T.border}`,
-                  cursor: "pointer",
-                  fontSize: 10,
-                }}
-              >
-                Bekor
-              </button>
-              <button
-                onClick={() => {
-                  const amt =
-                    parseFloat(document.getElementById("damt")?.value) || 0;
-                  const due = document.getElementById("ddue")?.value || "";
-                  const cat = document.getElementById("dcat")?.value || "";
-                  const desc = document.getElementById("ddesc")?.value || "";
-                  if (!amt) return;
-                  setDebts((p) => [
-                    ...p,
-                    {
-                      id: uid(),
-                      leadId: cur.id,
-                      name: cur.name,
-                      type: "client",
-                      category: cat,
-                      dueDate: due,
-                      desc,
-                      amount: amt,
-                      paid: false,
-                      createdAt: new Date().toISOString().slice(0, 10),
-                      by: user.id,
-                    },
-                  ]);
                   setModal(null);
                 }}
                 style={{

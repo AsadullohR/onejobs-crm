@@ -219,32 +219,22 @@ function VacancyCard({ v, leads, onClick, T }) {
           style={{
             borderTop: `1px solid ${T.border}`,
             paddingTop: 8,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
           }}
         >
-          <span
-            style={{
-              fontSize: 10,
-              color: T.muted,
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            <span style={{ fontSize: 12 }}>👥</span>
-            Positions
-          </span>
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: filled >= total ? T.green : T.text,
-            }}
-          >
-            {filled} / {total}
-          </span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <span style={{ fontSize: 10, color: T.muted, display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontSize: 12 }}>👥</span>
+              Filled
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: filled >= total ? "#16a34a" : T.text }}>
+              {filled} / {total}
+            </span>
+          </div>
+          {v.approvedCount > 0 && v.approvedCount !== v.hiredCount && (
+            <div style={{ fontSize: 9, color: "#d97706", marginBottom: 2 }}>
+              ⏳ {v.approvedCount} approved (in progress)
+            </div>
+          )}
         </div>
         <div
           style={{
