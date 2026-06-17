@@ -46,6 +46,7 @@ const INIT_ROLES = {
   sales:   {label:"Sotuv/Call", color:"#f97316",canOwner:false,canFin:false,canEdit:true, canCfg:false,canTeam:false, seeAll:true, canTakeUnassigned:true, canChangeOwner:false},
   docs:    {label:"Konsultant", color:"#06b6d4",canOwner:true, canFin:false,canEdit:true, canCfg:false,canTeam:false, seeAll:true, canTakeUnassigned:true, canChangeOwner:false},
   partner: {label:"Hamkor",     color:"#6b7280",canOwner:false,canFin:false,canEdit:true, canCfg:false,canTeam:false, seeAll:false,canTakeUnassigned:false,canChangeOwner:false},
+  employer:{label:"Ish Beruvchi",color:"#0891b2",canOwner:false,canFin:false,canEdit:false,canCfg:false,canTeam:false, seeAll:false,canTakeUnassigned:false,canChangeOwner:false},
 };
 
 const INIT_TEAM = [
@@ -55,6 +56,7 @@ const INIT_TEAM = [
   {id:4, name:"Muhammad Rizo", username:"rizo",    role:"sales",   password:"sales456",   av:"MR",color:"#eab308",phone:"+998901234570",active:true, salary:0,       salType:"percent",pct:5,  salItems:[]},
   {id:5, name:"Asadulloh",     username:"asad",    role:"docs",    password:"docs123",    av:"AS",color:"#06b6d4",phone:"+998901234571",active:true, salary:2500000, salType:"fixed",  pct:0,  salItems:[{id:1,label:"Oylik maosh",amount:2500000}]},
   {id:7, name:"Hamkor Europe", username:"partner", role:"partner", password:"partner123", av:"HP",color:"#6b7280",phone:"+998901234573",active:true, salary:0,       salType:"fixed",  pct:0,  salItems:[]},
+  {id:8, name:"ABC Company",  username:"employer1",role:"employer",password:"emp123",    av:"AC",color:"#0891b2",phone:"",             active:true, salary:0,       salType:"fixed",  pct:0,  salItems:[]},
 ];
 
 // ─── REAL LEADS (500 top leads from OneJobs DB) ──────────────────────────────

@@ -1264,6 +1264,115 @@ function VacancyDetail({
   );
 }
 
+// ─── PARTNER VIEW ────────────────────────────────────────────────────────────
+function PartnerVacanciesView({ user, leads, vacancies, T }) {
+  const [ptab, setPtab] = useState("vacancies");
+  const [selV, setSelV] = useState(null);
+  const [candModal, setCandModal] = useState(false);
+  const [candForm, setCandForm] = useState({});
+  const [candidates, setCandidates] = useState([]);
+  const [candLoading, setCandLoading] = useState(false);
+  const inpS = inp(T);
+
+  const activeVacs = vacancies.filter(v => v.status === "active");
+  const myLeadIds = new Set(leads.map(l => l.id));
+
+  useEffect(() => {
+    if (!selV) return;
+    setCandLoading(true);
+    vacanciesAPI.getCandidates(selV.id)
+      .then(r => setCandidates(r||[]))
+      .catch(()=>setCandidates([]))
+      .finally(()=>setCandLoading(false));
+  }, [selV]);
+
+  const myCands = candidates.filter(c => myLeadIds.has(c.leadId));
+
+  const submitCandidate = async () => {
+    if (!candForm.leadId || !selV) return;
+    const lead = leads.find(l=>l.id===candForm.leadId);
+    try {
+      const saved = await candidatesAPI.create({
+        vacancyId: selV.id,
+        leadId: candForm.leadId,
+        leadName: lead?.name||"",
+        addedByName: user.name,
+        status: "submitted",
+        note: candForm.note||"",
+      });
+      setCandidates(p=>[...p,saved]);
+      setCandModal(false);
+      setCandForm({});
+    } catch(e){ alert("Xatolik: "+e.message); }
+  };
+
+  return <div>
+    <div style={{display:"flex",gap:6,marginBottom:16}}>
+      {[["vacancies","Ochiq Vakansiyalar"],["mycands","Mening Nomzodlarim"]].map(([k,l])=>(
+        <button key={k} onClick={()=>setPtab(k)} style={{padding:"7px 16px",borderRadius:7,border:`2px solid ${ptab===k?T.accent:T.border}`,background:ptab===k?`${T.accent}22`:"transparent",color:ptab===k?T.text:T.muted,fontWeight:ptab===k?700:400,cursor:"pointer",fontSize:11}}>{l}</button>
+      ))}
+    </div>
+
+    {ptab==="vacancies"&&<div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+        {activeVacs.map(v=>(
+          <div key={v.id} onClick={()=>{setSelV(v);setCandModal(true);setCandForm({});}}
+            style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:12,padding:14,cursor:"pointer",transition:"box-shadow 0.15s"}}
+            onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 18px rgba(0,0,0,0.1)"}
+            onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+            <div style={{fontSize:13,fontWeight:800,color:T.text,marginBottom:3}}>{v.title||"–"}</div>
+            <div style={{fontSize:10,color:T.muted,marginBottom:7}}>{v.company||""} · {v.country||""}</div>
+            {v.salary&&<div style={{fontSize:10,color:T.green,marginBottom:5}}>€{v.salary}/oy</div>}
+            <div style={{fontSize:9,color:T.muted}}>O'rinlar: {v.positions||1} · Yollangan: {v.hiredCount||0}</div>
+            <button style={{marginTop:9,width:"100%",padding:"5px",borderRadius:6,background:T.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:10,fontWeight:700}}>+ Nomzod yuborish</button>
+          </div>
+        ))}
+        {activeVacs.length===0&&<div style={{color:T.muted,padding:30,fontSize:12}}>Ochiq vakansiyalar yo'q</div>}
+      </div>
+    </div>}
+
+    {ptab==="mycands"&&<div>
+      <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:10}}>Mening yuborishlarim</div>
+      {myCands.length===0&&<div style={{color:T.muted,fontSize:12,padding:20}}>Hali nomzod yuborilmagan</div>}
+      {myCands.map(c=>{
+        const cs=CAND_STATUS[c.status]||CAND_STATUS.submitted;
+        const lead=leads.find(l=>l.id===c.leadId);
+        return <div key={c.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:T.text}}>{c.leadName||lead?.name||"–"}</div>
+            <div style={{fontSize:9,color:T.muted}}>{c.vacancyTitle||"Vakansiya"} · {c.addedAt?.slice(0,10)||""}</div>
+          </div>
+          <span style={{fontSize:10,fontWeight:700,color:cs.c,background:`${cs.c}18`,borderRadius:12,padding:"2px 9px"}}>{cs.label}</span>
+        </div>;
+      })}
+    </div>}
+
+    {candModal&&selV&&<Modal onClose={()=>setCandModal(false)} width={420}>
+      <div style={{padding:20}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+          <h3 style={{margin:0,fontSize:13,fontWeight:800,color:T.text}}>Nomzod yuborish — {selV.title}</h3>
+          <button onClick={()=>setCandModal(false)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,fontSize:18}}>✕</button>
+        </div>
+        <div style={{display:"grid",gap:9}}>
+          <div><label style={{fontSize:10,color:T.muted,fontWeight:600,display:"block",marginBottom:3}}>Mijoz (nomzod) *</label>
+            <select value={candForm.leadId||""} onChange={e=>setCandForm(p=>({...p,leadId:e.target.value}))} style={inpS}>
+              <option value="">— Tanlang —</option>
+              {leads.map(l=><option key={l.id} value={l.id}>{l.name} ({l.phone||l.id})</option>)}
+            </select>
+          </div>
+          <div><label style={{fontSize:10,color:T.muted,fontWeight:600,display:"block",marginBottom:3}}>Izoh</label>
+            <textarea value={candForm.note||""} onChange={e=>setCandForm(p=>({...p,note:e.target.value}))} rows={2} style={{...inpS,resize:"vertical"}}/>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:7,justifyContent:"flex-end",marginTop:14}}>
+          <button onClick={()=>setCandModal(false)} style={{padding:"7px 12px",borderRadius:6,background:T.card2,color:T.muted,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:11}}>Bekor</button>
+          <button onClick={submitCandidate} style={{padding:"7px 16px",borderRadius:6,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:"pointer",fontSize:11}}>Yuborish</button>
+        </div>
+      </div>
+    </Modal>}
+  </div>;
+}
+
 // ─── VACANCIES PAGE ───────────────────────────────────────────────────────────
 function Vacancies({ leads, user, team, roles }) {
   const T = useT();
@@ -1367,6 +1476,21 @@ function Vacancies({ leads, user, team, roles }) {
   const allCountries = [
     ...new Set(vacancies.map((v) => v.country).filter(Boolean)),
   ];
+
+  // Partner view
+  if (user.role === "partner") {
+    return (
+      <div style={{ minHeight: "100%" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 900, color: T.text, margin: 0 }}>Vakansiyalar</h1>
+            <p style={{ color: T.muted, margin: "2px 0 0", fontSize: 11 }}>Nomzodlaringizni yuboring</p>
+          </div>
+        </div>
+        <PartnerVacanciesView user={user} leads={leads} vacancies={vacancies} T={T} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100%" }}>

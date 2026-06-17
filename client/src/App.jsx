@@ -20,8 +20,9 @@ import { DocsPipeline } from "./DocsPipeline.jsx";
 import { Dashboard } from "./Dashboard.jsx";
 import { DebtsPage } from "./DebtsPage.jsx";
 import { Analytics } from "./Analytics.jsx";
-import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, getToken, clearToken } from "./api.js";
+import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, getToken, clearToken } from "./api.js";
 import { Vacancies } from "./Vacancies.jsx";
+import { EmployerPortal } from "./EmployerPortal.jsx";
 
 export default function App() {
   const [dark,setDark]=useState(false); 
@@ -33,6 +34,7 @@ export default function App() {
   const [leads,setLeads]=useState([]);
   const [tasks,setTasks]=useState([]);
   const [txns,setTxns]=useState([]);
+  const [extExps,setExtExps]=useState([]);
   const [appLoading,setAppLoading]=useState(false);
   const lastPollRef=useRef(new Date().toISOString());
   const [loading,setLoading]=useState(false);
@@ -226,12 +228,13 @@ const deleteLead = useCallback(async (id) => {
     const loadAll = async () => {
       setAppLoading(true);
       try {
-        const [leadsRes, tasksRes, txnsRes, usersRes, notifsRes] = await Promise.all([
+        const [leadsRes, tasksRes, txnsRes, usersRes, notifsRes, extExpsRes] = await Promise.all([
           leadsAPI.getAll({ limit: 10000 }),
           tasksAPI.getAll(),
           txnAPI.getAll(),
           usersAPI.getAll(),
           notifAPI.getAll().catch(()=>[]),
+          extExpAPI.getAll().catch(()=>[]),
         ]);
         setLeads((leadsRes.leads||leadsRes||[]).map(mapLead));
         setTasks((tasksRes||[]).map(t=>({
@@ -246,6 +249,7 @@ const deleteLead = useCallback(async (id) => {
           amount:Number(t.amount)||0, date:t.date?.slice(0,10)||"",
           empId:t.emp_id||null, empName:t.emp_name||"", by:t.created_by,
         })));
+        if(extExpsRes?.length) setExtExps(extExpsRes);
         if(notifsRes?.length) setNotifs(notifsRes);
         if(usersRes?.length) setTeam(usersRes.map(u=>({
           id:u.id, username:u.username, name:u.name, role:u.role,
@@ -312,9 +316,11 @@ const deleteLead = useCallback(async (id) => {
             {perm.canFin&&(()=>{
               const tI=txns.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
               const tE=txns.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+              const tExtExp=extExps.reduce((s,e)=>s+Number(e.amount||0),0);
+              const totalE=tE+tExtExp;
               const sf=leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+(l.sofFoyda||0),0);
               return <div style={{display:"flex",gap:8,paddingLeft:10,borderLeft:`1px solid ${T.border}`,fontSize:10}}>
-                {[["Kirim",`+${fmtMs(tI)}`,T.green],["Chiqim",`-${fmtMs(tE)}`,T.red],["Balans",fmtMs(tI-tE),(tI-tE)>=0?T.green:T.red],["Sof Foyda",fmtMs(sf),T.yellow]].map(([lb,val,c])=>(
+                {[["Kirim",`+${fmtMs(tI)}`,T.green],["Chiqim",`-${fmtMs(totalE)}`,T.red],["Balans",fmtMs(tI-totalE),(tI-totalE)>=0?T.green:T.red],["Sof Foyda",fmtMs(sf),T.yellow]].map(([lb,val,c])=>(
                   <div key={lb}><span style={{color:T.muted}}>{lb}: </span><b style={{color:c}}>{val}</b></div>
                 ))}
               </div>;
@@ -387,7 +393,8 @@ const deleteLead = useCallback(async (id) => {
           {page==="visa"       && <Visa user={user} roles={roles}/>}
           {page==="team"       && <TeamPage user={user} team={team} setTeam={setTeam} roles={roles}/>}
           {page==="settings"   && <Settings user={user} config={config} setConfig={setConfig} roles={roles} setRoles={setRoles}/>}
-          {page==="finance"    && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts} roles={roles}/>}
+          {page==="finance"    && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts} roles={roles} extExps={extExps} setExtExps={setExtExps}/>}
+          {page==="employer"   && user.role==="employer" && <EmployerPortal user={user} leads={leads} team={team}/>}
         </div>
       </div>
       {drawer&&<Drawer lead={drawer} user={user} team={team} leads={leads} tasks={tasks} onSave={saveLead} onClose={()=>setDrawer(null)} onAddTask={addTask} config={config} roles={roles} addNotif={addNotif}/>}

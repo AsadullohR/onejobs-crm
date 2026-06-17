@@ -29,6 +29,7 @@ function Finance({
   addNotif,
   debts,
   setDebts,
+  extExps,
 }) {
   const T = useT();
   const [selLead, setSelLead] = useState(null);
@@ -65,9 +66,10 @@ function Finance({
   const totalInc = txns
     .filter((t) => t.type === "income")
     .reduce((s, t) => s + t.amount, 0);
+  const extTotal = (extExps||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
   const totalExp = txns
     .filter((t) => t.type === "expense")
-    .reduce((s, t) => s + t.amount, 0);
+    .reduce((s, t) => s + t.amount, 0) + extTotal;
   const sofFoyda = leads
     .filter((l) => DONE.includes(l.status) && l.sofFoyda)
     .reduce((s, l) => s + (l.sofFoyda || 0), 0);

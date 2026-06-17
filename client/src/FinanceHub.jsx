@@ -249,7 +249,15 @@ function FinanceDashboard({ txns, leads, extExps }) {
         ))}
       </div>
 
-      {/* Expense breakdown */}
+      {/* Charts row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 12, marginBottom: 16 }}>
+        {/* Bar chart — last 6 months income vs expenses */}
+        <BarChart txns={txns} extExps={extExps} T={T} />
+        {/* Donut chart — expense breakdown */}
+        <DonutChart salaries={salaries} clientExp={clientExp} extTotal={extTotal} T={T} />
+      </div>
+
+      {/* Expense breakdown bars */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 14 }}>Xarajat taqsimoti</div>
         {totalExp === 0
@@ -277,6 +285,119 @@ function FinanceDashboard({ txns, leads, extExps }) {
   );
 }
 
+// ─── BAR CHART: last 6 months income vs total expenses ───────────────────────
+function BarChart({ txns, extExps, T }) {
+  const months = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      return { key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`, label: d.toLocaleString("uz", { month: "short" }) };
+    });
+  }, []);
+
+  const SALARY_CATS = ["Oylik maosh","Avans","Bonus","KPI","Jarima","Maosh"];
+  const data = useMemo(() => months.map(({ key }) => {
+    const inc = txns.filter(t => t.type==="income" && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
+    const sal = txns.filter(t => t.type==="expense" && SALARY_CATS.includes(t.cat) && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
+    const cl  = txns.filter(t => t.type==="expense" && !SALARY_CATS.includes(t.cat) && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
+    const ext = extExps.filter(e => e.date?.startsWith(key)).reduce((s,e)=>s+Number(e.amount),0);
+    return { inc, exp: sal+cl+ext };
+  }), [txns, extExps, months]);
+
+  const maxVal = Math.max(...data.flatMap(d => [d.inc, d.exp]), 1);
+  const W=480, H=160, PL=8, PR=8, PT=16, PB=30, bw=26, gap=16;
+  const grpW = bw*2+4;
+  const totalW = months.length*(grpW+gap)-gap;
+  const startX = PL + (W-PL-PR-totalW)/2;
+
+  return (
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 4 }}>Oylik Kirim / Chiqim</div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 10, fontSize: 9, color: T.muted }}>
+        <span><span style={{ display:"inline-block", width:8, height:8, borderRadius:2, background:"#22c55e", marginRight:4 }}/>Kirim</span>
+        <span><span style={{ display:"inline-block", width:8, height:8, borderRadius:2, background:"#ef4444", marginRight:4 }}/>Chiqim</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", height:"auto", overflow:"visible" }}>
+        {/* Grid lines */}
+        {[0,0.25,0.5,0.75,1].map(f => {
+          const y = PT + (H-PT-PB)*(1-f);
+          return <line key={f} x1={PL} x2={W-PR} y1={y} y2={y} stroke={T.border} strokeWidth="0.5" />;
+        })}
+        {data.map((d, i) => {
+          const gx = startX + i*(grpW+gap);
+          const chartH = H-PT-PB;
+          const incH = maxVal > 0 ? (d.inc/maxVal)*chartH : 0;
+          const expH = maxVal > 0 ? (d.exp/maxVal)*chartH : 0;
+          return (
+            <g key={i}>
+              {/* Income bar */}
+              <rect x={gx} y={PT+chartH-incH} width={bw} height={incH} rx={3} fill="#22c55e" opacity="0.85" />
+              {/* Expense bar */}
+              <rect x={gx+bw+4} y={PT+chartH-expH} width={bw} height={expH} rx={3} fill="#ef4444" opacity="0.85" />
+              {/* Month label */}
+              <text x={gx+grpW/2} y={H-4} textAnchor="middle" fontSize="8" fill={T.muted}>{months[i].label}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ─── DONUT CHART: expense category breakdown ──────────────────────────────────
+function DonutChart({ salaries, clientExp, extTotal, T }) {
+  const total = salaries + clientExp + extTotal;
+  const segs = [
+    { lb: "Maosh", val: salaries, c: "#ef4444" },
+    { lb: "Mijoz", val: clientExp, c: "#f59e0b" },
+    { lb: "Tashqi", val: extTotal, c: "#8b5cf6" },
+  ];
+  const R=60, r=36, cx=80, cy=80;
+
+  const paths = useMemo(() => {
+    if (total === 0) return [];
+    let angle = -Math.PI/2;
+    return segs.map(s => {
+      const sweep = (s.val/total)*2*Math.PI;
+      const x1=cx+R*Math.cos(angle), y1=cy+R*Math.sin(angle);
+      angle += sweep;
+      const x2=cx+R*Math.cos(angle), y2=cy+R*Math.sin(angle);
+      const xi=cx+r*Math.cos(angle-sweep), yi=cy+r*Math.sin(angle-sweep);
+      const xj=cx+r*Math.cos(angle), yj=cy+r*Math.sin(angle);
+      const lg = sweep > Math.PI ? 1 : 0;
+      return { d: `M ${x1} ${y1} A ${R} ${R} 0 ${lg} 1 ${x2} ${y2} L ${xj} ${yj} A ${r} ${r} 0 ${lg} 0 ${xi} ${yi} Z`, c: s.c, val: s.val, lb: s.lb };
+    });
+  }, [salaries, clientExp, extTotal]);
+
+  return (
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 8 }}>Xarajat Ulushi</div>
+      {total === 0
+        ? <div style={{ color: T.muted, fontSize: 11, padding: "20px 0" }}>Ma'lumot yo'q</div>
+        : <>
+            <svg viewBox="0 0 160 160" style={{ width: "100%", maxWidth: 160, display: "block", margin: "0 auto" }}>
+              {paths.map((p,i) => <path key={i} d={p.d} fill={p.c} opacity="0.9" />)}
+              <text x={cx} y={cy-6} textAnchor="middle" fontSize="9" fill={T.muted}>Jami</text>
+              <text x={cx} y={cy+8} textAnchor="middle" fontSize="11" fontWeight="bold" fill={T.text}>{Math.round(total/1e6)}M</text>
+            </svg>
+            <div style={{ marginTop: 10 }}>
+              {segs.map(s => {
+                const pct = total > 0 ? Math.round((s.val/total)*100) : 0;
+                return (
+                  <div key={s.lb} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:5, fontSize:10 }}>
+                    <span style={{ width:8, height:8, borderRadius:2, background:s.c, flexShrink:0, display:"inline-block" }}/>
+                    <span style={{ color:T.muted, flex:1 }}>{s.lb}</span>
+                    <span style={{ color:T.text, fontWeight:700 }}>{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+      }
+    </div>
+  );
+}
+
 // ─── FINANCE HUB ─────────────────────────────────────────────────────────────
 const TABS = [
   { k: "dashboard", l: "📊 Dashboard" },
@@ -286,15 +407,9 @@ const TABS = [
   { k: "debts",     l: "⚠️ Qarzlar" },
 ];
 
-function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNotif, debts, setDebts, roles }) {
+function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNotif, debts, setDebts, roles, extExps=[], setExtExps }) {
   const T = useT();
   const [tab, setTab] = useState("dashboard");
-  const [extExps, setExtExps] = useState([]);
-
-  // Load external expenses for dashboard
-  useEffect(() => {
-    extExpAPI.getAll().then(setExtExps).catch(() => {});
-  }, []);
 
   const tabStyle = (k) => ({
     padding: "9px 18px", borderRadius: "8px 8px 0 0", fontSize: 12, fontWeight: 700,
@@ -322,7 +437,7 @@ function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNot
         {tab === "clients" && (
           <Finance leads={leads} setLeads={setLeads} team={team} user={user}
             txns={txns} setTxns={setTxns} config={config} addNotif={addNotif}
-            debts={debts} setDebts={setDebts} />
+            debts={debts} setDebts={setDebts} extExps={extExps} />
         )}
         {tab === "salary" && (
           <SalaryPage team={team} txns={txns} setTxns={setTxns} user={user} />

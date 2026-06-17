@@ -64,110 +64,136 @@ function Visa({user, roles}) {
 }
 
 function TeamPage({user, team, setTeam, roles}) {
-  const T=useT(); const [modal,setModal]=useState(null); const [form,setForm]=useState({});
+  const T=useT();
+  const [modal,setModal]=useState(null);
+  const [form,setForm]=useState({});
+  const [activeTab,setActiveTab]=useState("staff");
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const COLORS=["#6366f1","#22c55e","#f97316","#eab308","#ef4444","#06b6d4","#a855f7","#10b981","#3b82f6"];
+
+  const STAFF_ROLES=["admin","manager","sales","docs"];
+  const TAB_ROLES={staff:STAFF_ROLES, partner:["partner"], employer:["employer"]};
+  const TAB_DEFAULT={staff:"sales", partner:"partner", employer:"employer"};
+
   const save = async () => {
-  if (!form.name || !form.username) return;
-
-  try {
-    const payload = {
-      username: form.username,
-      password: form.password,
-      name: form.name,
-      role: form.role,
-      avatar: form.av || form.avatar || "",
-      color: form.color,
-      phone: form.phone,
-      email: form.email || "",
-      active: form.active !== false,
-      salary: Number(form.salary || 0),
-      salary_type: form.salType || form.salary_type || "fixed",
-      salary_pct: Number(form.pct || form.salary_pct || 0),
-    };
-
-    let saved;
-
-    if (form.id) {
-      saved = await usersAPI.update(form.id, payload);
-    } else {
-      saved = await usersAPI.save(payload);
+    if (!form.name || !form.username) return;
+    try {
+      const payload = {
+        username: form.username,
+        password: form.password,
+        name: form.name,
+        role: form.role,
+        avatar: form.av || form.avatar || "",
+        color: form.color,
+        phone: form.phone,
+        email: form.email || "",
+        active: form.active !== false,
+        salary: Number(form.salary || 0),
+        salary_type: form.salType || form.salary_type || "fixed",
+        salary_pct: Number(form.pct || form.salary_pct || 0),
+      };
+      let saved;
+      if (form.id) {
+        saved = await usersAPI.update(form.id, payload);
+      } else {
+        saved = await usersAPI.save(payload);
+      }
+      setTeam(p =>
+        p.some(t => t.id === saved.id)
+          ? p.map(t => t.id === saved.id ? saved : t)
+          : [...p, saved]
+      );
+      setModal(null);
+    } catch (err) {
+      alert("Xodim saqlanmadi: " + err.message);
     }
+  };
 
-    setTeam(p =>
-      p.some(t => t.id === saved.id)
-        ? p.map(t => t.id === saved.id ? saved : t)
-        : [...p, saved]
-    );
-
-    setModal(null);
-  } catch (err) {
-    alert("Xodim saqlanmadi: " + err.message);
-  }
-};
   const inpS=inp(T); const labS=lab(T);
+  const allowedRoles = TAB_ROLES[activeTab]||STAFF_ROLES;
+  const visTeam = team.filter(m=>allowedRoles.includes(m.role));
+
+  const openAdd = () => {
+    const defRole = TAB_DEFAULT[activeTab]||"sales";
+    setForm({name:"",username:"",role:defRole,password:"",av:"",color:COLORS[0],phone:"",email:"",active:true,salary:0,salType:"fixed",pct:5,salItems:[]});
+    setModal("form");
+  };
+
+  const TABS_DEF=[
+    {k:"staff",    l:"Xodimlar"},
+    {k:"partner",  l:"Hamkorlar"},
+    {k:"employer", l:"Ish Beruvchilar"},
+  ];
+
   return <div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
       <h1 style={{fontSize:18,fontWeight:900,color:T.text,margin:0}}>Jamoa</h1>
-      {user.role==="admin"&&<button onClick={()=>{setForm({name:"",username:"",role:"sales",password:"",av:"",color:COLORS[0],phone:"",email:"",active:true,salary:0,salary_type:"fixed", salary_pct:5, salItems:[]});setModal("form");}} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 11px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,fontSize:11,border:"none",cursor:"pointer"}}>{I.plus} Qo'shish</button>}
+      {user.role==="admin"&&<button onClick={openAdd} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 11px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,fontSize:11,border:"none",cursor:"pointer"}}>{I.plus} Qo'shish</button>}
+    </div>
+    {/* Tabs */}
+    <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+      {TABS_DEF.map(({k,l})=>(
+        <button key={k} onClick={()=>setActiveTab(k)} style={{padding:"6px 16px",borderRadius:7,border:`2px solid ${activeTab===k?T.accent:T.border}`,background:activeTab===k?`${T.accent}22`:"transparent",color:activeTab===k?T.text:T.muted,fontWeight:activeTab===k?700:400,cursor:"pointer",fontSize:11}}>{l} <span style={{fontSize:9,color:T.muted}}>({team.filter(m=>(TAB_ROLES[k]||[]).includes(m.role)).length})</span></button>
+      ))}
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
-      {team.map(m=>(
+      {visTeam.map(m=>(
         <div key={m.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:13,display:"flex",gap:10,alignItems:"flex-start",opacity:m.active===false?.5:1}}>
           <Av id={m.id} team={team} size={34}/>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}><span style={{fontSize:13,fontWeight:700,color:T.text}}>{m.name}</span>{m.id===user.id&&<span style={{fontSize:8,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,borderRadius:3,padding:"0 4px",fontWeight:600}}>Siz</span>}</div>
-            <div style={{fontSize:10,color:T.muted,marginBottom:4}}>@{m.username} · {m.phone}</div>
+            <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
+              <span style={{fontSize:13,fontWeight:700,color:T.text}}>{m.name}</span>
+              {m.id===user.id&&<span style={{fontSize:8,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,borderRadius:3,padding:"0 4px",fontWeight:600}}>Siz</span>}
+            </div>
+            <div style={{fontSize:10,color:T.muted,marginBottom:4}}>@{m.username}{m.phone&&` · ${m.phone}`}</div>
+            {activeTab==="partner"&&<div style={{fontSize:9,color:T.muted,marginBottom:3}}>Komissiya: {m.pct||0}%</div>}
+            {activeTab==="employer"&&<div style={{fontSize:9,color:T.muted,marginBottom:3}}>Kompaniya: {m.name}</div>}
             <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
               <span style={{background:`${roles[m.role]?.color||T.accent}22`,color:roles[m.role]?.color||T.accent,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:20}}>{roles[m.role]?.label||m.role}</span>
-              {(user.role==="admin"||user.role==="manager")&&<select value={m.role} onChange={async e => {
-              const role = e.target.value;
-
-              try {
-                const updated = await usersAPI.update(m.id, { ...m, role });
-
-                setTeam(p =>
-                  p.map(t => t.id === m.id ? updated : t)
-                );
-              } catch (err) {
-                alert("Rol saqlanmadi: " + err.message);
-              }
-            }} style={{...inpS,width:"auto",fontSize:9,padding:"2px 5px"}}>{Object.keys(roles).map(r=><option key={r} value={r}>{roles[r].label}</option>)}</select>}
+              {(user.role==="admin"||user.role==="manager")&&activeTab==="staff"&&<select value={m.role} onChange={async e=>{
+                const role=e.target.value;
+                try {
+                  const updated=await usersAPI.update(m.id,{...m,role});
+                  setTeam(p=>p.map(t=>t.id===m.id?updated:t));
+                } catch(err){alert("Rol saqlanmadi: "+err.message);}
+              }} style={{...inpS,width:"auto",fontSize:9,padding:"2px 5px"}}>{STAFF_ROLES.map(r=><option key={r} value={r}>{roles[r]?.label||r}</option>)}</select>}
             </div>
-            <div style={{fontSize:9,color:T.muted,marginTop:3}}>{m.salType==="fixed"?`Maosh: ${fmtMs(m.salary||0)} so'm`:`${m.pct||0}% komissiya`}</div>
+            {activeTab==="staff"&&<div style={{fontSize:9,color:T.muted,marginTop:3}}>{m.salType==="fixed"?`Maosh: ${fmtMs(m.salary||0)} so'm`:`${m.pct||0}% komissiya`}</div>}
           </div>
           {user.role==="admin"&&<div style={{display:"flex",gap:4,flexShrink:0}}>
             <button onClick={()=>{setForm({...m});setModal("form");}} style={{padding:"3px 6px",borderRadius:4,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,cursor:"pointer",fontSize:10}}>{I.edit}</button>
-            {m.id!==user.id&&<button onClick={async () => {
-          try {
-            const updated = await usersAPI.update(m.id, {
-              ...m,
-              active: m.active === false
-            });
-          
-            setTeam(p =>
-              p.map(t => t.id === m.id ? updated : t)
-            );
-          } catch (err) {
-            alert("Status saqlanmadi: " + err.message);
-          }
-}} style={{padding:"3px 6px",borderRadius:4,background:m.active===false?`${T.green}22`:`${T.yellow}22`,color:m.active===false?T.green:T.yellow,border:`1px solid ${m.active===false?T.green:T.yellow}44`,cursor:"pointer",fontSize:9}}>{m.active===false?"Faol":"To'xtat"}</button>}
+            {m.id!==user.id&&<button onClick={async()=>{
+              try {
+                const updated=await usersAPI.update(m.id,{...m,active:m.active===false});
+                setTeam(p=>p.map(t=>t.id===m.id?updated:t));
+              } catch(err){alert("Status saqlanmadi: "+err.message);}
+            }} style={{padding:"3px 6px",borderRadius:4,background:m.active===false?`${T.green}22`:`${T.yellow}22`,color:m.active===false?T.green:T.yellow,border:`1px solid ${m.active===false?T.green:T.yellow}44`,cursor:"pointer",fontSize:9}}>{m.active===false?"Faol":"To'xtat"}</button>}
           </div>}
         </div>
       ))}
+      {visTeam.length===0&&<div style={{gridColumn:"1/-1",textAlign:"center",padding:"30px 0",color:T.muted,fontSize:12}}>Bu bo'limda hech kim yo'q</div>}
     </div>
     {modal==="form"&&<Modal onClose={()=>setModal(null)} width={500}>
       <div style={{padding:20}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><h3 style={{margin:0,fontSize:13,fontWeight:800,color:T.text}}>Xodim</h3><button onClick={()=>setModal(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}>{I.x}</button></div>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+          <h3 style={{margin:0,fontSize:13,fontWeight:800,color:T.text}}>
+            {activeTab==="partner"?"Hamkor":activeTab==="employer"?"Ish Beruvchi":"Xodim"}
+          </h3>
+          <button onClick={()=>setModal(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}>{I.x}</button>
+        </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
-          <div style={{gridColumn:"1/-1"}}><label style={labS}>To'liq ismi *</label><input value={form.name||""} onChange={e=>f("name",e.target.value)} style={inpS}/></div>
+          <div style={{gridColumn:"1/-1"}}><label style={labS}>{activeTab==="employer"?"Kompaniya nomi *":"To'liq ismi *"}</label><input value={form.name||""} onChange={e=>f("name",e.target.value)} style={inpS}/></div>
+          {activeTab==="employer"&&<div style={{gridColumn:"1/-1"}}><label style={labS}>Kontakt shaxs</label><input value={form.contactPerson||""} onChange={e=>f("contactPerson",e.target.value)} style={inpS} placeholder="Direktor ismi"/></div>}
           <div><label style={labS}>Username *</label><input value={form.username||""} onChange={e=>f("username",e.target.value)} style={inpS}/></div>
           <div><label style={labS}>Parol</label><input value={form.password||""} onChange={e=>f("password",e.target.value)} style={inpS}/></div>
           <div><label style={labS}>Telefon</label><input value={form.phone||""} onChange={e=>f("phone",e.target.value)} style={inpS}/></div>
-          <div><label style={labS}>Rol</label><select value={form.role||"sales"} onChange={e=>f("role",e.target.value)} style={inpS}>{Object.entries(roles).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
+          {activeTab==="staff"&&<div><label style={labS}>Rol</label><select value={form.role||"sales"} onChange={e=>f("role",e.target.value)} style={inpS}>{STAFF_ROLES.map(r=><option key={r} value={r}>{roles[r]?.label||r}</option>)}</select></div>}
           <div><label style={labS}>Avatar (2 harf)</label><input value={form.av||""} onChange={e=>f("av",e.target.value.toUpperCase().slice(0,2))} maxLength={2} style={inpS} placeholder="AS"/></div>
-          <div><label style={labS}>Maosh turi</label><select value={form.salType||"fixed"} onChange={e=>f("salType",e.target.value)} style={inpS}><option value="fixed">Fiksed</option><option value="percent">Foiz %</option></select></div>
-          {form.salType==="fixed"?<div><label style={labS}>Oylik maosh</label><input type="number" value={form.salary||0} onChange={e=>f("salary",Number(e.target.value))} style={inpS}/></div>:<div><label style={labS}>Foiz %</label><input type="number" value={form.pct||5} onChange={e=>f("pct",Number(e.target.value))} style={inpS}/></div>}
+          {activeTab==="staff"&&<>
+            <div><label style={labS}>Maosh turi</label><select value={form.salType||"fixed"} onChange={e=>f("salType",e.target.value)} style={inpS}><option value="fixed">Fiksed</option><option value="percent">Foiz %</option></select></div>
+            {form.salType==="fixed"?<div><label style={labS}>Oylik maosh</label><input type="number" value={form.salary||0} onChange={e=>f("salary",Number(e.target.value))} style={inpS}/></div>:<div><label style={labS}>Foiz %</label><input type="number" value={form.pct||5} onChange={e=>f("pct",Number(e.target.value))} style={inpS}/></div>}
+          </>}
+          {activeTab==="partner"&&<div><label style={labS}>Komissiya %</label><input type="number" value={form.pct||0} onChange={e=>f("pct",Number(e.target.value))} style={inpS}/></div>}
           <div style={{gridColumn:"1/-1"}}><label style={labS}>Rang</label><div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:2}}>{COLORS.map(c=><div key={c} onClick={()=>f("color",c)} style={{width:20,height:20,borderRadius:"50%",background:c,cursor:"pointer",border:`3px solid ${form.color===c?T.text:"transparent"}`}}/>)}</div></div>
         </div>
         <div style={{display:"flex",gap:6,marginTop:12,justifyContent:"flex-end"}}>
