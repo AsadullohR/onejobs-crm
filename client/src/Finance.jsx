@@ -1087,7 +1087,7 @@ function Finance({
                 </div>
               ))}
             </div>
-            {/* Tabs: Tranzaksiyalar | Qarzlar | Maosh */}
+            {/* Tabs: Tranzaksiyalar | Maosh */}
             <div
               style={{
                 display: "flex",
@@ -1102,7 +1102,6 @@ function Finance({
             >
               {[
                 ["txns", `💳 Tranzaksiyalar (${cf.txns.length})`],
-                ["debts", `⚠️ Qarzlar (${curDebts.length})`],
                 ["salary", "💰 Xodim xarajat"],
               ].map(([k, l]) => (
                 <button

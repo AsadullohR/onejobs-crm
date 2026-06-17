@@ -4,6 +4,7 @@ import { DONE } from "./constants.js";
 import { uid, fmtMs, fmtD, inp, I } from "./helpers.jsx";
 import { Finance } from "./Finance.jsx";
 import { SalaryPage } from "./SalaryPage.jsx";
+import { DebtsPage } from "./DebtsPage.jsx";
 import { extExpAPI } from "./api.js";
 
 // ─── EXTERNAL EXPENSES TAB ────────────────────────────────────────────────────
@@ -205,12 +206,12 @@ function FinanceDashboard({ txns, leads, extExps }) {
   ];
 
   const cards = [
-    { ic: "📥", lb: "KIRIM",           val: fmtMs(income) + " so'm",   c: T.green, sub: "Mijozlardan tushum" },
-    { ic: "📤", lb: "XARAJAT JAMI",    val: fmtMs(totalExp) + " so'm", c: T.red,   sub: `Maosh ${fmtMs(salaries)} + Mijoz ${fmtMs(clientExp)} + Tashqi ${fmtMs(extTotal)}` },
-    { ic: "💰", lb: "SOF FOYDA",       val: fmtMs(profit) + " so'm",   c: profit >= 0 ? T.green : T.red, sub: "Kirim − Barcha xarajatlar" },
-    { ic: "💳", lb: "KUTILAYOTGAN",    val: fmtMs(outstanding) + " so'm", c: T.yellow, sub: "Ijobiy leadlardan" },
-    { ic: "👷", lb: "MAOSH XARAJATI",  val: fmtMs(salaries) + " so'm", c: T.red,   sub: "Xodimlar maoshi" },
-    { ic: "🏢", lb: "TASHQI XARAJAT",  val: fmtMs(extTotal) + " so'm", c: T.red,   sub: "Ijara, kommunal, marketing..." },
+    { ic: "📥", lb: "OLINGAN TO'LOVLAR",     val: fmtMs(income) + " so'm",      c: T.green,  sub: "Mijozlardan qabul qilingan pul" },
+    { ic: "💰", lb: "TASDIQLANGAN FOYDA",    val: fmtMs(outstanding) + " so'm", c: T.yellow, sub: "Tugagan mijozlar (Jo'nab ketdi) sof foydasi" },
+    { ic: "⚖️", lb: "JORIY BALANS HISOBI",   val: fmtMs(profit) + " so'm",      c: profit >= 0 ? T.green : T.red, sub: "Kirim − Barcha xarajatlar (joriy P&L)" },
+    { ic: "📤", lb: "XARAJAT JAMI",          val: fmtMs(totalExp) + " so'm",    c: T.red,    sub: `Maosh ${fmtMs(salaries)} · Mijoz ${fmtMs(clientExp)} · Tashqi ${fmtMs(extTotal)}` },
+    { ic: "👷", lb: "MAOSH XARAJATI",        val: fmtMs(salaries) + " so'm",    c: T.red,    sub: "Xodimlar maoshi va bonuslari" },
+    { ic: "🏢", lb: "TASHQI XARAJAT",        val: fmtMs(extTotal) + " so'm",    c: T.red,    sub: "Ijara, kommunal, marketing..." },
   ];
 
   return (
@@ -282,9 +283,10 @@ const TABS = [
   { k: "clients",   l: "💼 Mijozlar Moliyasi" },
   { k: "salary",    l: "👷 Xodim Xarajatlari" },
   { k: "external",  l: "🏢 Tashqi Xarajatlar" },
+  { k: "debts",     l: "⚠️ Qarzlar" },
 ];
 
-function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNotif, debts, setDebts }) {
+function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNotif, debts, setDebts, roles }) {
   const T = useT();
   const [tab, setTab] = useState("dashboard");
   const [extExps, setExtExps] = useState([]);
@@ -327,6 +329,9 @@ function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNot
         )}
         {tab === "external" && (
           <ExternalExpenses user={user} addNotif={addNotif} />
+        )}
+        {tab === "debts" && (
+          <DebtsPage debts={debts} setDebts={setDebts} user={user} leads={leads} />
         )}
       </div>
     </div>

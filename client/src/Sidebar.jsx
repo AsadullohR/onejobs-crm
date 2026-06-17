@@ -8,22 +8,20 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
   const T=useT();
   const NAV=[
     {k:"dashboard", l:"Dashboard",           ic:I.dash},
-    {k:"analytics", l:"Tahlil Markazi",      ic:"📊"},
     {k:"pipeline",  l:"Pipeline",            ic:I.pipe},
     {k:"leads",     l:"Mijozlar",            ic:I.list},
     {k:"tasks",     l:"Vazifalar",           ic:I.task},
     {k:"vacancies", l:"Vakansiyalar",        ic:"💼"},
     {k:"finance",   l:"Moliya",              ic:I.money},
     {k:"docspipe",  l:"Konsultant Pipeline", ic:I.flag},
-    {k:"debts",     l:"Qarzlar",             ic:I.money},
     {k:"visa",      l:"Viza",                ic:I.flag},
     {k:"team",      l:"Jamoa",               ic:I.team},
     {k:"settings",  l:"Sozlamalar",          ic:I.gear},
   ];
   const allowed={
-  admin:  NAV.filter(n=>n.k!=="salary").map(n=>n.k),
-  manager:["dashboard","pipeline","leads","tasks","finance","debts","visa","team","settings","docspipe","analytics","vacancies"],
-  sales:  ["dashboard","pipeline","leads","tasks","vacancies", "visa"],
+  admin:  NAV.map(n=>n.k),
+  manager:["dashboard","pipeline","leads","tasks","finance","visa","team","settings","docspipe","vacancies"],
+  sales:  ["dashboard","pipeline","leads","tasks","vacancies","visa"],
   docs:   ["dashboard","pipeline","leads","tasks","docspipe","visa","vacancies"],
   partner:["leads","pipeline","vacancies"],
 };

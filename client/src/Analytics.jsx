@@ -4,10 +4,10 @@ import { DONE, LOST } from "./constants.js";
 import { fmtMs, isOD, inp, I, Av,fmtD } from "./helpers.jsx";
 
 // ─── ANALYTICS PAGE (Employee Productivity + Time Analysis) ─────────────────
-function Analytics({leads, tasks, team, txns, roles, user}) {
+function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
   const T=useT();
   const inpS=inp(T);
-  const [tab,setTab]=useState("productivity");  // productivity | time | salary
+  const [tab,setTab]=useState(initialTab||"productivity");  // productivity | time | salary
   const [fEmp,setFEmp]=useState("all");
   const [fPeriod,setFPeriod]=useState("month"); // week | month | quarter | all
   const [fStage,setFStage]=useState("all");

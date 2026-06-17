@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
 import { fmtMs, fmtD, isOD, isSoon, I, Pill, Av, inp } from "./helpers.jsx";
+import { Analytics } from "./Analytics.jsx";
 
 // ─── SUPER DASHBOARD v2 (Business KPI) ────────────────────────────────────────
-function Dashboard({ leads, tasks, user, team, txns, roles }) {
+function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
   const T = useT();
   const inpS = inp(T);
 
@@ -1356,6 +1357,41 @@ function Dashboard({ leads, tasks, user, team, txns, roles }) {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── UNIFIED DASHBOARD SHELL ─────────────────────────────────────────────────
+function Dashboard({ leads, tasks, user, team, txns, roles }) {
+  const T = useT();
+  const perm = roles[user.role] || {};
+  const [tab, setTab] = useState("kpi");
+
+  const tabs = [
+    { k: "kpi",    l: "📈 Biznes KPI" },
+    { k: "team",   l: "👔 Xodimlar" },
+    { k: "time",   l: "⏱️ Vaqt Tahlili" },
+    ...(perm.canFin ? [{ k: "salary", l: "💰 Maosh Tahlili" }] : []),
+  ];
+
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Tab bar */}
+      <div style={{ display: "flex", gap: 3, marginBottom: 16, background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 4, width: "fit-content" }}>
+        {tabs.map(t => (
+          <button key={t.k} onClick={() => setTab(t.k)}
+            style={{ padding: "7px 16px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: tab === t.k ? 700 : 400,
+              background: tab === t.k ? T.accent : "transparent", color: tab === t.k ? "#fff" : T.muted, transition: "all 0.15s" }}>
+            {t.l}
+          </button>
+        ))}
+      </div>
+      <div style={{ flex: 1, overflow: "auto" }}>
+        {tab === "kpi"    && <DashboardKPI leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles} />}
+        {tab === "team"   && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user} initialTab="productivity" />}
+        {tab === "time"   && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user} initialTab="time" />}
+        {tab === "salary" && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user} initialTab="salary" />}
       </div>
     </div>
   );
