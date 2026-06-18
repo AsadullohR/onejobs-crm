@@ -8,8 +8,8 @@ const NOW = new Date();
 const isOD = d => d && new Date(d) < NOW;
 const isSoon = d => { if(!d)return false; const v=(new Date(d)-NOW)/864e5; return v>=0&&v<=2; };
 const fmtD = d => { try{return new Date(d).toLocaleDateString("uz-UZ",{day:"2-digit",month:"short"});}catch{return d||"–";} };
-const fmtM = n => !n?0: n>=1000000?`${(n/1000000).toFixed(2)} mln`:n>=1000?`${(n/1000).toFixed(0)}K`:n;
-const fmtMs = n => !n?0: n>=1000000?`${(n/1000000).toFixed(1)}M`:n>=1000?`${(n/1000).toFixed(0)}K`:n;
+const fmtM = n => !n?'0': Number(n).toLocaleString('ru-RU');
+const fmtMs = n => !n?'0': Number(n).toLocaleString('ru-RU');
 const uid = () => Date.now()+Math.floor(Math.random()*1000);
 const dateRange = (d, range) => {
   const n = new Date(); const dt = new Date(d);
