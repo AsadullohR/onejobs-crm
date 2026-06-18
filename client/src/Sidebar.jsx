@@ -25,6 +25,7 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     docs:    ["dashboard","pipeline","leads","tasks","vacancies","visa"],
     partner: ["leads","pipeline","vacancies","visa"],
     employer:["employer"],
+    finance_manager:["dashboard","finance","vacancies"],
   };
   const vis = NAV.filter(n=>(allowed[user.role]||[]).includes(n.k));
   const W = col ? 52 : 200;

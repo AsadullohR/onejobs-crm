@@ -71,7 +71,7 @@ function TeamPage({user, team, setTeam, roles}) {
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const COLORS=["#6366f1","#22c55e","#f97316","#eab308","#ef4444","#06b6d4","#a855f7","#10b981","#3b82f6"];
 
-  const STAFF_ROLES=["admin","manager","sales","docs"];
+  const STAFF_ROLES=["admin","manager","sales","docs","finance_manager"];
   const TAB_ROLES={staff:STAFF_ROLES, partner:["partner"], employer:["employer"]};
   const TAB_DEFAULT={staff:"sales", partner:"partner", employer:"employer"};
 

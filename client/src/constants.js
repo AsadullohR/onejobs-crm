@@ -49,6 +49,7 @@ const INIT_ROLES = {
   docs:    {label:"Konsultant", color:"#06b6d4",canOwner:true, canFin:false,canEdit:true, canCfg:false,canTeam:false, seeAll:true, canTakeUnassigned:true, canChangeOwner:false},
   partner: {label:"Hamkor",     color:"#6b7280",canOwner:false,canFin:false,canEdit:true, canCfg:false,canTeam:false, seeAll:false,canTakeUnassigned:false,canChangeOwner:false},
   employer:{label:"Ish Beruvchi",color:"#0891b2",canOwner:false,canFin:false,canEdit:false,canCfg:false,canTeam:false, seeAll:false,canTakeUnassigned:false,canChangeOwner:false},
+  finance_manager:{label:"Moliya Menejer",color:"#10b981",canOwner:false,canFin:true,canEdit:false,canCfg:false,canTeam:false,seeAll:false,canTakeUnassigned:false,canChangeOwner:false},
 };
 
 const INIT_TEAM = [

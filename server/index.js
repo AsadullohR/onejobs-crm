@@ -222,15 +222,7 @@ app.post("/api/leads", auth, async (req, res) => {
         }
       }
     }
-    if (!l.force && l.name) {
-      const dup = await pool.query(
-        `SELECT id, name, comment, status, country FROM leads WHERE LOWER(name) LIKE LOWER($1) LIMIT 3`,
-        [`%${l.name.trim()}%`]
-      );
-      if (dup.rows.length > 0 && dup.rows[0].id !== (l.id || "")) {
-        return res.status(409).json({ duplicates: dup.rows, message: "Shu ismli mijoz allaqachon mavjud" });
-      }
-    }
+    // Name duplicate check removed — similar names are allowed
     const { rows } = await pool.query(
       `
       INSERT INTO leads (id, name, phone, telegram, status, country, sector, position, source, gender,
