@@ -20,7 +20,7 @@ import { DocsPipeline } from "./DocsPipeline.jsx";
 import { Dashboard } from "./Dashboard.jsx";
 import { DebtsPage } from "./DebtsPage.jsx";
 import { Analytics } from "./Analytics.jsx";
-import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, getToken, clearToken } from "./api.js";
+import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, getToken, clearToken } from "./api.js";
 import { Vacancies } from "./Vacancies.jsx";
 import { EmployerPortal } from "./EmployerPortal.jsx";
 
@@ -228,13 +228,14 @@ const deleteLead = useCallback(async (id) => {
     const loadAll = async () => {
       setAppLoading(true);
       try {
-        const [leadsRes, tasksRes, txnsRes, usersRes, notifsRes, extExpsRes] = await Promise.all([
+        const [leadsRes, tasksRes, txnsRes, usersRes, notifsRes, extExpsRes, debtsRes] = await Promise.all([
           leadsAPI.getAll({ limit: 10000 }),
           tasksAPI.getAll(),
           txnAPI.getAll(),
           usersAPI.getAll(),
           notifAPI.getAll().catch(()=>[]),
           extExpAPI.getAll().catch(()=>[]),
+          debtsAPI.getAll().catch(()=>[]),
         ]);
         setLeads((leadsRes.leads||leadsRes||[]).map(mapLead));
         setTasks((tasksRes||[]).map(t=>({
@@ -250,6 +251,7 @@ const deleteLead = useCallback(async (id) => {
           empId:t.emp_id||null, empName:t.emp_name||"", by:t.created_by,
         })));
         if(extExpsRes?.length) setExtExps(extExpsRes);
+        if(debtsRes?.length) setDebts(debtsRes);
         if(notifsRes?.length) setNotifs(notifsRes);
         if(usersRes?.length) setTeam(usersRes.map(u=>({
           id:u.id, username:u.username, name:u.name, role:u.role,
@@ -394,7 +396,7 @@ const deleteLead = useCallback(async (id) => {
           {page==="team"       && <TeamPage user={user} team={team} setTeam={setTeam} roles={roles}/>}
           {page==="settings"   && <Settings user={user} config={config} setConfig={setConfig} roles={roles} setRoles={setRoles}/>}
           {page==="finance"    && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts} roles={roles} extExps={extExps} setExtExps={setExtExps}/>}
-          {page==="employer"   && user.role==="employer" && <EmployerPortal user={user} leads={leads} team={team}/>}
+          {page==="employer"   && user.role==="employer" && <EmployerPortal user={user} leads={leads} team={team} addNotif={addNotif}/>}
         </div>
       </div>
       {drawer&&<Drawer lead={drawer} user={user} team={team} leads={leads} tasks={tasks} onSave={saveLead} onClose={()=>setDrawer(null)} onAddTask={addTask} config={config} roles={roles} addNotif={addNotif}/>}

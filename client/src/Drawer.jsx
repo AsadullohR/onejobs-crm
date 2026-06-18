@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useT } from "./theme.js";
 import { STAGES, DONE, LOST } from "./constants.js";
 import { uid, fmtM, fmtMs, fmtD, isOD, inp, lab, I, Pill, Av, Modal, SearchSelect, gS } from "./helpers.jsx";
-import { candidatesAPI } from "./api.js";
+import { candidatesAPI, leadDocsAPI } from "./api.js";
 
 // ─── LEAD DRAWER ──────────────────────────────────────────────────────────────
 function Drawer({lead, user, team, leads, tasks, onSave, onClose, onAddTask, config, roles, addNotif}) {
@@ -58,12 +58,51 @@ const [form,setForm]=useState({
     candidatesAPI.getByLead(lead.id).then(setVacCands).catch(() => {});
   }, [lead.id]);
 
+  // Document checklist
+  const DOC_TYPES = [
+    { key:"passport",   label:"📘 Pasport",              desc:"Pasport nusxasi va asl" },
+    { key:"photo",      label:"📸 Rasm",                  desc:"3×4 rasm (6 dona)" },
+    { key:"medical",    label:"🏥 Tibbiy Guvohnoma",      desc:"Tibbiy tekshiruv natijasi" },
+    { key:"police",     label:"👮 Politsiya Ma'lumotnomasi", desc:"Sudlanmaganlik haqida" },
+    { key:"diploma",    label:"🎓 Diplom/Attestat",       desc:"Ta'lim hujjati" },
+    { key:"contract",   label:"📄 Shartnoma",             desc:"Ish shartnomasi imzolandi" },
+    { key:"visa_apply", label:"🛂 Vizaga Topshirildi",    desc:"Elchixonaga topshirilgan sana" },
+    { key:"visa_got",   label:"✈️ Viza Olindi",           desc:"Viza qo'lga tegdi" },
+    { key:"ticket",     label:"🎫 Aviachipta",            desc:"Aviachiptа band qilindi" },
+    { key:"departure",  label:"🛫 Jo'nab Ketdi",          desc:"Jo'nab ketish tasdiqlandi" },
+  ];
+  const DOC_STATUSES = {
+    pending: { label:"Kutilmoqda", next:"done" },
+    done:    { label:"✅ Tayyor",  next:"na" },
+    na:      { label:"— N/A",      next:"pending" },
+  };
+  const [leadDocs, setLeadDocs] = useState({});
+  useEffect(() => {
+    if (!lead.id) return;
+    leadDocsAPI.getByLead(lead.id)
+      .then(docs => {
+        const map = {};
+        docs.forEach(d => { map[d.docType] = d; });
+        setLeadDocs(map);
+      })
+      .catch(() => {});
+  }, [lead.id]);
+  const updateDoc = async (docType, status, notes) => {
+    if (!lead.id) return;
+    try {
+      const saved = await leadDocsAPI.upsert(lead.id, docType, { status, notes });
+      setLeadDocs(p => ({ ...p, [docType]: saved }));
+    } catch (e) { console.error(e); }
+  };
+  const doneCount = DOC_TYPES.filter(dt => leadDocs[dt.key]?.status === 'done').length;
+
   const TABS=[
     {k:"info",l:"Ma'lumot"},
     {k:"owners",l:"Mas'ullar"},
     {k:"kpi",l:"KPI"},
     {k:"pay",l:"To'lovlar"},
     {k:"docs",l:"Hujjatlar"},
+    {k:"checklist",l:`✅ Tekshiruv(${doneCount}/${DOC_TYPES.length})`},
     {k:"cv",l:"CV"},
     {k:"vacancies",l:`Vakansiyalar(${vacCands.length})`},
     {k:"tasks",l:`Vazifalar(${leadTasks.length})`},
@@ -239,6 +278,47 @@ const [form,setForm]=useState({
               <div key={k} style={{gridColumn:"1/-1"}}><label style={labS}>{lb}</label><textarea value={(form.cv||{})[k]||""} onChange={e=>cv(k,e.target.value)} rows={2} style={{...inpS,resize:"vertical"}}/></div>
             ))}
           </div>
+        </div>}
+
+        {/* DOCUMENT CHECKLIST */}
+        {tab==="checklist"&&<div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontSize:11,color:T.muted}}>Hujjatlar holati — Bosib holatni o'zgartiring</div>
+            <div style={{fontSize:10,fontWeight:700,color:doneCount===DOC_TYPES.length?T.green:T.muted}}>{doneCount}/{DOC_TYPES.length} tayyor</div>
+          </div>
+          <div style={{height:4,background:T.card2,borderRadius:2,overflow:"hidden",marginBottom:14}}>
+            <div style={{height:"100%",width:`${(doneCount/DOC_TYPES.length)*100}%`,background:doneCount===DOC_TYPES.length?T.green:T.accent,borderRadius:2,transition:"width 0.3s"}}/>
+          </div>
+          {DOC_TYPES.map(dt=>{
+            const doc=leadDocs[dt.key]||{status:"pending",notes:""};
+            const st=DOC_STATUSES[doc.status]||DOC_STATUSES.pending;
+            const bgColor=doc.status==="done"?`${T.green}12`:doc.status==="na"?T.card2:T.card;
+            const borderColor=doc.status==="done"?`${T.green}44`:T.border;
+            return (
+              <div key={dt.key} style={{background:bgColor,border:`1px solid ${borderColor}`,borderRadius:8,padding:"10px 12px",marginBottom:7}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:12,fontWeight:700,color:T.text}}>{dt.label}</div>
+                    <div style={{fontSize:9,color:T.muted}}>{dt.desc}</div>
+                  </div>
+                  <button
+                    onClick={()=>updateDoc(dt.key,st.next,doc.notes)}
+                    style={{padding:"4px 12px",borderRadius:6,fontSize:10,fontWeight:700,cursor:"pointer",flexShrink:0,
+                      background:doc.status==="done"?`${T.green}22`:doc.status==="na"?T.card2:T.card,
+                      color:doc.status==="done"?T.green:doc.status==="na"?T.muted:T.muted,
+                      border:`1px solid ${doc.status==="done"?T.green+"44":T.border}`}}
+                  >{st.label}</button>
+                </div>
+                {doc.status!=="pending"&&<input
+                  placeholder="Izoh (sana, raqam...)"
+                  value={doc.notes||""}
+                  onChange={e=>setLeadDocs(p=>({...p,[dt.key]:{...doc,notes:e.target.value}}))}
+                  onBlur={e=>updateDoc(dt.key,doc.status,e.target.value)}
+                  style={{...inpS,marginTop:6,fontSize:10}}
+                />}
+              </div>
+            );
+          })}
         </div>}
 
         {/* VACANCIES */}

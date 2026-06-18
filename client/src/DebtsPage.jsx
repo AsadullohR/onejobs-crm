@@ -1,28 +1,58 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useT } from "./theme.js";
 import { uid, fmtMs, fmtD, isOD, inp, lab, I, Modal, SearchSelect} from "./helpers.jsx";
+import { debtsAPI } from "./api.js";
 
 // ─── DEBTS PAGE ───────────────────────────────────────────────────────────────
 function DebtsPage({debts, setDebts, user, leads}) {
   const T=useT();
   const [tab,setTab]=useState("client");
   const [modal,setModal]=useState(null); const [form,setForm]=useState({});
+  const [saving,setSaving]=useState(false);
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const inpS=inp(T); const labS=lab(T);
-  const clientDebts=debts.filter(d=>d.type==="client"&&!d.leadId);
+
+  // Load from API on mount
+  useEffect(()=>{
+    debtsAPI.getAll().then(setDebts).catch(err=>console.error('Debts load error:',err));
+  },[]);
+
+  const clientDebts=debts.filter(d=>d.type==="client");
   const companyDebts=debts.filter(d=>d.type==="company");
   const allDebts=[...clientDebts,...companyDebts];
-  const addDebt=()=>{
+
+  const addDebt=async()=>{
     if(!form.name||!form.amount)return;
-    setDebts(p=>[...p,{...form,id:uid(),amount:Number(form.amount),paid:false,createdAt:new Date().toISOString().slice(0,10),by:user.id}]);
-    setModal(null);setForm({});
+    setSaving(true);
+    try {
+      const saved = await debtsAPI.create({...form,amount:Number(form.amount),paid:false});
+      setDebts(p=>[saved,...p]);
+      setModal(null);setForm({});
+    } catch(e){ alert("Xatolik: "+e.message); } finally{ setSaving(false); }
   };
-  const togglePaid=id=>setDebts(p=>p.map(d=>d.id===id?{...d,paid:!d.paid}:d));
-  const del=id=>setDebts(p=>p.filter(d=>d.id!==id));
+
+  const togglePaid=async(id)=>{
+    const debt=debts.find(d=>d.id===id);
+    if(!debt) return;
+    try {
+      const updated=await debtsAPI.update(id,{...debt,paid:!debt.paid});
+      setDebts(p=>p.map(d=>d.id===id?updated:d));
+    } catch(e){ alert("Xatolik: "+e.message); }
+  };
+
+  const del=async(id)=>{
+    if(!confirm("O'chirilsinmi?"))return;
+    try {
+      await debtsAPI.delete(id);
+      setDebts(p=>p.filter(d=>d.id!==id));
+    } catch(e){ alert("Xatolik: "+e.message); }
+  };
+
   const list=tab==="client"?clientDebts:companyDebts;
   const totalU=list.filter(d=>!d.paid).reduce((s,d)=>s+(d.amount||0),0);
   const totalP=list.filter(d=>d.paid).reduce((s,d)=>s+(d.amount||0),0);
   const overdue=allDebts.filter(d=>!d.paid&&d.dueDate&&isOD(d.dueDate)).reduce((s,d)=>s+(d.amount||0),0);
+
   return <div>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
       <div><h1 style={{fontSize:18,fontWeight:900,color:T.text,margin:0}}>Qarzlar Boshqaruvi</h1><p style={{color:T.muted,margin:"1px 0 0",fontSize:10}}>Mijoz qarzlari va kompaniya majburiyatlari</p></div>
@@ -56,7 +86,7 @@ function DebtsPage({debts, setDebts, user, leads}) {
             </div>
             {d.desc&&<div style={{fontSize:9,color:T.muted,marginBottom:2}}>{d.desc}</div>}
             <div style={{display:"flex",gap:8}}>
-              {d.category&&<span style={{fontSize:8,background:T.card2,color:T.sub,border:`1px solid ${T.border}`,borderRadius:3,padding:"1px 5px"}}>{d.category}</span>}
+              {d.category&&<span style={{fontSize:8,background:T.card2,color:T.muted,border:`1px solid ${T.border}`,borderRadius:3,padding:"1px 5px"}}>{d.category}</span>}
               {d.dueDate&&<span style={{fontSize:8,color:isOD(d.dueDate)?T.red:T.muted}}>📅 {fmtD(d.dueDate)}</span>}
             </div>
           </div>
@@ -100,7 +130,7 @@ function DebtsPage({debts, setDebts, user, leads}) {
         </div>
         <div style={{display:"flex",gap:6,justifyContent:"flex-end",marginTop:12}}>
           <button onClick={()=>setModal(null)} style={{padding:"6px 12px",borderRadius:6,background:T.card2,color:T.text,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:10}}>Bekor</button>
-          <button onClick={addDebt} style={{padding:"6px 16px",borderRadius:6,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:"pointer",fontSize:10}}>💾 Saqlash</button>
+          <button onClick={addDebt} disabled={saving} style={{padding:"6px 16px",borderRadius:6,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:"pointer",fontSize:10}}>{saving?"Saqlanmoqda...":"💾 Saqlash"}</button>
         </div>
       </div>
     </Modal>}

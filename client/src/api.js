@@ -120,3 +120,23 @@ export const extExpAPI = {
   update: (id, e) => req("PUT", `/api/external-expenses/${id}`, e),
   delete: (id) => req("DELETE", `/api/external-expenses/${id}`),
 };
+
+export const debtsAPI = {
+  getAll: () => req("GET", "/api/debts"),
+  create: (d) => req("POST", "/api/debts", d),
+  update: (id, d) => req("PUT", `/api/debts/${id}`, d),
+  delete: (id) => req("DELETE", `/api/debts/${id}`),
+};
+
+export const leadDocsAPI = {
+  getByLead: (leadId) => req("GET", `/api/leads/${leadId}/documents`),
+  upsert: (leadId, docType, data) => req("PUT", `/api/leads/${leadId}/documents/${docType}`, data),
+};
+
+export const reportsAPI = {
+  openMonthly: (month) => {
+    const token = _token || localStorage.getItem("onejobs_token");
+    const m = month || new Date().toISOString().slice(0,7);
+    window.open(`${API}/api/reports/monthly?month=${m}&token=${token}`, '_blank');
+  },
+};

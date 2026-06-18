@@ -11,7 +11,7 @@ const CAND_STATUS = {
   hired:     { label: "Yollandi",    c: "#9333ea" },
 };
 
-function EmployerPortal({ user, leads, team }) {
+function EmployerPortal({ user, leads, team, addNotif }) {
   const T = useT();
   const [vacancies, setVacancies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -45,8 +45,10 @@ function EmployerPortal({ user, leads, team }) {
 
   const updateStatus = async (candId, status) => {
     try {
-      const saved = await candidatesAPI.update(candId, { status });
+      await candidatesAPI.update(candId, { status });
       setCandidates(p => p.map(c => c.id === candId ? { ...c, status } : c));
+      if (status === 'approved') addNotif?.('✅ Nomzod tasdiqlandi. Konsultantga vazifa yuborildi!', 'success');
+      if (status === 'hired')    addNotif?.('🎉 Nomzod yollandi! Hamkorga bildirishnoma yuborildi.', 'success');
     } catch (e) { alert("Xatolik: " + e.message); }
   };
 

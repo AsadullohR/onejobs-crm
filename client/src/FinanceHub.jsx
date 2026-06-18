@@ -207,7 +207,7 @@ function FinanceDashboard({ txns, leads, extExps }) {
 
   const cards = [
     { ic: "📥", lb: "OLINGAN TO'LOVLAR",     val: fmtMs(income) + " so'm",      c: T.green,  sub: "Mijozlardan qabul qilingan pul" },
-    { ic: "💰", lb: "TASDIQLANGAN FOYDA",    val: fmtMs(outstanding) + " so'm", c: T.yellow, sub: "Tugagan mijozlar (Jo'nab ketdi) sof foydasi" },
+    { ic: "💰", lb: "UMUMIY TASDIQLANGAN FOYDA", val: fmtMs(outstanding) + " so'm", c: T.yellow, sub: "Barcha vaqt: Jo'nab ketdi holatidagi sof foyda (filtrga bog'liq emas)" },
     { ic: "⚖️", lb: "JORIY BALANS HISOBI",   val: fmtMs(profit) + " so'm",      c: profit >= 0 ? T.green : T.red, sub: "Kirim − Barcha xarajatlar (joriy P&L)" },
     { ic: "📤", lb: "XARAJAT JAMI",          val: fmtMs(totalExp) + " so'm",    c: T.red,    sub: `Maosh ${fmtMs(salaries)} · Mijoz ${fmtMs(clientExp)} · Tashqi ${fmtMs(extTotal)}` },
     { ic: "👷", lb: "MAOSH XARAJATI",        val: fmtMs(salaries) + " so'm",    c: T.red,    sub: "Xodimlar maoshi va bonuslari" },

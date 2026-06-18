@@ -3,6 +3,7 @@ import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
 import { fmtMs, fmtD, isOD, isSoon, I, Pill, Av, inp } from "./helpers.jsx";
 import { Analytics } from "./Analytics.jsx";
+import { reportsAPI } from "./api.js";
 
 // ─── SUPER DASHBOARD v2 (Business KPI) ────────────────────────────────────────
 function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
@@ -127,7 +128,7 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
         if (["Shartnoma qildi", ...DONE].some((s) => l.status.includes(s)))
           m[l.source].contracts++;
         if (DONE.includes(l.status)) m[l.source].gone++;
-        m[l.source].revenue += l.totalIncome || 0;
+        m[l.source].revenue += Number(l.sofFoyda) || 0;
       }
       return m;
     }, {}),
@@ -306,6 +307,12 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
             Biznes boshqaruv paneli · {new Date().toLocaleDateString("uz-UZ")}
           </p>
         </div>
+        {/* Monthly report button */}
+        {(user.role==="admin"||user.role==="manager")&&(
+          <button onClick={()=>reportsAPI.openMonthly()} style={{padding:"6px 12px",borderRadius:7,background:`${T.accent}15`,color:T.accent,border:`1px solid ${T.accent}33`,cursor:"pointer",fontSize:10,fontWeight:700,flexShrink:0}}>
+            📄 Oylik Hisobot
+          </button>
+        )}
         {/* Date range filter */}
         <div
           style={{

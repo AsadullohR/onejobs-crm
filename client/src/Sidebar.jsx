@@ -21,9 +21,9 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
   ];
   const allowed={
   admin:   NAV.map(n=>n.k),
-  manager: ["dashboard","pipeline","leads","tasks","finance","visa","team","settings","docspipe","vacancies"],
-  sales:   ["dashboard","pipeline","leads","tasks","vacancies","visa"],
-  docs:    ["dashboard","pipeline","leads","tasks","docspipe","visa","vacancies"],
+  manager: ["dashboard","pipeline","leads","tasks","finance","team","settings","docspipe","visa","vacancies"],
+  sales:   ["dashboard","pipeline","leads","tasks","vacancies"],
+  docs:    ["dashboard","pipeline","leads","tasks","vacancies"],
   partner: ["leads","pipeline","vacancies"],
   employer:["employer"],
 };

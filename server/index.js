@@ -1019,6 +1019,42 @@ app.put("/api/candidates/:id", auth, async (req, res) => {
        WHERE id=$5 RETURNING *`,
       [name, phone||null, status, note||null, req.params.id],
     );
+    if (!rows[0]) return res.status(404).json({ error: "Not found" });
+    const cand = rows[0];
+
+    if (status === 'hired' || status === 'approved') {
+      const leadRes = await pool.query("SELECT * FROM leads WHERE id=$1", [cand.lead_id]).catch(()=>({rows:[]}));
+      const lead = leadRes.rows[0];
+
+      if (status === 'approved' && lead) {
+        const consultId = lead.owner_consult || lead.owner_sales;
+        if (consultId) {
+          await pool.query(
+            `INSERT INTO tasks (title, description, assignee, lead_id, priority, status, due_date, created_by)
+             VALUES ($1,$2,$3,$4,'high','todo',(NOW() + INTERVAL '3 days')::DATE::TEXT,$5)`,
+            [`Ish beruvchi tasdiqladi: ${lead.name} uchun shartnoma imzolash`, `Ish beruvchi nomzodni tasdiqladi. Shartnoma imzolash bosqichiga o'tkazish kerak.`, consultId, lead.id, req.user.id]
+          ).catch(()=>{});
+        }
+        await pool.query(
+          `INSERT INTO notifications (message, type, user_id, created_at) VALUES ($1,'success',$2,NOW())`,
+          [`✅ Ish beruvchi nomzodni tasdiqladi: ${lead?.name || cand.lead_id}`, consultId || req.user.id]
+        ).catch(()=>{});
+      }
+
+      if (status === 'hired' && lead) {
+        const partnerRes = await pool.query(
+          `SELECT u.id FROM users u WHERE u.role='partner' AND u.id=(SELECT added_by FROM candidates WHERE id=$1)`,
+          [cand.id]
+        ).catch(()=>({rows:[]}));
+        if (partnerRes.rows[0]) {
+          await pool.query(
+            `INSERT INTO notifications (message, type, user_id, created_at) VALUES ($1,'success',$2,NOW())`,
+            [`🎉 Sizning nomzodingiz yollandi: ${lead?.name || 'Nomzod'}! Tabriklaymiz!`, partnerRes.rows[0].id]
+          ).catch(()=>{});
+        }
+      }
+    }
+
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1072,6 +1108,369 @@ app.delete("/api/external-expenses/:id", auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── DEBTS ────────────────────────────────────────────────────────────────────
+app.get("/api/debts", auth, async (req, res) => {
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS debts (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL DEFAULT 'client',
+      name TEXT,
+      amount NUMERIC DEFAULT 0,
+      paid BOOLEAN DEFAULT FALSE,
+      due_date TEXT,
+      category TEXT,
+      description TEXT,
+      lead_id TEXT,
+      created_by INTEGER,
+      created_at TEXT DEFAULT NOW()::TEXT
+    )`);
+    const { rows } = await pool.query("SELECT * FROM debts ORDER BY created_at DESC");
+    res.json(rows.map(r => ({
+      id: r.id, type: r.type, name: r.name, amount: Number(r.amount),
+      paid: r.paid, dueDate: r.due_date, category: r.category,
+      desc: r.description, leadId: r.lead_id, by: r.created_by,
+      createdAt: r.created_at
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/debts", auth, async (req, res) => {
+  const { id, type, name, amount, paid, dueDate, category, desc, leadId } = req.body;
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS debts (
+      id TEXT PRIMARY KEY, type TEXT NOT NULL DEFAULT 'client', name TEXT,
+      amount NUMERIC DEFAULT 0, paid BOOLEAN DEFAULT FALSE, due_date TEXT,
+      category TEXT, description TEXT, lead_id TEXT, created_by INTEGER, created_at TEXT DEFAULT NOW()::TEXT
+    )`);
+    const { rows } = await pool.query(
+      `INSERT INTO debts (id,type,name,amount,paid,due_date,category,description,lead_id,created_by,created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW()::TEXT) RETURNING *`,
+      [id || require('crypto').randomUUID(), type||'client', name, Number(amount)||0, paid||false, dueDate||null, category||null, desc||null, leadId||null, req.user.id]
+    );
+    const r = rows[0];
+    res.json({ id:r.id,type:r.type,name:r.name,amount:Number(r.amount),paid:r.paid,dueDate:r.due_date,category:r.category,desc:r.description,leadId:r.lead_id,by:r.created_by,createdAt:r.created_at });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/debts/:id", auth, async (req, res) => {
+  const { type, name, amount, paid, dueDate, category, desc, leadId } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE debts SET type=$1,name=$2,amount=$3,paid=$4,due_date=$5,category=$6,description=$7,lead_id=$8
+       WHERE id=$9 RETURNING *`,
+      [type, name, Number(amount)||0, paid||false, dueDate||null, category||null, desc||null, leadId||null, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: "Not found" });
+    const r = rows[0];
+    res.json({ id:r.id,type:r.type,name:r.name,amount:Number(r.amount),paid:r.paid,dueDate:r.due_date,category:r.category,desc:r.description,leadId:r.lead_id,by:r.created_by,createdAt:r.created_at });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete("/api/debts/:id", auth, async (req, res) => {
+  try {
+    await pool.query("DELETE FROM debts WHERE id=$1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── LEAD DOCUMENTS CHECKLIST ─────────────────────────────────────────────────
+app.get("/api/leads/:id/documents", auth, async (req, res) => {
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS lead_documents (
+      id SERIAL PRIMARY KEY, lead_id TEXT NOT NULL, doc_type TEXT NOT NULL,
+      status TEXT DEFAULT 'pending', notes TEXT, updated_by INTEGER, updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(lead_id, doc_type)
+    )`);
+    const { rows } = await pool.query("SELECT * FROM lead_documents WHERE lead_id=$1 ORDER BY id", [req.params.id]);
+    res.json(rows.map(r => ({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes, updatedBy:r.updated_by, updatedAt:r.updated_at })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/leads/:leadId/documents/:docType", auth, async (req, res) => {
+  const { status, notes } = req.body;
+  try {
+    await pool.query(`CREATE TABLE IF NOT EXISTS lead_documents (
+      id SERIAL PRIMARY KEY, lead_id TEXT NOT NULL, doc_type TEXT NOT NULL,
+      status TEXT DEFAULT 'pending', notes TEXT, updated_by INTEGER, updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(lead_id, doc_type)
+    )`);
+    const { rows } = await pool.query(
+      `INSERT INTO lead_documents (lead_id, doc_type, status, notes, updated_by, updated_at)
+       VALUES ($1,$2,$3,$4,$5,NOW())
+       ON CONFLICT (lead_id, doc_type) DO UPDATE SET status=EXCLUDED.status, notes=EXCLUDED.notes, updated_by=EXCLUDED.updated_by, updated_at=NOW()
+       RETURNING *`,
+      [req.params.leadId, req.params.docType, status||'pending', notes||null, req.user.id]
+    );
+    const r = rows[0];
+    res.json({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── MONTHLY REPORT (HTML, browser-printable) ─────────────────────────────────
+app.get("/api/reports/monthly", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1] || req.query.token;
+  if (!token) return res.status(401).send("Kirish taqiqlangan");
+  let user;
+  try { user = jwt.verify(token, JWT_SECRET); } catch { return res.status(401).send("Token noto'g'ri"); }
+  if (!["admin","manager"].includes(user.role)) return res.status(403).send("Faqat admin");
+
+  const month = req.query.month || new Date().toISOString().slice(0,7);
+  try {
+    const [leadRes, txnRes, debtRes] = await Promise.all([
+      pool.query(`SELECT * FROM leads WHERE status=$1 AND updated_at::TEXT LIKE $2`, ["Jo'nab ketdi", `${month}%`]),
+      pool.query(`SELECT * FROM transactions WHERE date::TEXT LIKE $1`, [`${month}%`]),
+      pool.query(`SELECT * FROM debts WHERE paid=FALSE ORDER BY created_at DESC`).catch(()=>({rows:[]})),
+    ]);
+    const leads = leadRes.rows;
+    const txns = txnRes.rows;
+    const debts = debtRes.rows;
+    const income = txns.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
+    const expense = txns.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
+    const totalDebt = debts.reduce((s,d)=>s+Number(d.amount),0);
+    const fmt = n => n.toLocaleString('uz-UZ') + " so'm";
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>OneJobs Hisobot ${month}</title>
+<style>body{font-family:Arial,sans-serif;padding:40px;color:#111}h1{color:#6366f1}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{padding:8px 12px;border:1px solid #ddd;text-align:left}th{background:#f3f4f6}@media print{button{display:none}}</style></head>
+<body>
+<button onclick="window.print()" style="float:right;padding:8px 16px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨️ Chop etish</button>
+<h1>✈️ OneJobs CRM — Oylik Hisobot</h1>
+<p>Davr: <b>${month}</b> | Yaratildi: ${new Date().toLocaleDateString('uz-UZ')}</p>
+<h2>📊 Moliya Xulosasi</h2>
+<table><tr><th>Ko'rsatkich</th><th>Miqdor</th></tr>
+<tr><td>Jami Kirim</td><td style="color:#16a34a"><b>${fmt(income)}</b></td></tr>
+<tr><td>Jami Chiqim</td><td style="color:#dc2626"><b>${fmt(expense)}</b></td></tr>
+<tr><td>Balans</td><td style="color:${income-expense>=0?'#16a34a':'#dc2626'}"><b>${fmt(income-expense)}</b></td></tr>
+<tr><td>To'lanmagan Qarzlar</td><td style="color:#d97706"><b>${fmt(totalDebt)}</b></td></tr>
+</table>
+<h2>👷 Jo'nab Ketgan Ishchilar (${leads.length} ta)</h2>
+<table><tr><th>Ism</th><th>Mamlakat</th><th>Sof Foyda</th><th>Sana</th></tr>
+${leads.map(l=>`<tr><td>${l.name||''}</td><td>${l.country||''}</td><td style="color:#16a34a">${fmt(Number(l.sof_foyda||0))}</td><td>${(l.updated_at||'').toString().slice(0,10)}</td></tr>`).join('')}
+</table>
+<h2>⚠️ Qarzlar (${debts.length} ta)</h2>
+<table><tr><th>Ism</th><th>Miqdor</th><th>Muddat</th><th>Turi</th></tr>
+${debts.map(d=>`<tr><td>${d.name||''}</td><td style="color:#dc2626">${fmt(Number(d.amount||0))}</td><td>${d.due_date||'—'}</td><td>${d.type||''}</td></tr>`).join('')}
+</table>
+</body></html>`);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── STALE LEAD AUTO-TASKS ────────────────────────────────────────────────────
+const SKIP_STAGES_STALE = ["Jo'nab ketdi", "Rad etildi", "Keyinchalik", "Anchagacha ko'tarmadi"];
+
+async function createStaleTasks() {
+  try {
+    const { rows: staleLeads } = await pool.query(`
+      SELECT l.* FROM leads l
+      WHERE l.status NOT IN (${SKIP_STAGES_STALE.map((_,i)=>`$${i+1}`).join(',')})
+      AND (l.updated_at < NOW() - INTERVAL '7 days' OR l.updated_at IS NULL)
+      AND NOT EXISTS (
+        SELECT 1 FROM tasks t
+        WHERE t.lead_id = l.id
+        AND t.title LIKE 'Mijoz bilan bog%'
+        AND t.created_at > NOW() - INTERVAL '7 days'
+      )
+    `, SKIP_STAGES_STALE);
+
+    for (const lead of staleLeads) {
+      const assignee = lead.owner_sales || lead.assigned_to;
+      if (!assignee) continue;
+      await pool.query(
+        `INSERT INTO tasks (title, description, assignee, lead_id, priority, status, due_date, created_by)
+         VALUES ($1,$2,$3,$4,'medium','todo',(NOW() + INTERVAL '1 day')::DATE::TEXT,1)`,
+        [`Mijoz bilan bog'laning: ${lead.name}`, `Bu vazifa avtomatik yaratildi — mijoz 7 kun davomida faoliyatsiz`, assignee, lead.id]
+      ).catch(()=>{});
+    }
+    if (staleLeads.length > 0) console.log(`✅ Stale tasks created: ${staleLeads.length}`);
+  } catch (err) {
+    console.error('Stale task cron error:', err.message);
+  }
+}
+
+app.post("/api/admin/run-stale-tasks", auth, adminOnly, async (req, res) => {
+  await createStaleTasks();
+  res.json({ ok: true });
+});
+
+// ─── DEBTS ────────────────────────────────────────────────────────────────────
+const ensureDebtsTable = () => pool.query(`CREATE TABLE IF NOT EXISTS debts (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL DEFAULT 'client',
+  name TEXT,
+  amount NUMERIC DEFAULT 0,
+  paid BOOLEAN DEFAULT FALSE,
+  due_date TEXT,
+  category TEXT,
+  description TEXT,
+  lead_id TEXT,
+  created_by INTEGER,
+  created_at TEXT DEFAULT NOW()::TEXT
+)`).catch(()=>{});
+
+app.get("/api/debts", auth, async (req, res) => {
+  try {
+    await ensureDebtsTable();
+    const { rows } = await pool.query("SELECT * FROM debts ORDER BY paid ASC, created_at DESC");
+    res.json(rows.map(r => ({ id:r.id, type:r.type, name:r.name, amount:Number(r.amount), paid:r.paid, dueDate:r.due_date, category:r.category, desc:r.description, leadId:r.lead_id, by:r.created_by, createdAt:r.created_at })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/debts", auth, async (req, res) => {
+  const { id, type, name, amount, paid, dueDate, category, desc, leadId } = req.body;
+  try {
+    await ensureDebtsTable();
+    const { rows } = await pool.query(
+      `INSERT INTO debts (id,type,name,amount,paid,due_date,category,description,lead_id,created_by,created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW()::TEXT) RETURNING *`,
+      [id||`D-${Date.now()}`, type||'client', name, Number(amount)||0, paid||false, dueDate||null, category||null, desc||null, leadId||null, req.user.id]
+    );
+    const r = rows[0];
+    res.json({ id:r.id, type:r.type, name:r.name, amount:Number(r.amount), paid:r.paid, dueDate:r.due_date, category:r.category, desc:r.description, leadId:r.lead_id, by:r.created_by, createdAt:r.created_at });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/debts/:id", auth, async (req, res) => {
+  const { type, name, amount, paid, dueDate, category, desc, leadId } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE debts SET type=$1,name=$2,amount=$3,paid=$4,due_date=$5,category=$6,description=$7,lead_id=$8 WHERE id=$9 RETURNING *`,
+      [type, name, Number(amount)||0, paid||false, dueDate||null, category||null, desc||null, leadId||null, req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: "Not found" });
+    const r = rows[0];
+    res.json({ id:r.id, type:r.type, name:r.name, amount:Number(r.amount), paid:r.paid, dueDate:r.due_date, category:r.category, desc:r.description, leadId:r.lead_id, by:r.created_by, createdAt:r.created_at });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete("/api/debts/:id", auth, async (req, res) => {
+  try {
+    await pool.query("DELETE FROM debts WHERE id=$1", [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── LEAD DOCUMENT CHECKLIST ──────────────────────────────────────────────────
+const ensureLeadDocsTable = () => pool.query(`CREATE TABLE IF NOT EXISTS lead_documents (
+  id SERIAL PRIMARY KEY,
+  lead_id TEXT NOT NULL,
+  doc_type TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',
+  notes TEXT,
+  updated_by INTEGER,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(lead_id, doc_type)
+)`).catch(()=>{});
+
+app.get("/api/leads/:id/documents", auth, async (req, res) => {
+  try {
+    await ensureLeadDocsTable();
+    const { rows } = await pool.query("SELECT * FROM lead_documents WHERE lead_id=$1 ORDER BY id", [req.params.id]);
+    res.json(rows.map(r => ({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes, updatedBy:r.updated_by, updatedAt:r.updated_at })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/leads/:leadId/documents/:docType", auth, async (req, res) => {
+  const { status, notes } = req.body;
+  try {
+    await ensureLeadDocsTable();
+    const { rows } = await pool.query(
+      `INSERT INTO lead_documents (lead_id, doc_type, status, notes, updated_by, updated_at)
+       VALUES ($1,$2,$3,$4,$5,NOW())
+       ON CONFLICT (lead_id, doc_type) DO UPDATE SET status=EXCLUDED.status, notes=EXCLUDED.notes, updated_by=EXCLUDED.updated_by, updated_at=NOW()
+       RETURNING *`,
+      [req.params.leadId, req.params.docType, status||'pending', notes||null, req.user.id]
+    );
+    const r = rows[0];
+    res.json({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── MONTHLY HTML REPORT ──────────────────────────────────────────────────────
+app.get("/api/reports/monthly", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1] || req.query.token;
+  if (!token) return res.status(401).send("Kirish taqiqlangan");
+  let ru;
+  try { ru = jwt.verify(token, JWT_SECRET); } catch { return res.status(401).send("Token noto'g'ri"); }
+  if (!["admin","manager"].includes(ru.role)) return res.status(403).send("Faqat admin");
+
+  const month = req.query.month || new Date().toISOString().slice(0,7);
+  const fmt = n => Number(n||0).toLocaleString('uz-UZ') + " so'm";
+  try {
+    const [lr, tr, dr] = await Promise.all([
+      pool.query(`SELECT * FROM leads WHERE status='Jo''nab ketdi' AND updated_at::TEXT LIKE $1`, [`${month}%`]),
+      pool.query(`SELECT * FROM transactions WHERE date LIKE $1`, [`${month}%`]),
+      pool.query(`SELECT * FROM debts WHERE paid=FALSE ORDER BY created_at DESC`).catch(()=>({rows:[]})),
+    ]);
+    const leads=lr.rows, txns=tr.rows, debts=dr.rows;
+    const inc = txns.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
+    const exp = txns.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
+    const totalDebt = debts.reduce((s,d)=>s+Number(d.amount),0);
+    const totalSofFoyda = leads.reduce((s,l)=>s+Number(l.sof_foyda||0),0);
+    res.setHeader('Content-Type','text/html; charset=utf-8');
+    res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>OneJobs Hisobot ${month}</title>
+<style>*{box-sizing:border-box}body{font-family:Arial,sans-serif;padding:40px;color:#111;max-width:900px;margin:0 auto}h1{color:#6366f1;margin-bottom:4px}h2{color:#374151;border-bottom:2px solid #e5e7eb;padding-bottom:6px}table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}th,td{padding:8px 12px;border:1px solid #e5e7eb;text-align:left}th{background:#f9fafb;font-weight:700}tr:nth-child(even){background:#f9fafb}.green{color:#16a34a;font-weight:700}.red{color:#dc2626;font-weight:700}.blue{color:#6366f1;font-weight:700}.yellow{color:#d97706;font-weight:700}@media print{.noprint{display:none}}</style></head>
+<body>
+<div class="noprint" style="text-align:right;margin-bottom:20px"><button onclick="window.print()" style="padding:10px 20px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">🖨️ Chop etish / PDF</button></div>
+<h1>✈️ OneJobs CRM</h1><p style="color:#6b7280;margin:0 0 24px">Oylik hisobot · <b>${month}</b> · Yaratildi: ${new Date().toLocaleDateString('uz-UZ')}</p>
+<h2>📊 Moliyaviy Ko'rsatkichlar</h2>
+<table><tr><th>Ko'rsatkich</th><th>Miqdor</th></tr>
+<tr><td>Jami Kirim</td><td class="green">${fmt(inc)}</td></tr>
+<tr><td>Jami Chiqim</td><td class="red">${fmt(exp)}</td></tr>
+<tr><td>Balans (Kirim − Chiqim)</td><td class="${inc-exp>=0?'green':'red'}">${fmt(inc-exp)}</td></tr>
+<tr><td>Jo'nab ketganlardan sof foyda</td><td class="blue">${fmt(totalSofFoyda)}</td></tr>
+<tr><td>To'lanmagan qarzlar (jami)</td><td class="yellow">${fmt(totalDebt)}</td></tr>
+</table>
+<h2>👷 Jo'nab Ketgan Ishchilar — ${leads.length} ta</h2>
+${leads.length===0?'<p style="color:#6b7280">Bu oyda jo\'nab ketgan ishchi yo\'q</p>':`<table><tr><th>Ism</th><th>Mamlakat</th><th>Manba</th><th>Sof Foyda</th><th>Sana</th></tr>${leads.map(l=>`<tr><td>${l.name||''}</td><td>${l.country||''}</td><td>${l.source||'—'}</td><td class="green">${fmt(l.sof_foyda)}</td><td>${(l.updated_at||'').slice(0,10)}</td></tr>`).join('')}</table>`}
+<h2>⚠️ To'lanmagan Qarzlar — ${debts.length} ta</h2>
+${debts.length===0?'<p style="color:#16a34a">✅ Barcha qarzlar to\'langan</p>':`<table><tr><th>Ism</th><th>Turi</th><th>Miqdor</th><th>Muddat</th></tr>${debts.map(d=>`<tr><td>${d.name||''}</td><td>${d.type==='client'?'Mijoz':'Kompaniya'}</td><td class="red">${fmt(d.amount)}</td><td style="color:${d.due_date&&new Date(d.due_date)<new Date()?'#dc2626':'#374151'}">${d.due_date||'—'}</td></tr>`).join('')}</table>`}
+</body></html>`);
+  } catch (err) { res.status(500).send("Xatolik: " + err.message); }
+});
+
+// ─── STALE LEAD AUTO-TASKS (nightly cron) ────────────────────────────────────
+const SKIP_STAGES = ["Jo'nab ketdi","Rad etildi","Keyinchalik","Anchagacha ko'tarmadi","Arxiv"];
+
+async function createStaleTasks() {
+  try {
+    const { rows: stale } = await pool.query(`
+      SELECT l.* FROM leads l
+      WHERE l.status != ALL($1::text[])
+      AND (l.updated_at < NOW() - INTERVAL '7 days' OR l.updated_at IS NULL)
+      AND NOT EXISTS (
+        SELECT 1 FROM tasks t
+        WHERE t.lead_id = l.id
+        AND t.title LIKE 'Mijoz bilan bog%'
+        AND t.created_at > NOW() - INTERVAL '7 days'
+      )
+    `, [SKIP_STAGES]);
+
+    for (const lead of stale) {
+      const assignee = lead.owner_sales || lead.assigned_to;
+      if (!assignee) continue;
+      await pool.query(
+        `INSERT INTO tasks (title, description, assignee, lead_id, priority, status, due_date, created_by)
+         VALUES ($1,$2,$3,$4,'medium','todo',(NOW() + INTERVAL '1 day')::DATE::TEXT,1)`,
+        [`Mijoz bilan bog'laning: ${lead.name}`, `Avtomatik vazifa — mijoz 7 kun davomida faoliyatsiz`, assignee, lead.id]
+      ).catch(()=>{});
+    }
+    if (stale.length > 0) console.log(`⏰ Stale lead tasks created: ${stale.length}`);
+  } catch (err) { console.error('Stale task cron error:', err.message); }
+}
+
+// Manual trigger for admin
+app.post("/api/admin/run-stale-tasks", auth, adminOnly, async (req, res) => {
+  await createStaleTasks();
+  res.json({ ok: true, message: "Stale tasks yaratildi" });
+});
+
+// Schedule nightly at 00:05
+const msUntilMidnight = (() => {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 5, 0);
+  return next - now;
+})();
+setTimeout(() => { createStaleTasks(); setInterval(createStaleTasks, 24*60*60*1000); }, msUntilMidnight);
+
 // ─── START SERVER ─────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`🚀 OneJobs CRM API running on port ${PORT}`);
@@ -1079,6 +1478,14 @@ app.listen(PORT, () => {
     `   Database: ${process.env.DATABASE_URL ? "Connected" : "Using default localhost"}`,
   );
   console.log(`   Env: ${process.env.NODE_ENV || "development"}`);
+
+  // Schedule stale lead auto-tasks at midnight daily
+  const now = new Date();
+  const msUntilMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 5, 0) - now;
+  setTimeout(() => {
+    createStaleTasks();
+    setInterval(createStaleTasks, 24 * 60 * 60 * 1000);
+  }, msUntilMidnight);
 });
 
 module.exports = app;
