@@ -29,6 +29,7 @@ import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, ge
 import { Vacancies } from "./Vacancies.jsx";
 import { EmployerPortal } from "./EmployerPortal.jsx";
 import { ImportModal } from "./ImportModal.jsx";
+import { MobileFinance, MobileTasks, MobileDashboard, MobileLeads } from "./MobileViews.jsx";
 
 export default function App() {
   const [dark,setDark]=useState(false); 
@@ -36,7 +37,7 @@ export default function App() {
   const [team,setTeam]=useState(INIT_TEAM); 
   const [roles,setRoles]=useState(INIT_ROLES);
   const [user,setUser]=useState(null); 
-  const [page,setPage]=useState("pipeline");
+  const [page,setPage]=useState("dashboard");
   const [leads,setLeads]=useState([]);
   const [tasks,setTasks]=useState([]);
   const [txns,setTxns]=useState([]);
@@ -273,6 +274,7 @@ const deleteLead = useCallback(async (id) => {
           cat:t.category||"", desc:t.description||"",
           amount:Number(t.amount)||0, date:t.date?.slice(0,10)||"",
           empId:t.emp_id||null, empName:t.emp_name||"", by:t.created_by,
+          paymentMethod:t.payment_method||'cash',
         })));
         if(extExpsRes?.length) setExtExps(extExpsRes);
         if(debtsRes?.length) setDebts(debtsRes);
@@ -318,7 +320,7 @@ const deleteLead = useCallback(async (id) => {
 
   const isMobile = useIsMobile();
 
-  if(!user)return <Login onLogin={u=>{setUser(u);setPage("pipeline");}} team={team} roles={roles}/>;
+  if(!user)return <Login onLogin={u=>{setUser(u);setPage(u.role==="finance_manager"?"finance":u.role==="employer"?"employer":"pipeline");}} team={team} roles={roles}/>;
   const perm=roles[user.role]||{};
   // Partner: filter leads to only their own + those with their source/name
   const partnerName = user.role==="partner" ? user.name : null;
@@ -417,10 +419,11 @@ const deleteLead = useCallback(async (id) => {
           </div>
         </div>
         <div style={{flex:1,padding:(page==="finance"||page==="docspipe")?0:"14px 18px",overflow:(page==="finance"||page==="docspipe")?"hidden":"auto",display:"flex",flexDirection:"column",minHeight:0}}>
-          {page==="dashboard"  && <Dashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
+          {page==="dashboard"  && !isMobile && <Dashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
+          {page==="dashboard"  && isMobile && <MobileDashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
           {page==="analytics"  && (user.role==="admin"||user.role==="manager") && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user}/>}
           {page==="pipeline"   && <Pipeline {...PROPS} tasks={tasks} addLead={()=>openLead(null)} stages={stages} setStages={setStages}/>}
-          {page==="leads"      && <LeadsList
+          {page==="leads"      && !isMobile && <LeadsList
             {...PROPS}
             tasks={tasks}
             addLead={() => openLead(null)}
@@ -428,14 +431,17 @@ const deleteLead = useCallback(async (id) => {
             deleteLead={deleteLead}
             addNotif={addNotif}
           />}
-          {page==="tasks"      && <Tasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif}/>}
+          {page==="leads"      && isMobile && <MobileLeads leads={visibleLeads} user={user} team={team} roles={roles} open={openLead} config={config}/>}
+          {page==="tasks"      && !isMobile && <Tasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif}/>}
+          {page==="tasks"      && isMobile && <MobileTasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif}/>}
           {page==="debts"     && <DebtsPage debts={debts} setDebts={setDebts} user={user} leads={leads}/>}
           {page==="docspipe"  && <DocsPipeline leads={leads} tasks={tasks} team={team} user={user} open={openLead} config={config} roles={roles} setLeads={setLeads}/>}
           {page==="vacancies" && <Vacancies leads={visibleLeads} user={user} team={team} roles={roles}/>}
           {page==="visa"       && <Visa user={user} roles={roles}/>}
           {page==="team"       && <TeamPage user={user} team={team} setTeam={setTeam} roles={roles}/>}
           {page==="settings"   && <Settings user={user} config={config} setConfig={setConfig} roles={roles} setRoles={setRoles}/>}
-          {page==="finance"    && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts} roles={roles} extExps={extExps} setExtExps={setExtExps}/>}
+          {page==="finance"    && !isMobile && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts} roles={roles} extExps={extExps} setExtExps={setExtExps}/>}
+          {page==="finance"    && isMobile && <MobileFinance txns={txns} setTxns={setTxns} leads={leads} extExps={extExps} user={user} config={config} addNotif={addNotif}/>}
           {page==="employer"   && user.role==="employer" && <EmployerPortal user={user} leads={leads} team={team} addNotif={addNotif}/>}
         </div>
       </div>

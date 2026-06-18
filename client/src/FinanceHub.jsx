@@ -205,6 +205,13 @@ function FinanceDashboard({ txns, leads, extExps }) {
     { k: "custom",  l: "Sana" },
   ];
 
+  const cashIncome = filtTxns.filter(t=>t.type==="income"&&(t.paymentMethod||t.payment_method)==="cash").reduce((s,t)=>s+t.amount,0);
+  const bankIncome = filtTxns.filter(t=>t.type==="income"&&(t.paymentMethod||t.payment_method)==="bank").reduce((s,t)=>s+t.amount,0);
+  const cashExp = filtTxns.filter(t=>t.type==="expense"&&(t.paymentMethod||t.payment_method)==="cash").reduce((s,t)=>s+t.amount,0);
+  const bankExp = filtTxns.filter(t=>t.type==="expense"&&(t.paymentMethod||t.payment_method)==="bank").reduce((s,t)=>s+t.amount,0);
+  const cashBalance = cashIncome - cashExp;
+  const bankBalance = bankIncome - bankExp;
+
   const cards = [
     { ic: "📥", lb: "OLINGAN TO'LOVLAR",     val: fmtMs(income) + " so'm",      c: T.green,  sub: "Mijozlardan qabul qilingan pul" },
     { ic: "💰", lb: "UMUMIY TASDIQLANGAN FOYDA", val: fmtMs(outstanding) + " so'm", c: T.yellow, sub: "Barcha vaqt: Jo'nab ketdi holatidagi sof foyda (filtrga bog'liq emas)" },
@@ -212,6 +219,8 @@ function FinanceDashboard({ txns, leads, extExps }) {
     { ic: "📤", lb: "XARAJAT JAMI",          val: fmtMs(totalExp) + " so'm",    c: T.red,    sub: `Maosh ${fmtMs(salaries)} · Mijoz ${fmtMs(clientExp)} · Tashqi ${fmtMs(extTotal)}` },
     { ic: "👷", lb: "MAOSH XARAJATI",        val: fmtMs(salaries) + " so'm",    c: T.red,    sub: "Xodimlar maoshi va bonuslari" },
     { ic: "🏢", lb: "TASHQI XARAJAT",        val: fmtMs(extTotal) + " so'm",    c: T.red,    sub: "Ijara, kommunal, marketing..." },
+    { ic: "💵", lb: "NAQD PUL BALANSI",      val: fmtMs(cashBalance) + " so'm", c: cashBalance>=0?T.green:T.red, sub: `Kirim: ${fmtMs(cashIncome)} · Chiqim: ${fmtMs(cashExp)}` },
+    { ic: "🏦", lb: "BANK BALANSI",          val: fmtMs(bankBalance) + " so'm", c: bankBalance>=0?T.green:T.red, sub: `Kirim: ${fmtMs(bankIncome)} · Chiqim: ${fmtMs(bankExp)}` },
   ];
 
   return (

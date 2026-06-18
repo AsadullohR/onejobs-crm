@@ -429,8 +429,8 @@ app.post("/api/transactions", auth, async (req, res) => {
   const t = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO transactions (lead_id, date, type, category, description, amount, currency, receipt_url, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      `INSERT INTO transactions (lead_id, date, type, category, description, amount, currency, receipt_url, payment_method, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [
         t.leadId || null,
         t.date || new Date().toISOString().slice(0, 10),
@@ -440,6 +440,7 @@ app.post("/api/transactions", auth, async (req, res) => {
         t.amount,
         t.currency || "UZS",
         t.receiptUrl || null,
+        t.paymentMethod || 'cash',
         req.user.id,
       ],
     );
@@ -453,8 +454,8 @@ app.put("/api/transactions/:id", auth, async (req, res) => {
   const t = req.body;
   try {
     const { rows } = await pool.query(
-      `UPDATE transactions SET lead_id=$1,date=$2,type=$3,category=$4,description=$5,amount=$6,receipt_url=$7
-       WHERE id=$8 RETURNING *`,
+      `UPDATE transactions SET lead_id=$1,date=$2,type=$3,category=$4,description=$5,amount=$6,receipt_url=$7,payment_method=$8
+       WHERE id=$9 RETURNING *`,
       [
         t.leadId || null,
         t.date,
@@ -463,6 +464,7 @@ app.put("/api/transactions/:id", auth, async (req, res) => {
         t.description,
         t.amount,
         t.receiptUrl || null,
+        t.paymentMethod || 'cash',
         req.params.id,
       ],
     );

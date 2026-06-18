@@ -140,6 +140,7 @@ function Finance({
       desc: "",
       amount: "",
       receipt: null,
+      paymentMethod: 'cash',
     });
 
     setModal("form");
@@ -153,6 +154,7 @@ function Finance({
       category: form.cat || "",
       description: form.desc || "",
       amount: Number(form.amount),
+      paymentMethod: form.paymentMethod || 'cash',
     };
     try {
       const isEdit = txns.some((t) => t.id === form.id);
@@ -1225,6 +1227,7 @@ function Finance({
                             >
                               {type === "income" ? "+" : "-"}
                               {t.amount.toLocaleString()} so'm
+                              <span style={{fontSize:8,padding:"1px 5px",borderRadius:4,background:(t.paymentMethod||'cash')==="bank"?"#2563eb22":"#05966922",color:(t.paymentMethod||'cash')==="bank"?"#2563eb":"#059669",fontWeight:700,marginLeft:4}}>{(t.paymentMethod||'cash')==="bank"?"BANK":"NAQD"}</span>
                             </div>
                             {t.receipt && (
                               <span style={{ fontSize: 8, color: T.green }}>
@@ -1682,6 +1685,19 @@ function Finance({
               <div>
                 <label style={labS}>Summa (so'm) *</label>
                 <input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} style={{ ...inpS, textAlign: "right", fontSize: 16, fontWeight: 800 }} placeholder="0" onKeyDown={e => e.key === "Enter" && save()} />
+              </div>
+              <div style={{marginBottom:10}}>
+                <label style={labS}>To'lov usuli</label>
+                <div style={{display:"flex",gap:6,marginTop:4}}>
+                  {["cash","bank"].map(m=>(
+                    <button key={m} onClick={()=>setForm(p=>({...p,paymentMethod:m}))}
+                      style={{flex:1,padding:"7px",borderRadius:7,border:`1px solid ${form.paymentMethod===m?T.accent:T.border}`,
+                        background:form.paymentMethod===m?`${T.accent}18`:"transparent",
+                        color:form.paymentMethod===m?T.accent:T.muted,fontWeight:600,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>
+                      {m==="cash"?"💵 Naqd":"🏦 Bank"}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
