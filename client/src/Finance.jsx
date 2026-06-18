@@ -70,7 +70,7 @@ function Finance({
   const totalExp = txns
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + t.amount, 0) + extTotal;
-  const tasdFoyda = leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+(l.sofFoyda||0),0);
+  const tasdFoyda = leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
   const staffExp = txns.filter(t=>t.type==="expense"&&!t.leadId).reduce((s,t)=>s+t.amount,0);
   const sofFoyda = tasdFoyda - extTotal - staffExp;
   const visLeads = leads

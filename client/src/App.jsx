@@ -339,7 +339,7 @@ const deleteLead = useCallback(async (id) => {
               const tE=txns.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
               const tExtExp=extExps.reduce((s,e)=>s+Number(e.amount||0),0);
               const totalE=tE+tExtExp;
-              const tasdFoyda=leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+(l.sofFoyda||0),0);
+              const tasdFoyda=leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
               const staffExp=txns.filter(t=>t.type==="expense"&&!t.leadId).reduce((s,t)=>s+t.amount,0);
               const sofFoyda=tasdFoyda-tExtExp-staffExp;
               return <div style={{display:"flex",gap:8,paddingLeft:10,borderLeft:`1px solid ${T.border}`,fontSize:10}}>
