@@ -23,7 +23,7 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     manager: ["dashboard","pipeline","leads","tasks","finance","team","settings","visa","vacancies"],
     sales:   ["dashboard","pipeline","leads","tasks","vacancies","visa"],
     docs:    ["dashboard","pipeline","leads","tasks","vacancies","visa"],
-    partner: ["leads","pipeline","vacancies","visa"],
+    partner: ["leads","pipeline","vacancies"],
     employer:["employer"],
     finance_manager:["dashboard","finance","vacancies"],
   };

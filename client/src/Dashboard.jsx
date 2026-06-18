@@ -67,7 +67,7 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
     .reduce((s, t) => s + t.amount, 0);
   const sofF = leads
     .filter((l) => DONE.includes(l.status) && l.sofFoyda)
-    .reduce((s, l) => s + (l.sofFoyda || 0), 0);
+    .reduce((s, l) => s + Number(l.sofFoyda || 0), 0);
   // Funnel analytics with conversion %
   const funnelGroups = [
     ["Yangi", ["Yangi", "Qilindi"]],

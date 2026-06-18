@@ -1,4 +1,9 @@
-import { useState, useMemo, useRef, useCallback, createContext, useContext, useEffect } from "react";
+import { useState, useMemo, useRef, useCallback, createContext, useContext, useEffect, useSyncExternalStore } from "react";
+
+function useIsMobile() {
+  const subscribe = cb => { window.addEventListener("resize", cb); return () => window.removeEventListener("resize", cb); };
+  return useSyncExternalStore(subscribe, () => window.innerWidth < 768, () => false);
+}
 import { ThemeCtx, mkT, useT } from "./theme.js";
 import {
 STAGES, DONE, LOST, gS,
@@ -311,6 +316,8 @@ const deleteLead = useCallback(async (id) => {
     return ()=>clearInterval(poll);
   }, [user?.id]);
 
+  const isMobile = useIsMobile();
+
   if(!user)return <Login onLogin={u=>{setUser(u);setPage("pipeline");}} team={team} roles={roles}/>;
   const perm=roles[user.role]||{};
   // Partner: filter leads to only their own + those with their source/name
@@ -325,16 +332,16 @@ const deleteLead = useCallback(async (id) => {
 
   return <ThemeCtx.Provider value={T}>
     <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg,fontFamily:"'Inter',system-ui,sans-serif",color:T.text}}>
-      <Sidebar user={user} pg={page} go={setPage} 
-      logout={()=>{ clearToken(); setUser(null); setLeads([]); setTasks([]); setTxns([]); }}
-      notif={totalNotif} 
-      roles={roles} dark={dark} setDark={setDark} col={col} setCol={setCol}/>
-      <div style={{flex:1,overflow:"auto",minWidth:0,display:"flex",flexDirection:"column"}}>
+      {!isMobile && <Sidebar user={user} pg={page} go={setPage}
+        logout={()=>{ clearToken(); setUser(null); setLeads([]); setTasks([]); setTxns([]); }}
+        notif={totalNotif}
+        roles={roles} dark={dark} setDark={setDark} col={col} setCol={setCol}/>}
+      <div style={{flex:1,overflow:"auto",minWidth:0,display:"flex",flexDirection:"column",paddingBottom:isMobile?56:0}}>
         {/* Topbar */}
-        <div style={{background:T.card,borderBottom:`1px solid ${T.border}`,padding:"0 20px",height:48,display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:200,flexShrink:0,boxShadow:T.shadow}}>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <span style={{color:T.muted,fontSize:12,fontWeight:400}}>👋 <span style={{color:T.text,fontWeight:600}}>{user.name}</span></span>
-            {perm.canFin&&(()=>{
+        <div style={{background:T.card,borderBottom:`1px solid ${T.border}`,padding:`0 ${isMobile?12:20}px`,height:48,display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:200,flexShrink:0,boxShadow:T.shadow}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",minWidth:0,flex:1}}>
+            <span style={{color:T.muted,fontSize:12,fontWeight:400,flexShrink:0}}>👋 <span style={{color:T.text,fontWeight:600}}>{isMobile ? user.name.split(" ")[0] : user.name}</span></span>
+            {perm.canFin&&!isMobile&&(()=>{
               const tI=txns.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
               const tE=txns.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
               const tExtExp=extExps.reduce((s,e)=>s+Number(e.amount||0),0);
@@ -432,6 +439,35 @@ const deleteLead = useCallback(async (id) => {
           {page==="employer"   && user.role==="employer" && <EmployerPortal user={user} leads={leads} team={team} addNotif={addNotif}/>}
         </div>
       </div>
+      {isMobile && (()=>{
+        const allowed={
+          admin:   ["dashboard","pipeline","leads","tasks","finance"],
+          manager: ["dashboard","pipeline","leads","tasks","finance"],
+          sales:   ["dashboard","pipeline","leads","tasks"],
+          docs:    ["dashboard","pipeline","leads","tasks"],
+          partner: ["leads","pipeline","vacancies"],
+          employer:["employer"],
+          finance_manager:["dashboard","finance","vacancies"],
+        };
+        const NAV_ICONS={dashboard:"📊",pipeline:"📋",leads:"👥",tasks:"✅",finance:"💰",vacancies:"💼",employer:"🏢"};
+        const NAV_LABELS={dashboard:"Bosh",pipeline:"Kanal",leads:"Mijozlar",tasks:"Vazifalar",finance:"Moliya",vacancies:"Vakansiya",employer:"Portal"};
+        const items=(allowed[user.role]||[]).slice(0,5);
+        return <div style={{position:"fixed",bottom:0,left:0,right:0,height:56,background:T.card,
+          borderTop:`1px solid ${T.border}`,display:"flex",zIndex:300,boxShadow:"0 -2px 10px rgba(0,0,0,.15)"}}>
+          {items.map(k=>(
+            <button key={k} onClick={()=>setPage(k)} style={{flex:1,border:"none",background:"none",
+              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+              gap:2,cursor:"pointer",color:page===k?T.accent:T.muted,
+              borderTop:page===k?`2px solid ${T.accent}`:"2px solid transparent",
+              fontFamily:"inherit"}}>
+              <span style={{fontSize:18,lineHeight:1}}>{NAV_ICONS[k]||"📄"}</span>
+              <span style={{fontSize:9,fontWeight:page===k?700:400}}>{NAV_LABELS[k]||k}</span>
+              {k==="tasks"&&totalNotif>0&&<span style={{position:"absolute",top:6,background:"#dc2626",color:"#fff",
+                borderRadius:10,fontSize:7,fontWeight:700,padding:"1px 4px",minWidth:14,textAlign:"center"}}>{totalNotif}</span>}
+            </button>
+          ))}
+        </div>;
+      })()}
       {drawer&&<Drawer lead={drawer} user={user} team={team} leads={leads} tasks={tasks} onSave={saveLead} onClose={()=>setDrawer(null)} onAddTask={addTask} config={config} roles={roles} addNotif={addNotif}/>}
       {showImport && (user?.role==="admin"||user?.role==="manager") && (
         <ImportModal
