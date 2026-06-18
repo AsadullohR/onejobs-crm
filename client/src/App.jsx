@@ -339,9 +339,11 @@ const deleteLead = useCallback(async (id) => {
               const tE=txns.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
               const tExtExp=extExps.reduce((s,e)=>s+Number(e.amount||0),0);
               const totalE=tE+tExtExp;
-              const sf=leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+(l.sofFoyda||0),0);
+              const tasdFoyda=leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+(l.sofFoyda||0),0);
+              const staffExp=txns.filter(t=>t.type==="expense"&&!t.leadId).reduce((s,t)=>s+t.amount,0);
+              const sofFoyda=tasdFoyda-tExtExp-staffExp;
               return <div style={{display:"flex",gap:8,paddingLeft:10,borderLeft:`1px solid ${T.border}`,fontSize:10}}>
-                {[["Kirim",`+${fmtMs(tI)}`,T.green],["Chiqim",`-${fmtMs(totalE)}`,T.red],["Balans",fmtMs(tI-totalE),(tI-totalE)>=0?T.green:T.red],["Sof Foyda",fmtMs(sf),T.yellow]].map(([lb,val,c])=>(
+                {[["Kirim",`+${fmtMs(tI)}`,T.green],["Chiqim",`-${fmtMs(totalE)}`,T.red],["Joriy Balans",fmtMs(tI-totalE),(tI-totalE)>=0?T.green:T.red],["Tasdiqlangan",fmtMs(tasdFoyda),T.yellow],["Sof Foyda",fmtMs(sofFoyda),sofFoyda>=0?"#a78bfa":T.red]].map(([lb,val,c])=>(
                   <div key={lb}><span style={{color:T.muted}}>{lb}: </span><b style={{color:c}}>{val}</b></div>
                 ))}
               </div>;
