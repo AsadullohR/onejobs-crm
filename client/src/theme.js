@@ -5,16 +5,22 @@ const ThemeCtx = createContext({});
 const useT = () => useContext(ThemeCtx);
 function mkT(dark) {
   return dark
-    ? { dark, bg:"#0a0a0f", card:"#111120", card2:"#161625", border:"#1e1e35",
-        text:"#e2e8f0", muted:"#64748b", sub:"#94a3b8",
-        accent:"#6366f1", green:"#22c55e", red:"#ef4444", yellow:"#f59e0b",
-        blue:"#3b82f6", purple:"#a855f7", cyan:"#06b6d4",
-        inp:"#161625", shadow:"0 4px 24px rgba(0,0,0,.5)" }
-    : { dark, bg:"#f1f5f9", card:"#ffffff", card2:"#f8fafc", border:"#e2e8f0",
-        text:"#1e293b", muted:"#64748b", sub:"#94a3b8",
-        accent:"#6366f1", green:"#16a34a", red:"#dc2626", yellow:"#d97706",
-        blue:"#2563eb", purple:"#9333ea", cyan:"#0891b2",
-        inp:"#ffffff", shadow:"0 4px 24px rgba(0,0,0,.08)" };
+    ? { dark,
+        bg:"#0a0e1a", card:"#111827", card2:"#1a2236", border:"#1e2d45",
+        text:"#f1f5f9", muted:"#64748b", sub:"#475569",
+        accent:"#2563eb", green:"#059669", red:"#dc2626", yellow:"#d97706",
+        blue:"#3b82f6", purple:"#7c3aed", cyan:"#0891b2",
+        inp:"#1a2236", shadow:"0 1px 3px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3)",
+        sidebarBg:"#0f172a", sidebarBorder:"#1e293b",
+        navActive:"#1e3a6e", navActiveTxt:"#60a5fa", navHover:"#1a2d4a" }
+    : { dark,
+        bg:"#f8fafc", card:"#ffffff", card2:"#f1f5f9", border:"#e2e8f0",
+        text:"#0f172a", muted:"#64748b", sub:"#94a3b8",
+        accent:"#2563eb", green:"#059669", red:"#dc2626", yellow:"#d97706",
+        blue:"#2563eb", purple:"#7c3aed", cyan:"#0891b2",
+        inp:"#ffffff", shadow:"0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04)",
+        sidebarBg:"#0f172a", sidebarBorder:"#1e293b",
+        navActive:"#1e3a6e", navActiveTxt:"#93c5fd", navHover:"#1a2d4a" };
 }
 
 export { ThemeCtx, mkT, useT };

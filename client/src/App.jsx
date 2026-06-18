@@ -324,16 +324,16 @@ const deleteLead = useCallback(async (id) => {
   const PROPS={leads:visibleLeads,tasks,team,user,open:openLead,config,roles};
 
   return <ThemeCtx.Provider value={T}>
-    <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg,fontFamily:"'Segoe UI',system-ui,sans-serif",color:T.text}}>
+    <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg,fontFamily:"'Inter',system-ui,sans-serif",color:T.text}}>
       <Sidebar user={user} pg={page} go={setPage} 
       logout={()=>{ clearToken(); setUser(null); setLeads([]); setTasks([]); setTxns([]); }}
       notif={totalNotif} 
       roles={roles} dark={dark} setDark={setDark} col={col} setCol={setCol}/>
       <div style={{flex:1,overflow:"auto",minWidth:0,display:"flex",flexDirection:"column"}}>
         {/* Topbar */}
-        <div style={{background:T.card,borderBottom:`1px solid ${T.border}`,padding:"7px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:200,flexShrink:0}}>
-          <div style={{display:"flex",gap:10,alignItems:"center"}}>
-            <span style={{color:T.text,fontSize:12}}>Salom, <b>{user.name}</b></span>
+        <div style={{background:T.card,borderBottom:`1px solid ${T.border}`,padding:"0 20px",height:48,display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:200,flexShrink:0,boxShadow:T.shadow}}>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <span style={{color:T.muted,fontSize:12,fontWeight:400}}>👋 <span style={{color:T.text,fontWeight:600}}>{user.name}</span></span>
             {perm.canFin&&(()=>{
               const tI=txns.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
               const tE=txns.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
@@ -342,16 +342,27 @@ const deleteLead = useCallback(async (id) => {
               const tasdFoyda=leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
               const staffExp=txns.filter(t=>t.type==="expense"&&!t.leadId).reduce((s,t)=>s+t.amount,0);
               const sofFoyda=tasdFoyda-tExtExp-staffExp;
-              return <div style={{display:"flex",gap:8,paddingLeft:10,borderLeft:`1px solid ${T.border}`,fontSize:10}}>
-                {[["Kirim",`+${fmtMs(tI)}`,T.green],["Chiqim",`-${fmtMs(totalE)}`,T.red],["Joriy Balans",fmtMs(tI-totalE),(tI-totalE)>=0?T.green:T.red],["Tasdiqlangan",fmtMs(tasdFoyda),T.yellow],["Sof Foyda",fmtMs(sofFoyda),sofFoyda>=0?"#a78bfa":T.red]].map(([lb,val,c])=>(
-                  <div key={lb}><span style={{color:T.muted}}>{lb}: </span><b style={{color:c}}>{val}</b></div>
+              const stats=[
+                {l:"Kirim",v:`+${fmtMs(tI)}`,c:T.green,bg:`${T.green}14`},
+                {l:"Chiqim",v:`-${fmtMs(totalE)}`,c:T.red,bg:`${T.red}14`},
+                {l:"Balans",v:fmtMs(tI-totalE),c:(tI-totalE)>=0?T.green:T.red,bg:(tI-totalE)>=0?`${T.green}14`:`${T.red}14`},
+                {l:"Tasdiqlangan",v:fmtMs(tasdFoyda),c:T.yellow,bg:`${T.yellow}14`},
+                {l:"Sof Foyda",v:fmtMs(sofFoyda),c:sofFoyda>=0?"#7c3aed":T.red,bg:sofFoyda>=0?"#7c3aed14":`${T.red}14`},
+              ];
+              return <div style={{display:"flex",gap:5,paddingLeft:12,borderLeft:`1px solid ${T.border}`}}>
+                {stats.map(({l,v,c,bg})=>(
+                  <div key={l} style={{display:"flex",alignItems:"center",gap:4,background:bg,
+                    borderRadius:6,padding:"3px 8px"}}>
+                    <span style={{color:T.muted,fontSize:9,fontWeight:500}}>{l}</span>
+                    <span style={{color:c,fontSize:10,fontWeight:700}}>{v}</span>
+                  </div>
                 ))}
               </div>;
             })()}
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            <span style={{background:`${roles[user.role]?.color||T.accent}22`,color:roles[user.role]?.color||T.accent,fontSize:8,fontWeight:700,padding:"2px 7px",borderRadius:20,textTransform:"uppercase"}}>{roles[user.role]?.label}</span>
-            {(user.role==="admin"||user.role==="manager")&&<button onClick={()=>setShowImport(true)} title="Import CSV" style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:6,height:28,padding:"0 10px",fontSize:10,fontWeight:700,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>📥 Import</button>}
+            <span style={{background:`${roles[user.role]?.color||T.accent}18`,color:roles[user.role]?.color||T.accent,fontSize:9,fontWeight:600,padding:"3px 9px",borderRadius:20,textTransform:"uppercase",letterSpacing:"0.05em"}}>{roles[user.role]?.label}</span>
+            {(user.role==="admin"||user.role==="manager")&&<button onClick={()=>setShowImport(true)} title="Import CSV" style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:7,height:30,padding:"0 11px",fontSize:11,fontWeight:500,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",gap:4,fontFamily:"inherit"}}>📥 Import</button>}
             <div style={{position:"relative"}}>
               <button onClick={()=>setShowNotif(p=>!p)} style={{position:"relative",background:showNotif?`${T.accent}22`:T.card2,border:`1px solid ${showNotif?T.accent+"66":T.border}`,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:showNotif?T.accent:T.muted}}>
                 {I.bell}
