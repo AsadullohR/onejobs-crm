@@ -99,6 +99,7 @@ export const vacanciesAPI = {
   update: (id, v) => req("PUT", `/api/vacancies/${id}`, v),
   delete: (id) => req("DELETE", `/api/vacancies/${id}`),
   getCandidates: (id) => req("GET", `/api/vacancies/${id}/candidates`),
+  setPartners: (id, partnerIds) => req("PATCH", `/api/vacancies/${id}/partners`, { partnerIds }),
 };
 
 export const candidatesAPI = {

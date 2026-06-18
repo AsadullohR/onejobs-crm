@@ -209,13 +209,25 @@ app.post("/api/leads", auth, async (req, res) => {
   const l = req.body;
   const id = l.id || `NO-${Date.now()}`;
   try {
-    // Soft duplicate check — return warning but still allow if force=true
+    // Duplicate check: phone (hard block) + name (soft, bypassable with force=true)
+    if (l.phone) {
+      const digits = (l.phone.match(/\d/g) || []).join("");
+      if (digits.length >= 7) {
+        const phoneDup = await pool.query(
+          `SELECT id, name, phone, status FROM leads WHERE regexp_replace(phone,'[^0-9]','','g') LIKE $1 LIMIT 1`,
+          [`%${digits.slice(-9)}`]
+        );
+        if (phoneDup.rows.length > 0 && phoneDup.rows[0].id !== (l.id || "")) {
+          return res.status(409).json({ duplicates: phoneDup.rows, message: `Bu telefon raqam allaqachon ro'yxatda: ${phoneDup.rows[0].name} (${phoneDup.rows[0].id})` });
+        }
+      }
+    }
     if (!l.force && l.name) {
       const dup = await pool.query(
         `SELECT id, name, comment, status, country FROM leads WHERE LOWER(name) LIKE LOWER($1) LIMIT 3`,
         [`%${l.name.trim()}%`]
       );
-      if (dup.rows.length > 0) {
+      if (dup.rows.length > 0 && dup.rows[0].id !== (l.id || "")) {
         return res.status(409).json({ duplicates: dup.rows, message: "Shu ismli mijoz allaqachon mavjud" });
       }
     }
@@ -927,19 +939,45 @@ const vacRow = (r) => ({
   candidateCount: Number(r.candidate_count || 0),
   hiredCount: Number(r.hired_count || 0),
   approvedCount: Number(r.approved_count || 0),
+  allowedPartners: r.allowed_partners || [],
 });
 
 app.get("/api/vacancies", auth, async (req, res) => {
   try {
+    const role = req.user.role;
+    let whereClause = "";
+    let params = [];
+    if (role === "employer") {
+      whereClause = "WHERE v.created_by=$1";
+      params = [req.user.id];
+    } else if (role === "partner") {
+      whereClause = "WHERE v.allowed_partners @> $1::jsonb";
+      params = [JSON.stringify([req.user.id])];
+    }
     const { rows } = await pool.query(
       `SELECT v.*,
         COUNT(c.id) FILTER (WHERE c.id IS NOT NULL) as candidate_count,
         COUNT(c.id) FILTER (WHERE c.status IN ('hired','approved')) as hired_count,
         COUNT(c.id) FILTER (WHERE c.status = 'approved') as approved_count
        FROM vacancies v LEFT JOIN candidates c ON c.vacancy_id = v.id
+       ${whereClause}
        GROUP BY v.id ORDER BY v.created_at DESC`,
+      params
     );
     res.json(rows.map(vacRow));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Admin: assign partners to a vacancy
+app.patch("/api/vacancies/:id/partners", auth, adminOnly, async (req, res) => {
+  try {
+    const { partnerIds } = req.body; // array of user ids
+    const { rows } = await pool.query(
+      `UPDATE vacancies SET allowed_partners=$1 WHERE id=$2 RETURNING *`,
+      [JSON.stringify(partnerIds || []), req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: "Not found" });
+    res.json(vacRow(rows[0]));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1045,12 +1083,21 @@ app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
 });
 
 app.post("/api/candidates", auth, async (req, res) => {
-  const { vacancy_id, lead_id, name, phone, status, note, applied_at } = req.body;
+  const b = req.body;
+  // Support both snake_case (from Vacancies tab) and camelCase (from partner portal)
+  const vacancy_id = b.vacancy_id || b.vacancyId;
+  const lead_id = b.lead_id || b.leadId || null;
+  const name = b.name || b.leadName || "Nomsiz";
+  const phone = b.phone || b.leadPhone || null;
+  const status = b.status || "applied";
+  const note = b.note || null;
+  const applied_at = b.applied_at || null;
+  if (!vacancy_id) return res.status(400).json({ error: "vacancy_id required" });
   try {
     const { rows } = await pool.query(
       `INSERT INTO candidates (vacancy_id, lead_id, name, phone, status, note, applied_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [vacancy_id, lead_id||null, name, phone||null, status||"applied", note||null, applied_at||null],
+      [vacancy_id, lead_id, name, phone, status, note, applied_at],
     );
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }

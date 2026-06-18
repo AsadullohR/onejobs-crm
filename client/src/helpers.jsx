@@ -52,10 +52,12 @@ function Pill({sk}) {
   const T=useT(); const s=gS(sk);
   return <span style={{background:`${s.c}${T.dark?"33":"18"}`,color:s.c,border:`1px solid ${s.c}${T.dark?"55":"33"}`,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:20,whiteSpace:"nowrap"}}>{s.label}</span>;
 }
-function Av({id,team,size=26}) {
+function Av({id,team,size=26,name,color}) {
   const T=useT(); const u=team?.find(t=>t.id===id);
-  if(!u) return null;
-  return <div title={u.name} style={{width:size,height:size,borderRadius:"50%",background:`${u.color}22`,border:`1.5px solid ${u.color}88`,color:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*.36,fontWeight:800,flexShrink:0}}>{u.av}</div>;
+  const nm=u?.name||name||"?";
+  const cl=u?.color||color||"#6366f1";
+  const initials=u?.av||(nm.split(" ").map(w=>w[0]||"").join("").slice(0,2).toUpperCase()||"?");
+  return <div title={nm} style={{width:size,height:size,borderRadius:"50%",background:`${cl}22`,border:`1.5px solid ${cl}88`,color:cl,display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*.36,fontWeight:800,flexShrink:0,userSelect:"none"}}>{initials}</div>;
 }
 function StatCard({icon,label,value,sub,color}) {
   const T=useT(); const c=color||T.accent;

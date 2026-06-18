@@ -310,6 +310,22 @@ function VacancyDetail({
   const [candForm, setCandForm] = useState({ leadId: "", status: "submitted", note: "" });
   const cf = (k, val) => setCandForm((p) => ({ ...p, [k]: val }));
 
+  // Partner access management
+  const [allowedPartners, setAllowedPartners] = useState(v.allowedPartners || []);
+  const [savingPartners, setSavingPartners] = useState(false);
+  const partners = (team || []).filter(t => t.role === "partner");
+  const togglePartner = async (pid) => {
+    const next = allowedPartners.includes(pid)
+      ? allowedPartners.filter(id => id !== pid)
+      : [...allowedPartners, pid];
+    setSavingPartners(true);
+    try {
+      await vacanciesAPI.setPartners(v.id, next);
+      setAllowedPartners(next);
+    } catch (e) { alert("Xato: " + e.message); }
+    finally { setSavingPartners(false); }
+  };
+
   useEffect(() => {
     setCandLoading(true);
     vacanciesAPI.getCandidates(v.id)
@@ -396,6 +412,7 @@ function VacancyDetail({
           <div style={{ flex: 1, display: "flex" }}>
             {tabBtn("info", "📋 JOB POSTING INFORMATION")}
             {tabBtn("candidates", `👥 CANDIDATES (${candLoading ? "…" : candidates.length})`)}
+            {(user.role === "admin" || user.role === "manager") && tabBtn("partners", `🤝 HAMKORLAR (${allowedPartners.length})`)}
           </div>
           <button
             onClick={onClose}
@@ -1259,6 +1276,58 @@ function VacancyDetail({
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* ── PARTNERS TAB ── */}
+      {tab === "partners" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>Hamkorlar kirishi</div>
+              <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>Qaysi hamkorlar bu vakansiyani ko'ra olishini belgilang</div>
+            </div>
+            {savingPartners && <span style={{ fontSize: 10, color: T.muted }}>Saqlanmoqda…</span>}
+          </div>
+
+          {partners.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "32px 0", color: T.muted, fontSize: 12 }}>
+              Hozircha hamkor foydalanuvchilar yo'q
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {partners.map(p => {
+                const active = allowedPartners.includes(p.id);
+                return (
+                  <div key={p.id} onClick={() => togglePartner(p.id)} style={{
+                    display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
+                    borderRadius: 10, cursor: "pointer", userSelect: "none",
+                    border: `2px solid ${active ? T.accent : T.border}`,
+                    background: active ? `${T.accent}10` : T.card2,
+                    transition: "all 0.15s",
+                  }}>
+                    <Av id={p.id} team={team} size={32} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{p.name}</div>
+                      <div style={{ fontSize: 10, color: T.muted }}>{p.phone || p.username}</div>
+                    </div>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: "50%", border: `2px solid ${active ? T.accent : T.border}`,
+                      background: active ? T.accent : "transparent", display: "flex", alignItems: "center",
+                      justifyContent: "center", color: "#fff", fontSize: 12, flexShrink: 0,
+                    }}>
+                      {active ? "✓" : ""}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div style={{ marginTop: 16, padding: "10px 12px", borderRadius: 8, background: `${T.accent}10`, border: `1px solid ${T.accent}22`, fontSize: 10, color: T.muted }}>
+            💡 Belgilangan hamkorlar bu vakansiyani o'z panelidagi ko'ra oladi va nomzod qo'sha oladi.
+            Belgilanmaganlar bu vakansiyani ko'ra olmaydi.
+          </div>
+        </div>
       )}
     </Modal>
   );

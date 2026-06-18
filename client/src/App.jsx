@@ -324,7 +324,7 @@ const deleteLead = useCallback(async (id) => {
   const PROPS={leads:visibleLeads,tasks,team,user,open:openLead,config,roles};
 
   return <ThemeCtx.Provider value={T}>
-    <div style={{display:"flex",minHeight:"100vh",background:T.bg,fontFamily:"'Segoe UI',system-ui,sans-serif",color:T.text}}>
+    <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg,fontFamily:"'Segoe UI',system-ui,sans-serif",color:T.text}}>
       <Sidebar user={user} pg={page} go={setPage} 
       logout={()=>{ clearToken(); setUser(null); setLeads([]); setTasks([]); setTxns([]); }}
       notif={totalNotif} 

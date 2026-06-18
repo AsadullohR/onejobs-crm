@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useT } from "./theme.js";
 import { uid, fmtMs, inp, I, Av, fmtD } from "./helpers.jsx";
+import { txnAPI } from "./api.js";
 
 // ─── SALARY PAGE ─────────────────────────────────────────────────────────────
 function SalaryPage({team, txns, setTxns, user}) {
@@ -34,23 +35,40 @@ function SalaryPage({team, txns, setTxns, user}) {
     const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([h+"\n"+rows.join("\n")],{type:"text/csv"}));a.download=`maosh_${selMonth}.csv`;a.click();
   };
 
-  const addTxn=(empId)=>{
+  const addTxn=async(empId)=>{
     const r=newRow[empId]||{};
     if(!r.amount||Number(r.amount)<=0)return;
     const emp=team.find(t=>t.id===empId);
-    setTxns(p=>[...p,{id:uid(),leadId:null,empId,empName:emp?.name||"",type:"expense",
-      cat:r.cat||"Oylik maosh",desc:r.desc||r.cat||"Oylik maosh",
-      amount:Number(r.amount),date:r.date||selMonth+"-01",by:user.id}]);
+    const payload={leadId:null,empId,empName:emp?.name||"",type:"expense",
+      category:r.cat||"Oylik maosh",description:r.desc||r.cat||"Oylik maosh",
+      amount:Number(r.amount),date:r.date||selMonth+"-01",createdBy:user.id};
+    try {
+      const saved=await txnAPI.create(payload);
+      setTxns(p=>[...p,{...saved,cat:saved.category,desc:saved.description,by:saved.created_by,leadId:saved.lead_id}]);
+    } catch(e){ alert("Saqlashda xatolik: "+e.message); return; }
     setNewRow(p=>({...p,[empId]:{}}));
   };
 
-  const saveEdit=(txnId)=>{
-    setTxns(p=>p.map(t=>t.id===txnId?{...t,desc:editVal.desc??t.desc,amount:Number(editVal.amount)||t.amount,date:editVal.date||t.date,cat:editVal.cat||t.cat}:t));
+  const saveEdit=async(txnId)=>{
+    const t=txns.find(x=>x.id===txnId);
+    const payload={...t,category:editVal.cat||t.cat,description:editVal.desc??t.desc,amount:Number(editVal.amount)||t.amount,date:editVal.date||t.date};
+    try {
+      const saved=await txnAPI.update(txnId,payload);
+      setTxns(p=>p.map(x=>x.id===txnId?{...saved,cat:saved.category,desc:saved.description,by:saved.created_by,leadId:saved.lead_id}:x));
+    } catch(e){ alert("Xatolik: "+e.message); return; }
     setEditId(null);setEditVal({});
   };
 
-  const delTxn=(txnId)=>{if(!window.confirm("O'chirilsinmi?"))return;setTxns(p=>p.filter(t=>t.id!==txnId));};
-  const delAllMonth=(empId,empTxns)=>{if(!window.confirm("Bu xodimning bu oydagi barcha to'lovlari o'chirilsinmi?"))return;const ids=empTxns.map(x=>x.id);setTxns(p=>p.filter(t=>!ids.includes(t.id)));};
+  const delTxn=async(txnId)=>{
+    if(!window.confirm("O'chirilsinmi?"))return;
+    try { await txnAPI.delete(txnId); } catch(e){ alert("Xatolik: "+e.message); return; }
+    setTxns(p=>p.filter(t=>t.id!==txnId));
+  };
+  const delAllMonth=async(empId,empTxns)=>{
+    if(!window.confirm("Bu xodimning bu oydagi barcha to'lovlari o'chirilsinmi?"))return;
+    for(const t of empTxns){ try{ await txnAPI.delete(t.id); }catch(e){} }
+    const ids=empTxns.map(x=>x.id);setTxns(p=>p.filter(t=>!ids.includes(t.id)));
+  };
 
   return <div style={{maxWidth:960,margin:"0 auto"}}>
     {/* ── HEADER ── */}

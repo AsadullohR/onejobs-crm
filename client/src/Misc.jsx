@@ -209,18 +209,40 @@ const ROLE_CAPS=[{key:"canOwner",label:"Mas'ulni o'zgartirish"},{key:"canFin",la
 
 function Settings({user, config, setConfig, roles, setRoles}) {
   const T=useT(); const [tab,setTab]=useState("lists"); const [lt,setLt]=useState("countries"); const [ni,setNi]=useState(""); const [rf,setRf]=useState(null); const [rfm,setRfm]=useState({});
+  const [clEdit,setClEdit]=useState(null); // checklist item being edited
+  const [clForm,setClForm]=useState({key:"",label:"",desc:""});
   const rfu=(k,v)=>setRfm(p=>({...p,[k]:v}));
   const ce=roles[user.role]?.canCfg; const isAdmin=user.role==="admin";
   const secs={countries:"Mamlakatlar",sectors:"Sohalar",sources:"Manbalar",positions:"Lavozimlar",txnInc:"Kirim kat.",txnExp:"Chiqim kat."};
   const addItem=(k)=>{if(!ni.trim())return;setConfig(p=>({...p,[k]:[...p[k],ni.trim()]}));setNi("");};
   const rmItem=(k,item)=>setConfig(p=>({...p,[k]:p[k].filter(x=>x!==item)}));
+  const DEFAULT_CL=[
+    {key:"passport",label:"📘 Pasport",desc:"Pasport nusxasi va asl"},
+    {key:"photo",label:"📸 Rasm",desc:"3×4 rasm (6 dona)"},
+    {key:"medical",label:"🏥 Tibbiy Guvohnoma",desc:"Tibbiy tekshiruv natijasi"},
+    {key:"police",label:"👮 Politsiya Ma'lumotnomasi",desc:"Sudlanmaganlik haqida"},
+    {key:"diploma",label:"🎓 Diplom/Attestat",desc:"Ta'lim hujjati"},
+    {key:"contract",label:"📄 Shartnoma",desc:"Ish shartnomasi imzolandi"},
+    {key:"visa_apply",label:"🛂 Vizaga Topshirildi",desc:"Elchixonaga topshirilgan sana"},
+    {key:"visa_got",label:"✈️ Viza Olindi",desc:"Viza qo'lga tegdi"},
+    {key:"ticket",label:"🎫 Aviachipta",desc:"Aviachipta band qilindi"},
+    {key:"departure",label:"🛫 Jo'nab Ketdi",desc:"Jo'nab ketish tasdiqlandi"},
+  ];
+  const checklistItems = config?.checklistItems?.length ? config.checklistItems : DEFAULT_CL;
+  const saveClItem=()=>{
+    if(!clForm.key||!clForm.label)return;
+    const items=checklistItems.filter(x=>x.key!==clForm.key);
+    setConfig(p=>({...p,checklistItems:[...items,{key:clForm.key,label:clForm.label,desc:clForm.desc}]}));
+    setClEdit(null);setClForm({key:"",label:"",desc:""});
+  };
+  const removeClItem=(key)=>setConfig(p=>({...p,checklistItems:checklistItems.filter(x=>x.key!==key)}));
   const saveRole=()=>{if(!rfm.key||!rfm.label)return;setRoles(p=>({...p,[rfm.key]:{label:rfm.label,color:rfm.color||T.accent,...Object.fromEntries(ROLE_CAPS.map(c=>[c.key,!!rfm[c.key]]))}}));setRf(null);};
   const inpS=inp(T); const labS=lab(T);
   const RCOLS=["#6366f1","#22c55e","#f97316","#eab308","#ef4444","#06b6d4","#a855f7","#10b981"];
   return <div>
     <h1 style={{fontSize:18,fontWeight:900,color:T.text,margin:"0 0 12px"}}>Sozlamalar</h1>
     <div style={{display:"flex",gap:7,marginBottom:14,flexWrap:"wrap"}}>
-      {[["lists","📋 Ro'yxatlar"],["roles","🔐 Rollar"],["integrations","🔗 Integratsiyalar"]].map(([k,l])=>(
+      {[["lists","📋 Ro'yxatlar"],["checklist","✅ Tekshiruv"],["roles","🔐 Rollar"],["integrations","🔗 Integratsiyalar"]].map(([k,l])=>(
         <button key={k} onClick={()=>setTab(k)} style={{padding:"6px 12px",borderRadius:7,border:`2px solid ${tab===k?T.accent:T.border}`,background:tab===k?`${T.accent}22`:"transparent",color:tab===k?T.text:T.muted,fontWeight:tab===k?700:400,cursor:"pointer",fontSize:11}}>{l}</button>
       ))}
     </div>
@@ -239,6 +261,36 @@ function Settings({user, config, setConfig, roles, setRoles}) {
           </div>
         ))}
       </div>
+    </div>}
+    {tab==="checklist"&&isAdmin&&<div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:11,padding:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <h3 style={{margin:0,fontSize:12,fontWeight:700,color:T.text}}>Tekshiruv ro'yxati (Checklist)</h3>
+        <button onClick={()=>{setClForm({key:`item_${Date.now()}`,label:"",desc:""});setClEdit("new");}} style={{padding:"5px 10px",borderRadius:6,background:T.accent,color:"#fff",fontWeight:700,fontSize:10,border:"none",cursor:"pointer"}}>+ Yangi</button>
+      </div>
+      {clEdit&&<div style={{background:T.card2,border:`1px solid ${T.accent}44`,borderRadius:8,padding:12,marginBottom:12,display:"grid",gridTemplateColumns:"1fr 2fr 2fr",gap:8,alignItems:"end"}}>
+        <div><label style={{fontSize:9,color:T.muted,display:"block",marginBottom:2}}>Kalit (key)</label><input value={clForm.key} onChange={e=>setClForm(p=>({...p,key:e.target.value.replace(/\s/g,"_")}))} style={{...inp(T),fontSize:10}} placeholder="passport"/></div>
+        <div><label style={{fontSize:9,color:T.muted,display:"block",marginBottom:2}}>Nomi (emoji + matn)</label><input value={clForm.label} onChange={e=>setClForm(p=>({...p,label:e.target.value}))} style={{...inp(T),fontSize:10}} placeholder="📘 Pasport"/></div>
+        <div><label style={{fontSize:9,color:T.muted,display:"block",marginBottom:2}}>Tavsif</label><input value={clForm.desc} onChange={e=>setClForm(p=>({...p,desc:e.target.value}))} style={{...inp(T),fontSize:10}} placeholder="Pasport nusxasi va asl"/></div>
+        <div style={{gridColumn:"1/-1",display:"flex",gap:7,justifyContent:"flex-end"}}>
+          <button onClick={()=>setClEdit(null)} style={{padding:"5px 12px",borderRadius:6,background:T.card,border:`1px solid ${T.border}`,color:T.muted,fontSize:10,cursor:"pointer"}}>Bekor</button>
+          <button onClick={saveClItem} style={{padding:"5px 14px",borderRadius:6,background:T.accent,color:"#fff",fontWeight:700,fontSize:10,border:"none",cursor:"pointer"}}>Saqlash</button>
+        </div>
+      </div>}
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {checklistItems.map((item,i)=>(
+          <div key={item.key} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,background:T.card2,border:`1px solid ${T.border}`}}>
+            <span style={{fontSize:16,width:24,textAlign:"center"}}>{item.label.match(/^\p{Emoji}/u)?.[0]||"📄"}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:11,fontWeight:700,color:T.text}}>{item.label}</div>
+              <div style={{fontSize:9,color:T.muted}}>{item.desc}</div>
+            </div>
+            <span style={{fontSize:9,color:T.muted,fontFamily:"monospace",marginRight:4}}>{item.key}</span>
+            <button onClick={()=>{setClForm({...item});setClEdit(item.key);}} style={{padding:"3px 8px",borderRadius:5,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,cursor:"pointer",fontSize:9}}>{I.edit}</button>
+            <button onClick={()=>removeClItem(item.key)} style={{padding:"3px 8px",borderRadius:5,background:`${T.red}22`,color:T.red,border:`1px solid ${T.red}44`,cursor:"pointer",fontSize:9}}>{I.trash}</button>
+          </div>
+        ))}
+      </div>
+      <button onClick={()=>setConfig(p=>({...p,checklistItems:DEFAULT_CL}))} style={{marginTop:10,padding:"5px 12px",borderRadius:6,background:T.card2,border:`1px solid ${T.border}`,color:T.muted,fontSize:9,cursor:"pointer"}}>↺ Standartga qaytarish</button>
     </div>}
     {tab==="roles"&&<div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>

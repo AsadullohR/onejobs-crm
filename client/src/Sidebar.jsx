@@ -13,7 +13,6 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     {k:"tasks",     l:"Vazifalar",           ic:I.task},
     {k:"vacancies", l:"Vakansiyalar",        ic:"💼"},
     {k:"finance",   l:"Moliya",              ic:I.money},
-    {k:"docspipe",  l:"Konsultant Pipeline", ic:I.flag},
     {k:"visa",      l:"Viza",                ic:I.flag},
     {k:"team",      l:"Jamoa",               ic:I.team},
     {k:"settings",  l:"Sozlamalar",          ic:I.gear},
@@ -21,10 +20,10 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
   ];
   const allowed={
   admin:   NAV.map(n=>n.k),
-  manager: ["dashboard","pipeline","leads","tasks","finance","team","settings","docspipe","visa","vacancies"],
-  sales:   ["dashboard","pipeline","leads","tasks","vacancies"],
-  docs:    ["dashboard","pipeline","leads","tasks","vacancies"],
-  partner: ["leads","pipeline","vacancies"],
+  manager: ["dashboard","pipeline","leads","tasks","finance","team","settings","visa","vacancies"],
+  sales:   ["dashboard","pipeline","leads","tasks","vacancies","visa"],
+  docs:    ["dashboard","pipeline","leads","tasks","vacancies","visa"],
+  partner: ["leads","pipeline","vacancies","visa"],
   employer:["employer"],
 };
   const perm=roles[user.role]||{};

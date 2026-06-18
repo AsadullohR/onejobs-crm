@@ -58,19 +58,20 @@ const [form,setForm]=useState({
     candidatesAPI.getByLead(lead.id).then(setVacCands).catch(() => {});
   }, [lead.id]);
 
-  // Document checklist
-  const DOC_TYPES = [
-    { key:"passport",   label:"📘 Pasport",              desc:"Pasport nusxasi va asl" },
-    { key:"photo",      label:"📸 Rasm",                  desc:"3×4 rasm (6 dona)" },
-    { key:"medical",    label:"🏥 Tibbiy Guvohnoma",      desc:"Tibbiy tekshiruv natijasi" },
-    { key:"police",     label:"👮 Politsiya Ma'lumotnomasi", desc:"Sudlanmaganlik haqida" },
-    { key:"diploma",    label:"🎓 Diplom/Attestat",       desc:"Ta'lim hujjati" },
-    { key:"contract",   label:"📄 Shartnoma",             desc:"Ish shartnomasi imzolandi" },
-    { key:"visa_apply", label:"🛂 Vizaga Topshirildi",    desc:"Elchixonaga topshirilgan sana" },
-    { key:"visa_got",   label:"✈️ Viza Olindi",           desc:"Viza qo'lga tegdi" },
-    { key:"ticket",     label:"🎫 Aviachipta",            desc:"Aviachiptа band qilindi" },
-    { key:"departure",  label:"🛫 Jo'nab Ketdi",          desc:"Jo'nab ketish tasdiqlandi" },
+  // Document checklist — from config (customizable by admin), fallback to defaults
+  const DEFAULT_DOC_TYPES = [
+    { key:"passport",   label:"📘 Pasport",                  desc:"Pasport nusxasi va asl" },
+    { key:"photo",      label:"📸 Rasm",                      desc:"3×4 rasm (6 dona)" },
+    { key:"medical",    label:"🏥 Tibbiy Guvohnoma",          desc:"Tibbiy tekshiruv natijasi" },
+    { key:"police",     label:"👮 Politsiya Ma'lumotnomasi",  desc:"Sudlanmaganlik haqida" },
+    { key:"diploma",    label:"🎓 Diplom/Attestat",           desc:"Ta'lim hujjati" },
+    { key:"contract",   label:"📄 Shartnoma",                 desc:"Ish shartnomasi imzolandi" },
+    { key:"visa_apply", label:"🛂 Vizaga Topshirildi",        desc:"Elchixonaga topshirilgan sana" },
+    { key:"visa_got",   label:"✈️ Viza Olindi",               desc:"Viza qo'lga tegdi" },
+    { key:"ticket",     label:"🎫 Aviachipta",                desc:"Aviachiptа band qilindi" },
+    { key:"departure",  label:"🛫 Jo'nab Ketdi",              desc:"Jo'nab ketish tasdiqlandi" },
   ];
+  const DOC_TYPES = config?.checklistItems?.length ? config.checklistItems : DEFAULT_DOC_TYPES;
   const DOC_STATUSES = {
     pending: { label:"Kutilmoqda", next:"done" },
     done:    { label:"✅ Tayyor",  next:"na" },

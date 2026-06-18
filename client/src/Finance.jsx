@@ -70,9 +70,7 @@ function Finance({
   const totalExp = txns
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + t.amount, 0) + extTotal;
-  const sofFoyda = leads
-    .filter((l) => DONE.includes(l.status) && l.sofFoyda)
-    .reduce((s, l) => s + (l.sofFoyda || 0), 0);
+  const sofFoyda = Math.round((totalInc - totalExp) / 2);
   const visLeads = leads
     .filter((l) => {
       if (fView === "jarayon")
@@ -94,10 +92,11 @@ function Finance({
 
   const markTugagan = (lead) => {
     const cf = lf(lead.id);
-    const autoSofFoyda = cf.inc - cf.exp;
+    const netProfit = cf.inc - cf.exp;
+    const autoSofFoyda = Math.round(netProfit / 2); // 50/50 shareholder split
     if (
       !window.confirm(
-        `"${lead.name}" uchun Tugagan belgilansinmi?\nSof Foyda: ${fmtM(autoSofFoyda)} so'm`,
+        `"${lead.name}" uchun Tugagan belgilansinmi?\nJami foyda: ${fmtM(netProfit)} so'm\nSizning ulushingiz (50%): ${fmtM(autoSofFoyda)} so'm`,
       )
     )
       return;
@@ -110,7 +109,7 @@ function Finance({
     );
     addNotif &&
       addNotif(
-        `✅ ${lead.name} — Tugagan. Sof foyda: ${fmtMs(autoSofFoyda)} so'm`,
+        `✅ ${lead.name} — Tugagan. Sof foyda (50%): ${fmtMs(autoSofFoyda)} so'm`,
       );
   };
   const openAdd = (type = "income", leadId = "") => {
@@ -490,7 +489,7 @@ function Finance({
                 totalInc - totalExp >= 0 ? T.green : T.red,
                 totalInc - totalExp >= 0 ? "+" : "-",
               ],
-              ["Sof Foyda", sofFoyda, T.yellow, "💰"],
+              ["Sof Foyda (50%)", sofFoyda, T.yellow, "💰"],
             ].map(([lb, val, c, sign]) => (
               <div
                 key={lb}

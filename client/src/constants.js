@@ -2,13 +2,14 @@
 const STAGES = [
   {key:"Yangi",                         label:"Yangi",                          c:"#6366f1"},
   {key:"Qilindi",                       label:"Qilindi",                        c:"#8b5cf6"},
-  {key:"Boglanildi",                     label:"Boglanildi",                      c:"#f59e0b"},
+  {key:"Boglanildi",                    label:"Boglanildi",                     c:"#f59e0b"},
   {key:"Onlayn Suhbat Uchun",           label:"Onlayn Suhbat Uchun",           c:"#06b6d4"},
   {key:"Onlayn Suhbat",                 label:"Onlayn Suhbat",                 c:"#0ea5e9"},
-  {key:"Suhbat",                        label:"Suhbat",                         c:"#10b981"},
+  {key:"Suhbat",                        label:"Suhbat",                        c:"#10b981"},
   {key:"Shartnoma qildi",               label:"Shartnoma qildi",               c:"#22c55e"},
+  {key:"Hujjat",                        label:"Hujjat",                        c:"#84cc16"},
   {key:"XBA To'lov qildi",              label:"XBA To'lov qildi",              c:"#f97316"},
-  {key:"CV Topshirildi",                label:"CV Topshirildi",                 c:"#a855f7"},
+  {key:"CV Topshirildi",                label:"CV Topshirildi",                c:"#a855f7"},
   {key:"Interview ga qo'yildi",         label:"Interview ga qo'yildi",         c:"#eab308"},
   {key:"Ishga qabul qilindi",           label:"Ishga qabul qilindi",           c:"#16a34a"},
   {key:"1 - Qism To'landi",             label:"1 - Qism To'landi",             c:"#ec4899"},
@@ -23,13 +24,14 @@ const STAGES = [
   {key:"Viza Oldi",                     label:"Viza Oldi ✅",                  c:"#15803d"},
   {key:"Jo'nab ketdi",                  label:"Jo'nab ketdi ✈️",              c:"#166534"},
   {key:"Viza Rad Etildi",               label:"Viza Rad ❌",                  c:"#dc2626"},
+  {key:"Rad etildi",                    label:"Rad etildi",                    c:"#ef4444"},
   {key:"Bekor qildi",                   label:"Bekor qildi",                   c:"#6b7280"},
   {key:"Keyinchalik",                   label:"Keyinchalik",                   c:"#0369a1"},
-  {key:"Anchagacha Ko'tarmadi",         label:"Anchagacha Ko'tarmadi",         c:"#9ca3af"},
+  {key:"Anchagacha ko'tarmadi",         label:"Anchagacha ko'tarmadi",         c:"#9ca3af"},
 ];
 const gS = k => STAGES.find(s=>s.key===k)||{c:"#6b7280",label:k||"–"};
 const DONE = ["Jo'nab ketdi","Viza Oldi"];
-const LOST = ["Viza Rad Etildi","Bekor qildi","Anchagacha Ko'tarmadi"];
+const LOST = ["Viza Rad Etildi","Rad etildi","Bekor qildi","Anchagacha ko'tarmadi"];
 
 const INIT_CFG = {
   countries:["Albaniya", "Aniq emas", "Arab", "Bolgariya", "Daniya", "Fransiya", "Germaniya", "Koreya", "Litva", "Montenegro", "Polsha", "Rossiya", "Serbiya", "Slovakiya", "Sloveniya", "Turkiya"],
