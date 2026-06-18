@@ -23,6 +23,7 @@ import { Analytics } from "./Analytics.jsx";
 import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, getToken, clearToken } from "./api.js";
 import { Vacancies } from "./Vacancies.jsx";
 import { EmployerPortal } from "./EmployerPortal.jsx";
+import { ImportModal } from "./ImportModal.jsx";
 
 export default function App() {
   const [dark,setDark]=useState(false); 
@@ -45,6 +46,7 @@ export default function App() {
   const [debts,setDebts]=useState([]);
   const [stages,setStages]=useState(STAGES);
   const [showNotif,setShowNotif]=useState(false);
+  const [showImport,setShowImport]=useState(false);
   const T=mkT(dark);
 
 const addNotif=useCallback((msg,type="info")=>{
@@ -125,8 +127,25 @@ const saveLead = useCallback(async f => {
       setDrawer(null);
 
     } catch(err) {
-      console.error(err);
-      alert("Lead saqlanmadi!");
+      if (err.status === 409 || err.duplicates) {
+        const dups = err.duplicates || [];
+        const names = dups.map(d => `${d.name} (${d.comment || d.id})`).join(", ");
+        const ok = window.confirm(
+          `⚠️ Dublikat topildi!\n\nShu ismli mijoz allaqachon mavjud:\n${names}\n\nBaribir qo'shishni davom ettirasizmi?`
+        );
+        if (ok) {
+          try {
+            await leadsAPI.save({ ...f, force: true });
+            const isNew = !leads.some(l => l.id === f.id);
+            setLeads(p => p.some(l => l.id === f.id) ? p.map(l => l.id === f.id ? f : l) : [...p, f]);
+            if (isNew) addNotif(`🆕 Yangi lead: ${f.name}`);
+            setDrawer(null);
+          } catch(e2) { alert("Lead saqlanmadi: " + e2.message); }
+        }
+      } else {
+        console.error(err);
+        alert("Lead saqlanmadi: " + (err.message || "Noma'lum xatolik"));
+      }
     }
 }, [leads, addNotif]);
 const deleteLead = useCallback(async (id) => {
@@ -330,6 +349,7 @@ const deleteLead = useCallback(async (id) => {
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
             <span style={{background:`${roles[user.role]?.color||T.accent}22`,color:roles[user.role]?.color||T.accent,fontSize:8,fontWeight:700,padding:"2px 7px",borderRadius:20,textTransform:"uppercase"}}>{roles[user.role]?.label}</span>
+            {(user.role==="admin"||user.role==="manager")&&<button onClick={()=>setShowImport(true)} title="Import CSV" style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:6,height:28,padding:"0 10px",fontSize:10,fontWeight:700,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>📥 Import</button>}
             <div style={{position:"relative"}}>
               <button onClick={()=>setShowNotif(p=>!p)} style={{position:"relative",background:showNotif?`${T.accent}22`:T.card2,border:`1px solid ${showNotif?T.accent+"66":T.border}`,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:showNotif?T.accent:T.muted}}>
                 {I.bell}
@@ -400,6 +420,14 @@ const deleteLead = useCallback(async (id) => {
         </div>
       </div>
       {drawer&&<Drawer lead={drawer} user={user} team={team} leads={leads} tasks={tasks} onSave={saveLead} onClose={()=>setDrawer(null)} onAddTask={addTask} config={config} roles={roles} addNotif={addNotif}/>}
+      {showImport && (user?.role==="admin"||user?.role==="manager") && (
+        <ImportModal
+          team={team}
+          user={user}
+          onClose={()=>setShowImport(false)}
+          onDone={()=>{ addNotif("✅ Import muvaffaqiyatli!","success"); }}
+        />
+      )}
     </div>
   </ThemeCtx.Provider>;
 }

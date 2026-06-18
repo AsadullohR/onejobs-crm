@@ -36,7 +36,10 @@ async function req(method, path, body) {
 
   if (!res.ok) {
     console.error("API ERROR:", res.status, data);
-    throw new Error(data.error || `HTTP ${res.status}`);
+    const err = new Error(data.error || `HTTP ${res.status}`);
+    err.status = res.status;
+    if (data.duplicates) err.duplicates = data.duplicates;
+    throw err;
   }
 
   return data;
@@ -139,4 +142,13 @@ export const reportsAPI = {
     const m = month || new Date().toISOString().slice(0,7);
     window.open(`${API}/api/reports/monthly?month=${m}&token=${token}`, '_blank');
   },
+};
+
+export const importAPI = {
+  bulkLeads: (leads, ownerSalesId, skipDuplicates = true) =>
+    req("POST", "/api/leads/bulk", { leads, ownerSalesId, skipDuplicates }),
+  checkDuplicate: (name, clientNo) =>
+    req("POST", "/api/leads/check-duplicate", { name, clientNo }),
+  clearLeadFinance: (leadId) =>
+    req("DELETE", `/api/transactions/lead/${leadId}`),
 };

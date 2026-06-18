@@ -209,6 +209,16 @@ app.post("/api/leads", auth, async (req, res) => {
   const l = req.body;
   const id = l.id || `NO-${Date.now()}`;
   try {
+    // Soft duplicate check — return warning but still allow if force=true
+    if (!l.force && l.name) {
+      const dup = await pool.query(
+        `SELECT id, name, comment, status, country FROM leads WHERE LOWER(name) LIKE LOWER($1) LIMIT 3`,
+        [`%${l.name.trim()}%`]
+      );
+      if (dup.rows.length > 0) {
+        return res.status(409).json({ duplicates: dup.rows, message: "Shu ismli mijoz allaqachon mavjud" });
+      }
+    }
     const { rows } = await pool.query(
       `
       INSERT INTO leads (id, name, phone, telegram, status, country, sector, position, source, gender,
@@ -270,12 +280,40 @@ app.delete("/api/leads/:id", auth, adminOnly, async (req, res) => {
   }
 });
 
+// ─── DUPLICATE CHECK ──────────────────────────────────────────────────────────
+app.post("/api/leads/check-duplicate", auth, async (req, res) => {
+  try {
+    const { name, clientNo } = req.body;
+    const results = [];
+    if (name) {
+      const r = await pool.query(
+        `SELECT id, name, comment, status, country FROM leads WHERE LOWER(name) LIKE LOWER($1) LIMIT 5`,
+        [`%${name.trim()}%`]
+      );
+      results.push(...r.rows);
+    }
+    if (clientNo) {
+      const r = await pool.query(
+        `SELECT id, name, comment, status, country FROM leads WHERE comment LIKE $1 LIMIT 5`,
+        [`%${clientNo}%`]
+      );
+      for (const row of r.rows) {
+        if (!results.find(x => x.id === row.id)) results.push(row);
+      }
+    }
+    res.json({ duplicates: results });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── BULK CSV IMPORT ──────────────────────────────────────────────────────────
 app.post("/api/leads/bulk", auth, async (req, res) => {
   const client = await pool.connect();
-
   try {
     const leads = req.body.leads || [];
+    const ownerSalesId = req.body.ownerSalesId || null;
+    const skipDuplicates = req.body.skipDuplicates !== false;
 
     if (!Array.isArray(leads)) {
       return res.status(400).json({ error: "leads must be an array" });
@@ -283,48 +321,44 @@ app.post("/api/leads/bulk", auth, async (req, res) => {
 
     await client.query("BEGIN");
 
-    let inserted = 0;
-    let updated = 0;
+    let inserted = 0, updated = 0, skipped = 0;
+    const skippedNames = [];
 
     for (const l of leads) {
-      const id =
-        l.id || `IMP-${Date.now()}-${Math.floor(Math.random() * 999999)}`;
+      const id = l.uid || l.id || `IMP-${Date.now()}-${Math.floor(Math.random() * 999999)}`;
+      const clientNo = l.clientId || "";
+      const destParts = (l.dest || l.country || "").split(" ");
+      const country = destParts[0] || "";
+      const sector = destParts.slice(1).join(" ") || "";
+      const statusMap = { progress: "Hujjat", finished: "Jo'nab ketdi" };
+      const status = statusMap[l.status] || l.status || "Yangi";
+      const sofFoyda = l.netBalance || l.sofFoyda || null;
+      const createdAt = l.createdAt || null;
+
+      if (skipDuplicates && (clientNo || l.name)) {
+        const dupCheck = await client.query(
+          `SELECT id FROM leads WHERE (comment LIKE $1 AND $1 != '') OR (LOWER(name)=LOWER($2) AND $2 != '') LIMIT 1`,
+          [`%${clientNo}%`, l.name || ""]
+        );
+        if (dupCheck.rows.length > 0) {
+          skipped++;
+          skippedNames.push(l.name);
+          continue;
+        }
+      }
 
       const result = await client.query(
-        `
-        INSERT INTO leads
-        (id, name, phone, telegram, status, country, sector, position, source, gender, comment, note, cv, docs, history)
-        VALUES
-        ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'{}','{}','[]')
-        ON CONFLICT (id) DO UPDATE SET
-          name = EXCLUDED.name,
-          phone = EXCLUDED.phone,
-          telegram = EXCLUDED.telegram,
-          status = EXCLUDED.status,
-          country = EXCLUDED.country,
-          sector = EXCLUDED.sector,
-          position = EXCLUDED.position,
-          source = EXCLUDED.source,
-          gender = EXCLUDED.gender,
-          comment = EXCLUDED.comment,
-          note = EXCLUDED.note,
-          updated_at = NOW()
-        RETURNING xmax
-        `,
-        [
-          id,
-          l.name || "",
-          l.phone || "",
-          l.telegram || "",
-          l.status || "Yangi",
-          l.country || "",
-          l.sector || "",
-          l.position || "",
-          l.source || "CSV Import",
-          l.gender || "",
-          l.comment || "",
-          l.note || "",
-        ],
+        `INSERT INTO leads
+          (id, name, phone, status, country, sector, comment, note, owner_sales, dest, sof_foyda, cv, docs, history, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'{}','{}','[]', COALESCE($12::timestamptz, NOW()))
+         ON CONFLICT (id) DO UPDATE SET
+           name=EXCLUDED.name, status=EXCLUDED.status, country=EXCLUDED.country,
+           sector=EXCLUDED.sector, comment=EXCLUDED.comment, note=EXCLUDED.note,
+           owner_sales=COALESCE(EXCLUDED.owner_sales, leads.owner_sales),
+           dest=EXCLUDED.dest, sof_foyda=EXCLUDED.sof_foyda, updated_at=NOW()
+         RETURNING xmax`,
+        [id, l.name||"", l.phone||"", status, country, sector,
+         clientNo, l.note||"", ownerSalesId, l.dest||"", sofFoyda, createdAt]
       );
 
       if (result.rows[0].xmax === "0") inserted++;
@@ -332,14 +366,25 @@ app.post("/api/leads/bulk", auth, async (req, res) => {
     }
 
     await client.query("COMMIT");
-
-    res.json({ ok: true, inserted, updated });
+    res.json({ ok: true, inserted, updated, skipped, skippedNames });
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Bulk import error:", err);
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+// ─── CLEAR LEAD FINANCE ───────────────────────────────────────────────────────
+app.delete("/api/transactions/lead/:leadId", auth, adminOnly, async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      "DELETE FROM transactions WHERE lead_id=$1", [req.params.leadId]
+    );
+    res.json({ ok: true, deleted: rowCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
