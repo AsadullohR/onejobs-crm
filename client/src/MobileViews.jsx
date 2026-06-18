@@ -1,8 +1,96 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useT } from "./theme.js";
 import { STAGES, DONE, LOST, gS } from "./constants.js";
 import { uid, fmtMs, fmtD, isOD, isSoon, inp, lab, I, Av } from "./helpers.jsx";
 import { txnAPI, tasksAPI } from "./api.js";
+
+// ─── SEARCHABLE CLIENT PICKER ─────────────────────────────────────────────────
+function LeadPicker({ leads, value, onChange }) {
+  const T = useT();
+  const inpS = inp(T);
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const ref = useRef();
+  const selected = leads.find(l => l.id === value);
+
+  const filtered = useMemo(() => {
+    if (!q.trim()) return leads.slice(0, 30);
+    const lq = q.toLowerCase();
+    return leads.filter(l =>
+      l.name?.toLowerCase().includes(lq) ||
+      l.id?.toLowerCase().includes(lq) ||
+      l.phone?.includes(q)
+    ).slice(0, 30);
+  }, [leads, q]);
+
+  useEffect(() => {
+    if (open && ref.current) ref.current.focus();
+  }, [open]);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => { setOpen(true); setQ(""); }}
+        style={{ width: "100%", height: 44, borderRadius: 8, border: `1px solid ${T.border}`,
+          background: T.inp, color: selected ? T.text : T.muted, textAlign: "left",
+          padding: "0 12px", fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+          display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span>{selected ? `${selected.name} (${selected.id})` : "— Mijozni tanlang —"}</span>
+        <span style={{ color: T.muted, fontSize: 10 }}>▼</span>
+      </button>
+      {value && (
+        <button onClick={() => onChange(null)}
+          style={{ position: "absolute", right: 36, top: 12, background: "none", border: "none",
+            color: T.muted, fontSize: 16, cursor: "pointer", lineHeight: 1, padding: 0 }}>×</button>
+      )}
+      {open && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", flexDirection: "column",
+          justifyContent: "flex-end", background: "rgba(0,0,0,.5)" }}
+          onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}>
+          <div style={{ background: T.card, borderRadius: "16px 16px 0 0", maxHeight: "70vh",
+            display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "12px 16px 8px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>Mijozni tanlang</span>
+                <button onClick={() => setOpen(false)}
+                  style={{ background: "none", border: "none", color: T.muted, fontSize: 20, cursor: "pointer", padding: 0 }}>×</button>
+              </div>
+              <input ref={ref} value={q} onChange={e => setQ(e.target.value)}
+                placeholder="Ism, telefon yoki NO- raqam..."
+                style={{ ...inpS, height: 40, width: "100%", fontSize: 13, borderRadius: 8 }} />
+            </div>
+            <div style={{ overflowY: "auto", flex: 1, padding: "8px 0" }}>
+              <div onClick={() => { onChange(null); setOpen(false); }}
+                style={{ padding: "12px 16px", color: T.muted, fontSize: 13, cursor: "pointer",
+                  borderBottom: `1px solid ${T.border}` }}>
+                — Mijozsiz —
+              </div>
+              {filtered.map(l => (
+                <div key={l.id} onClick={() => { onChange(l.id); setOpen(false); }}
+                  style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 10,
+                    background: value === l.id ? `${T.accent}12` : "transparent", cursor: "pointer",
+                    borderBottom: `1px solid ${T.border}` }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{l.name}</div>
+                    <div style={{ fontSize: 11, color: T.muted }}>{l.id} · {l.phone}</div>
+                  </div>
+                  <span style={{ fontSize: 9, padding: "2px 7px", borderRadius: 10,
+                    background: `${gS(l.status).c}22`, color: gS(l.status).c, fontWeight: 700 }}>
+                    {l.status}
+                  </span>
+                </div>
+              ))}
+              {filtered.length === 0 && (
+                <div style={{ padding: 24, textAlign: "center", color: T.muted, fontSize: 13 }}>
+                  Topilmadi
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── MOBILE FINANCE ───────────────────────────────────────────────────────────
 export function MobileFinance({ txns, setTxns, leads, extExps, user, config, addNotif }) {
@@ -175,10 +263,7 @@ export function MobileFinance({ txns, setTxns, leads, extExps, user, config, add
               </div>
               <div>
                 <label style={labS}>Mijoz</label>
-                <select value={form.leadId || ""} onChange={e => setForm(p => ({ ...p, leadId: e.target.value || null }))} style={{ ...inpS, height: 44 }}>
-                  <option value="">— Ixtiyoriy —</option>
-                  {leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
+                <LeadPicker leads={leads} value={form.leadId} onChange={v => setForm(p => ({ ...p, leadId: v }))} />
               </div>
               <div>
                 <label style={labS}>Sana</label>
@@ -342,10 +427,7 @@ export function MobileTasks({ tasks, setTasks, leads, user, team, roles, addNoti
               </div>
               <div>
                 <label style={labS}>Mijoz</label>
-                <select value={form.leadId || ""} onChange={e => setForm(p => ({ ...p, leadId: e.target.value || null }))} style={{ ...inpS, height: 44 }}>
-                  <option value="">— Ixtiyoriy —</option>
-                  {leads.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
+                <LeadPicker leads={leads} value={form.leadId} onChange={v => setForm(p => ({ ...p, leadId: v }))} />
               </div>
               <div>
                 <label style={labS}>Muddat</label>
