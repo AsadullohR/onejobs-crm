@@ -34,9 +34,9 @@ const DONE = ["Jo'nab ketdi","Viza Oldi"];
 const LOST = ["Viza Rad Etildi","Rad etildi","Bekor qildi","Anchagacha ko'tarmadi"];
 
 const INIT_CFG = {
-  countries:["Albaniya", "Aniq emas", "Arab", "Bolgariya", "Daniya", "Fransiya", "Germaniya", "Koreya", "Litva", "Montenegro", "Polsha", "Rossiya", "Serbiya", "Slovakiya", "Sloveniya", "Turkiya"],
-  sectors:["BCE Haydovchi","Qurilish","Mehmonxona","Zavod","Til kursi","Qishloq Xo'jaligi","Svarshik","Work and travel","Tikuvchilik","Sklad","Elektrik","Oshpaz","Animatsiya"],
-  sources:["Bot orqali", "Instagram", "Muslimbek", "Olim aka", "Onlayn Ariza", "Oybek +998 95 533 00 70", "Sarafan", "Taqdimot", "Target", "Telefon", "Telegram", "Yarmarka"],
+  countries:["Albaniya","Angilya","Aniq emas","Arab","Belaruss","Bolgariya","Chexiya","Daniya","Fransiya","Germaniya","Italy","Koreya","Latviya","Litva","Maldiv","Montenegro","Polsha","Rossiya","Serbiya","Slovakiya","Sloveniya","Turkiya","Xorvatiya"],
+  sectors:["Animatsiya","Ausbildung","BC Haydovchi","BCE Haydovchi","BCED Haydovchi","Boyoqchi","Ekskavator","Elektrik","Kafelchi","Kassa","Kladchik","Kran","Kuryer","Mebel","Mehmonxona","Mehmonxona Xizmati","O'simlik parvarishlash","Oshpaz","Otdelka","Parnik","Pitsa","Povar","Qishloq Xo'jaligi","Qossobchilik","Qurilish","Santexnik","Shifokor","Sklad","Sushi master","Svarshik","Tikuvchilik","Til kursi","Traktor","Transformator","Turist","Uy Xizmati","Work and travel","Xizmat Korsatish","Zavod"],
+  sources:["Bot orqali","Instagram","Muslimbek","Olim aka","Onlayn Ariza","Oybek +998 95 533 00 70","Sarafan","Sarvar aka hamkor-+998 94 838 72 50","Taqdimot","Target","Telefon","Telegram","Yarmarka"],
   positions:["Oshpaz","Yordamchi oshpaz","Ofitsiant","Animatsiya","Barman","Resepshn","Svarshik","Haydovchi","Qurilishchi","Bog'bon"],
   txnInc:["XBA To'lov","1-Qism","2-Qism","3-Qism","Bonus","Ro'yxat","Boshqa"],
   txnExp:["Maosh","Avans","Bonus","Reklama","Ofis ijara","Transport","KPI","Boshqa"],
