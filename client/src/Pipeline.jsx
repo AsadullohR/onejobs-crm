@@ -120,6 +120,14 @@ function Pipeline({
   });
   const inpS = inp(T);
   const exportPipelineCSV = () => {
+    const byId = Object.fromEntries(team.map(u => [String(u.id), u.name]));
+    const ownerName = (l) => {
+      const names = [l.ownerSales, l.ownerConsult, l.ownerDocs]
+        .filter(Boolean)
+        .map(id => byId[String(id)] || id)
+        .join(" / ");
+      return names;
+    };
     const cols = [
       "ID",
       "Ism",
@@ -138,7 +146,7 @@ function Pipeline({
         l.status || "",
         l.country || "",
         l.source || "",
-        l.owner || "",
+        ownerName(l),
         String(l.comment || "").replace(/,/g, " "),
       ].join(","),
     );
