@@ -135,19 +135,8 @@ const saveLead = useCallback(async f => {
     } catch(err) {
       if (err.status === 409 || err.duplicates) {
         const dups = err.duplicates || [];
-        const names = dups.map(d => `${d.name} (${d.comment || d.id})`).join(", ");
-        const ok = window.confirm(
-          `⚠️ Dublikat topildi!\n\nShu ismli mijoz allaqachon mavjud:\n${names}\n\nBaribir qo'shishni davom ettirasizmi?`
-        );
-        if (ok) {
-          try {
-            await leadsAPI.save({ ...f, force: true });
-            const isNew = !leads.some(l => l.id === f.id);
-            setLeads(p => p.some(l => l.id === f.id) ? p.map(l => l.id === f.id ? f : l) : [...p, f]);
-            if (isNew) addNotif(`🆕 Yangi lead: ${f.name}`);
-            setDrawer(null);
-          } catch(e2) { alert("Lead saqlanmadi: " + e2.message); }
-        }
+        const names = dups.map(d => `${d.name} (${d.phone || d.id})`).join(", ");
+        alert(`⚠️ Bu telefon raqam allaqachon mavjud!\n\n${names}\n\nHar bir mijoz uchun alohida telefon raqam bo'lishi kerak.`);
       } else {
         console.error(err);
         alert("Lead saqlanmadi: " + (err.message || "Noma'lum xatolik"));
