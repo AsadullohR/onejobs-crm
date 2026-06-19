@@ -1576,7 +1576,7 @@ app.listen(PORT, () => {
 
 // ─── FACEBOOK LEAD ADS WEBHOOK ───────────────────────────────────────────────
 const FB_VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN || "onejobs_fb_2026";
-const FB_PAGE_TOKEN   = process.env.FB_PAGE_TOKEN   || "";
+const FB_PAGE_TOKEN   = process.env.FB_PAGE_TOKEN   || "EAATFUqrQq2UBR0q9PttKrGEf0bp6mMocEjUMTUhy36RU5eHoOsHiCBhyW3pcqXjioOlTwK91LZBIEuorpmkZAwHmqVTTP5c9XiXdkuoklPSiYcYJDBa3RCkQ5M7ZATQZA8CZBnZCF0DRUMoxxHvaiZB7Gs2fg31BgHVVKZAdXTCSrbn9nbPxJxUCURhH7ZBoekUJd1eitlos1";
 
 // Map Facebook field keys → DB columns
 function mapFbLead(fieldData) {
