@@ -158,7 +158,7 @@ function TeamPage({user, team, setTeam, roles}) {
                 } catch(err){alert("Rol saqlanmadi: "+err.message);}
               }} style={{...inpS,width:"auto",fontSize:9,padding:"2px 5px"}}>{STAFF_ROLES.map(r=><option key={r} value={r}>{roles[r]?.label||r}</option>)}</select>}
             </div>
-            {activeTab==="staff"&&<div style={{fontSize:9,color:T.muted,marginTop:3}}>{m.salType==="fixed"?`Maosh: ${fmtMs(m.salary||0)} so'm`:`${m.pct||0}% komissiya`}</div>}
+            {activeTab==="staff"&&roles[user.role]?.canSalary&&<div style={{fontSize:9,color:T.muted,marginTop:3}}>{m.salType==="fixed"?`Maosh: ${fmtMs(m.salary||0)} so'm`:`${m.pct||0}% komissiya`}</div>}
           </div>
           {user.role==="admin"&&<div style={{display:"flex",gap:4,flexShrink:0}}>
             <button onClick={()=>{setForm({...m});setModal("form");}} style={{padding:"3px 6px",borderRadius:4,background:`${T.accent}22`,color:T.accent,border:`1px solid ${T.accent}44`,cursor:"pointer",fontSize:10}}>{I.edit}</button>
@@ -189,7 +189,7 @@ function TeamPage({user, team, setTeam, roles}) {
           <div><label style={labS}>Telefon</label><input value={form.phone||""} onChange={e=>f("phone",e.target.value)} style={inpS}/></div>
           {activeTab==="staff"&&<div><label style={labS}>Rol</label><select value={form.role||"sales"} onChange={e=>f("role",e.target.value)} style={inpS}>{STAFF_ROLES.map(r=><option key={r} value={r}>{roles[r]?.label||r}</option>)}</select></div>}
           <div><label style={labS}>Avatar (2 harf)</label><input value={form.av||""} onChange={e=>f("av",e.target.value.toUpperCase().slice(0,2))} maxLength={2} style={inpS} placeholder="AS"/></div>
-          {activeTab==="staff"&&<>
+          {activeTab==="staff"&&roles[user.role]?.canSalary&&<>
             <div><label style={labS}>Maosh turi</label><select value={form.salType||"fixed"} onChange={e=>f("salType",e.target.value)} style={inpS}><option value="fixed">Fiksed</option><option value="percent">Foiz %</option></select></div>
             {form.salType==="fixed"?<div><label style={labS}>Oylik maosh</label><input type="number" value={form.salary||0} onChange={e=>f("salary",Number(e.target.value))} style={inpS}/></div>:<div><label style={labS}>Foiz %</label><input type="number" value={form.pct||5} onChange={e=>f("pct",Number(e.target.value))} style={inpS}/></div>}
           </>}

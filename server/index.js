@@ -560,7 +560,9 @@ app.get("/api/users", auth, async (req, res) => {
     const { rows } = await pool.query(
       "SELECT id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,salary_items FROM users ORDER BY id",
     );
-    res.json(rows);
+    const canSalary = ["admin", "finance_manager"].includes(req.user.role);
+    const data = canSalary ? rows : rows.map(({ salary, salary_type, salary_pct, salary_items, ...rest }) => rest);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -258,7 +258,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
 
     {/* Tabs */}
     <div style={{display:"flex",gap:0,marginBottom:16,background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:3,width:"fit-content"}}>
-      {[["productivity","👔 Xodimlar Samaradorligi"],["time","⏱️ Vaqt Tahlili"],["salary","💰 Maosh Tahlili"]].map(([k,l])=>(
+      {[["productivity","👔 Xodimlar Samaradorligi"],["time","⏱️ Vaqt Tahlili"],...(roles[user?.role]?.canSalary?[["salary","💰 Maosh Tahlili"]]:[])] .map(([k,l])=>(
         <button key={k} onClick={()=>setTab(k)} style={{padding:"7px 16px",borderRadius:6,border:"none",background:tab===k?T.accent:"transparent",color:tab===k?"#fff":T.muted,cursor:"pointer",fontSize:11,fontWeight:tab===k?700:400}}>{l}</button>
       ))}
     </div>

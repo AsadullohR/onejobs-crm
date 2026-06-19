@@ -1107,7 +1107,6 @@ function Finance({
             >
               {[
                 ["txns", `💳 Tranzaksiyalar (${cf.txns.length})`],
-                ["salary", "💰 Xodim xarajat"],
               ].map(([k, l]) => (
                 <button
                   key={k}

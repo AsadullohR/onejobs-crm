@@ -1379,7 +1379,7 @@ function Dashboard({ leads, tasks, user, team, txns, roles }) {
     { k: "kpi",    l: "📈 Biznes KPI" },
     { k: "team",   l: "👔 Xodimlar" },
     { k: "time",   l: "⏱️ Vaqt Tahlili" },
-    ...(perm.canFin ? [{ k: "salary", l: "💰 Maosh Tahlili" }] : []),
+    ...(perm.canSalary ? [{ k: "salary", l: "💰 Maosh Tahlili" }] : []),
   ];
 
   return (

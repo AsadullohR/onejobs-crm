@@ -408,17 +408,17 @@ function DonutChart({ salaries, clientExp, extTotal, T }) {
 }
 
 // ─── FINANCE HUB ─────────────────────────────────────────────────────────────
-const TABS = [
-  { k: "dashboard", l: "📊 Dashboard" },
-  { k: "clients",   l: "💼 Mijozlar Moliyasi" },
-  { k: "salary",    l: "👷 Xodim Xarajatlari" },
-  { k: "external",  l: "🏢 Tashqi Xarajatlar" },
-  { k: "debts",     l: "⚠️ Qarzlar" },
-];
-
 function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNotif, debts, setDebts, roles, extExps=[], setExtExps }) {
   const T = useT();
   const [tab, setTab] = useState("dashboard");
+  const canSalary = roles[user?.role]?.canSalary;
+  const TABS = [
+    { k: "dashboard", l: "📊 Dashboard" },
+    { k: "clients",   l: "💼 Mijozlar Moliyasi" },
+    ...(canSalary ? [{ k: "salary", l: "👷 Xodim Xarajatlari" }] : []),
+    { k: "external",  l: "🏢 Tashqi Xarajatlar" },
+    { k: "debts",     l: "⚠️ Qarzlar" },
+  ];
 
   const tabStyle = (k) => ({
     padding: "9px 18px", borderRadius: "8px 8px 0 0", fontSize: 12, fontWeight: 700,
