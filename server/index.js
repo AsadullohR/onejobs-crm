@@ -1574,4 +1574,85 @@ app.listen(PORT, () => {
   }, msUntilMidnight);
 });
 
+// ─── FACEBOOK LEAD ADS WEBHOOK ───────────────────────────────────────────────
+const FB_VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN || "onejobs_fb_2026";
+const FB_PAGE_TOKEN   = process.env.FB_PAGE_TOKEN   || "";
+
+// Map Facebook field keys → DB columns
+function mapFbLead(fieldData) {
+  const m = {};
+  (fieldData || []).forEach(({ name, values }) => {
+    const v = (values || [])[0] || "";
+    const k = name.toLowerCase();
+    if (k.includes("full_name") || k.includes("name"))        m.name    = v;
+    else if (k.includes("phone"))                              m.phone   = v;
+    else if (k.includes("email"))                              m.email   = v;
+    else if (k.includes("city") || k.includes("country"))     m.country = v;
+    else if (k.includes("job") || k.includes("sector"))       m.sector  = v;
+    else                                                       m[k]      = v;
+  });
+  return m;
+}
+
+async function fetchAndSaveFbLead(leadId) {
+  if (!FB_PAGE_TOKEN) return;
+  const https = require("https");
+  const url = `https://graph.facebook.com/v19.0/${leadId}?fields=id,created_time,field_data,form_id&access_token=${FB_PAGE_TOKEN}`;
+  const data = await new Promise((resolve, reject) => {
+    https.get(url, res => {
+      let d = "";
+      res.on("data", c => d += c);
+      res.on("end", () => { try { resolve(JSON.parse(d)); } catch { reject(new Error(d)); } });
+    }).on("error", reject);
+  });
+  if (data.error) { console.error("FB lead fetch error:", data.error.message); return; }
+
+  const fields = mapFbLead(data.field_data);
+  if (!fields.name && !fields.phone) return;
+
+  const phone = fields.phone || "";
+  // Skip if phone already exists
+  if (phone) {
+    const dup = await pool.query("SELECT id FROM leads WHERE phone=$1 LIMIT 1", [phone]);
+    if (dup.rows.length > 0) { console.log("FB lead dup phone:", phone); return; }
+  }
+
+  // Generate next NO- id
+  const last = await pool.query("SELECT id FROM leads WHERE id LIKE 'NO-%' ORDER BY CAST(SUBSTRING(id,4) AS INTEGER) DESC LIMIT 1");
+  const nextNum = last.rows.length ? parseInt(last.rows[0].id.replace("NO-","")) + 1 : 1;
+  const newId = `NO-${nextNum}`;
+
+  await pool.query(
+    `INSERT INTO leads (id,name,phone,status,country,sector,source,comment,created_at)
+     VALUES ($1,$2,$3,'Yangi',$4,$5,'Bot orqali',$6,NOW())`,
+    [newId, fields.name||"", phone, fields.country||"", fields.sector||"", fields.email ? `Email: ${fields.email}` : ""]
+  );
+  console.log(`FB lead saved: ${newId} ${fields.name} ${phone}`);
+}
+
+// Webhook verification (Facebook sends GET to confirm endpoint)
+app.get("/api/facebook/webhook", (req, res) => {
+  const { "hub.mode": mode, "hub.verify_token": token, "hub.challenge": challenge } = req.query;
+  if (mode === "subscribe" && token === FB_VERIFY_TOKEN) {
+    console.log("Facebook webhook verified");
+    return res.send(challenge);
+  }
+  res.sendStatus(403);
+});
+
+// Webhook event receiver
+app.post("/api/facebook/webhook", express.json(), async (req, res) => {
+  res.sendStatus(200); // acknowledge immediately
+  const body = req.body;
+  if (body.object !== "page") return;
+  for (const entry of (body.entry || [])) {
+    for (const change of (entry.changes || [])) {
+      if (change.field === "leadgen") {
+        const leadId = change.value?.leadgen_id;
+        if (leadId) fetchAndSaveFbLead(leadId).catch(console.error);
+      }
+    }
+  }
+});
+
 module.exports = app;
