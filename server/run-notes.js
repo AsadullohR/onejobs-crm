@@ -7,8 +7,8 @@ const path = require("path");
 const { Pool } = require("pg");
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://onejobs_user:Y7XzI3rFh7cj1lVir51AdLB1nC52NPRX@dpg-d7tgr90sfn5c73anhrpg-a.frankfurt-postgres.render.com/onejobs",
-  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+  connectionString: process.env.DATABASE_URL || "postgresql://postgres:password@localhost:5432/onejobs",
+  ssl: false,
 });
 
 async function main() {
