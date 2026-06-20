@@ -4,7 +4,11 @@
  */
 
 const express = require("express");
-const { Pool } = require("pg");
+const pg = require("pg");
+const { Pool } = pg;
+// Return timestamps as ISO strings instead of Date objects
+pg.types.setTypeParser(1114, v => v); // TIMESTAMP
+pg.types.setTypeParser(1184, v => v); // TIMESTAMPTZ
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
