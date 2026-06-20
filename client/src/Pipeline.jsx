@@ -2,10 +2,12 @@ import { useState, useRef, useEffect } from "react";
 import { useT } from "./theme.js";
 import { DONE } from "./constants.js";
 import { isOD, inp, I, Pill, Av, fmtD, dateRange } from "./helpers.jsx";
+import { leadsAPI } from "./api.js";
 
 // ─── PIPELINE ────────────────────────────────────────────────────────────────
 function Pipeline({
   leads,
+  setLeads,
   tasks,
   team,
   user,
@@ -55,6 +57,8 @@ function Pipeline({
 
   const [dragStg, setDragStg] = useState(null);
   const [dragOverStg, setDragOverStg] = useState(null);
+  const [dragLeadId, setDragLeadId] = useState(null);
+  const [dragLeadOver, setDragLeadOver] = useState(null);
   const [editingStage, setEditingStage] = useState(null);
   const [stageEdit, setStageEdit] = useState({});
   const [newStageLabel, setNewStageLabel] = useState("");
@@ -203,6 +207,31 @@ function Pipeline({
     setStages(arr);
     setDragStg(null);
     setDragOverStg(null);
+  };
+
+  const onLeadDragStart = (e, leadId) => {
+    e.stopPropagation();
+    setDragLeadId(leadId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const onLeadDragOver = (e, stageKey) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragLeadOver(stageKey);
+  };
+  const onLeadDrop = async (e, stageKey) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dragLeadId) return;
+    const lead = leads.find(l => l.id === dragLeadId);
+    if (!lead || lead.status === stageKey) { setDragLeadId(null); setDragLeadOver(null); return; }
+    const updated = { ...lead, status: stageKey };
+    setLeads(p => p.map(l => l.id === dragLeadId ? updated : l));
+    setDragLeadId(null);
+    setDragLeadOver(null);
+    try {
+      await leadsAPI.save({ id: lead.id, status: stageKey });
+    } catch(err) { console.warn("Lead status update failed:", err.message); }
   };
 
   return (
@@ -879,8 +908,9 @@ function Pipeline({
               key={stage.key}
               draggable={editMode}
               onDragStart={(e) => editMode && onDragStart(e, stage.key)}
-              onDragOver={(e) => editMode && onDragOver(e, stage.key)}
-              onDrop={(e) => editMode && onDrop(e, stage.key)}
+              onDragOver={(e) => { if (editMode) onDragOver(e, stage.key); else onLeadDragOver(e, stage.key); }}
+              onDrop={(e) => { if (editMode) onDrop(e, stage.key); else onLeadDrop(e, stage.key); }}
+              onDragLeave={() => { if (!editMode) setDragLeadOver(null); }}
               style={{
                 minWidth: 210,
                 maxWidth: 210,
@@ -934,12 +964,13 @@ function Pipeline({
               </div>
               <div
                 style={{
-                  background: T.dark ? `${T.card}bb` : T.card2,
-                  border: `1px solid ${stage.c}22`,
+                  background: dragLeadOver === stage.key ? `${stage.c}18` : (T.dark ? `${T.card}bb` : T.card2),
+                  border: dragLeadOver === stage.key ? `2px dashed ${stage.c}88` : `1px solid ${stage.c}22`,
                   borderTop: "none",
                   borderRadius: "0 0 8px 8px",
                   padding: 5,
                   minHeight: 30,
+                  transition: "background 0.1s",
                 }}
               >
                 {cards.map((lead) => {
@@ -957,16 +988,20 @@ function Pipeline({
                   return (
                     <div
                       key={lead.id}
+                      draggable
+                      onDragStart={(e) => onLeadDragStart(e, lead.id)}
+                      onDragEnd={() => { setDragLeadId(null); setDragLeadOver(null); }}
                       onClick={() => open(lead)}
                       style={{
                         background: T.card,
                         borderRadius: 7,
                         padding: "8px 9px",
                         marginBottom: 4,
-                        cursor: "pointer",
+                        cursor: dragLeadId ? "grabbing" : "pointer",
+                        opacity: dragLeadId === lead.id ? 0.4 : 1,
                         border: `1px solid ${T.border}`,
                         borderLeft: `3px solid ${stage.c}66`,
-                        transition: "box-shadow 0.15s",
+                        transition: "box-shadow 0.15s, opacity 0.15s",
                       }}
                       onMouseEnter={(e) =>
                         (e.currentTarget.style.boxShadow = T.shadow)

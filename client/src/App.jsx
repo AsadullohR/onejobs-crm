@@ -411,7 +411,7 @@ const deleteLead = useCallback(async (id) => {
           {page==="dashboard"  && !isMobile && <Dashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
           {page==="dashboard"  && isMobile && <MobileDashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
           {page==="analytics"  && (user.role==="admin"||user.role==="manager") && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user}/>}
-          {page==="pipeline"   && <Pipeline {...PROPS} tasks={tasks} addLead={()=>openLead(null)} stages={stages} setStages={setStages}/>}
+          {page==="pipeline"   && <Pipeline {...PROPS} setLeads={setLeads} tasks={tasks} addLead={()=>openLead(null)} stages={stages} setStages={setStages}/>}
           {page==="leads"      && !isMobile && <LeadsList
             {...PROPS}
             tasks={tasks}
@@ -421,7 +421,7 @@ const deleteLead = useCallback(async (id) => {
             addNotif={addNotif}
           />}
           {page==="leads"      && isMobile && <MobileLeads leads={visibleLeads} user={user} team={team} roles={roles} open={openLead} config={config}/>}
-          {page==="tasks"      && !isMobile && <Tasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif}/>}
+          {page==="tasks"      && !isMobile && <Tasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif} open={openLead}/>}
           {page==="tasks"      && isMobile && <MobileTasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif}/>}
           {page==="debts"     && <DebtsPage debts={debts} setDebts={setDebts} user={user} leads={leads}/>}
           {page==="docspipe"  && <DocsPipeline leads={leads} tasks={tasks} team={team} user={user} open={openLead} config={config} roles={roles} setLeads={setLeads}/>}

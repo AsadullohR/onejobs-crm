@@ -3,11 +3,13 @@ import { useT } from "./theme.js";
 import { uid, fmtD, isOD, isSoon, inp, lab, I, Av, Modal, SearchSelect } from "./helpers.jsx";
 import { tasksAPI } from "./api.js";
 
-function Tasks({tasks, setTasks, leads, user, team, roles, addNotif}) {
+function Tasks({tasks, setTasks, leads, user, team, roles, addNotif, open}) {
   const T=useT();
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({});
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const [dragTaskId,setDragTaskId]=useState(null);
+  const [dragTaskOver,setDragTaskOver]=useState(null);
 
   // ── Filters ──────────────────────────────────────────────
   const [fAssignee,setFAssignee]=useState("");       // "" = all
@@ -70,6 +72,14 @@ function Tasks({tasks, setTasks, leads, user, team, roles, addNotif}) {
     try { await tasksAPI.delete(id); } catch(err){ console.warn('Task delete failed:', err.message); }
   };
 
+  const moveTask = async (taskId, newStatus) => {
+    const task = tasks.find(t=>t.id===taskId);
+    if (!task || task.status===newStatus) return;
+    setTasks(p=>p.map(t=>t.id===taskId?{...t,status:newStatus}:t));
+    try { await tasksAPI.update(taskId,{title:task.title,description:task.desc||'',assignee:task.assignee,leadId:task.leadId||null,priority:task.priority||'medium',status:newStatus,dueDate:task.due||null}); }
+    catch(err){ console.warn('Task status update failed:',err.message); }
+  };
+
   const inpS=inp(T); const labS=lab(T);
   const teamOpts=team.filter(t=>t.role!=="partner"&&t.active!==false).map(t=>({value:t.id,label:t.name,id:t.id,phone:t.phone}));
 
@@ -124,19 +134,26 @@ function Tasks({tasks, setTasks, leads, user, team, roles, addNotif}) {
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
       {Object.entries(COLS).map(([sk,sv])=>{
         const col=filtered.filter(t=>t.status===sk).sort((a,b)=>new Date(a.due||"9999")-new Date(b.due||"9999"));
-        return <div key={sk}>
+        const isOver = dragTaskOver===sk;
+        return <div key={sk}
+          onDragOver={e=>{e.preventDefault();setDragTaskOver(sk);}}
+          onDrop={e=>{e.preventDefault();if(dragTaskId){moveTask(dragTaskId,sk);setDragTaskId(null);setDragTaskOver(null);}}}
+          onDragLeave={()=>setDragTaskOver(null)}>
           <div style={{display:"flex",justifyContent:"space-between",padding:"7px 10px",background:`${sv.c}${T.dark?"22":"15"}`,border:`1px solid ${sv.c}44`,borderRadius:"8px 8px 0 0"}}>
             <span style={{fontSize:12,fontWeight:700,color:T.text}}>{sv.l}</span>
             <span style={{fontSize:11,fontWeight:700,background:`${sv.c}22`,color:sv.c,borderRadius:10,padding:"0 6px",border:`1px solid ${sv.c}44`}}>{col.length}</span>
           </div>
-          <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:"0 0 8px 8px",padding:7,minHeight:130}}>
+          <div style={{background:isOver?`${sv.c}18`:T.card,border:isOver?`2px dashed ${sv.c}88`:`1px solid ${T.border}`,borderRadius:"0 0 8px 8px",padding:7,minHeight:130,transition:"background 0.1s"}}>
             {col.map(t=>{
               const od=isOD(t.due)&&t.status!=="done";
               const ds=isSoon(t.due)&&!od;
               const lead=leads.find(l=>l.id===t.leadId);
               const assigneeName=team.find(u=>u.id===t.assignee)?.name||'';
               return <div key={t.id}
-                style={{background:T.card2,borderRadius:7,padding:8,marginBottom:5,border:`1px solid ${od?T.red+"44":ds?T.yellow+"44":T.border}`,borderLeft:`3px solid ${od?T.red:ds?T.yellow:PC[t.priority]||T.accent}`,cursor:"pointer"}}
+                draggable
+                onDragStart={e=>{e.stopPropagation();setDragTaskId(t.id);e.dataTransfer.effectAllowed="move";}}
+                onDragEnd={()=>{setDragTaskId(null);setDragTaskOver(null);}}
+                style={{background:T.card2,borderRadius:7,padding:8,marginBottom:5,border:`1px solid ${od?T.red+"44":ds?T.yellow+"44":T.border}`,borderLeft:`3px solid ${od?T.red:ds?T.yellow:PC[t.priority]||T.accent}`,cursor:dragTaskId?"grabbing":"pointer",opacity:dragTaskId===t.id?0.4:1,transition:"opacity 0.15s"}}
                 onClick={()=>{setForm({...t});setModal("form");}}>
                 <div style={{display:"flex",justifyContent:"space-between",gap:3,marginBottom:2}}>
                   <span style={{fontSize:11,fontWeight:600,color:T.text,textDecoration:t.status==="done"?"line-through":"none"}}>{t.title}</span>
@@ -147,7 +164,8 @@ function Tasks({tasks, setTasks, leads, user, team, roles, addNotif}) {
                 <div style={{display:"flex",gap:4,flexWrap:"wrap",alignItems:"center"}}>
                   <span style={{fontSize:8,color:PC[t.priority]||T.accent,fontWeight:700}}>{t.priority==="high"?"⚠️":t.priority==="low"?"📎":"📌"}</span>
                   {t.due&&<span style={{fontSize:8,color:od?T.red:ds?T.yellow:T.muted,fontWeight:od||ds?700:400}}>{fmtD(t.due)}{od?" ⚠️":ds?" ⏰":""}</span>}
-                  {lead&&<span style={{fontSize:8,color:T.accent,background:`${T.accent}22`,borderRadius:3,padding:"0 3px"}}>{lead.name}</span>}
+                  {lead&&open?<button onClick={e=>{e.stopPropagation();open(lead);}} style={{fontSize:8,color:T.accent,background:`${T.accent}22`,borderRadius:3,padding:"0 3px",border:"none",cursor:"pointer",fontWeight:600}}>👤 {lead.name}</button>
+                  :lead&&<span style={{fontSize:8,color:T.accent,background:`${T.accent}22`,borderRadius:3,padding:"0 3px"}}>{lead.name}</span>}
                 </div>
               </div>;
             })}
