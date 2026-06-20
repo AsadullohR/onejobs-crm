@@ -30,6 +30,7 @@ function Pipeline({
   const [fHasTasks, setFHasTasks] = useState(false);
   const [fSource, setFSource] = useState("");
   const [fGender, setFGender] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
   const [showFilters, setShowFilters] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const searchRef = useRef(null);
@@ -114,9 +115,19 @@ function Pipeline({
     if (fGender && l.gender !== fGender) return false;
     return true;
   });
+
+  const sorted = [...flt].sort((a, b) => {
+    if (sortBy === "newest")   return (b.createdAt||"") > (a.createdAt||"") ? 1 : -1;
+    if (sortBy === "oldest")   return (a.createdAt||"") > (b.createdAt||"") ? 1 : -1;
+    if (sortBy === "name_az")  return (a.name||"").localeCompare(b.name||"");
+    if (sortBy === "name_za")  return (b.name||"").localeCompare(a.name||"");
+    if (sortBy === "lastcall") return (b.lastCall||"") > (a.lastCall||"") ? 1 : -1;
+    return 0;
+  });
+
   const grp = {};
   stages.forEach((s) => {
-    grp[s.key] = flt.filter((l) => l.status === s.key);
+    grp[s.key] = sorted.filter((l) => l.status === s.key);
   });
   const inpS = inp(T);
   const exportPipelineCSV = () => {
@@ -138,7 +149,7 @@ function Pipeline({
       "Masul",
       "Izoh",
     ];
-    const rows = flt.map((l) =>
+    const rows = sorted.map((l) =>
       [
         l.id,
         l.name || "",
@@ -512,6 +523,17 @@ function Pipeline({
             />
             Vazifalari bor
           </label>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            style={{ ...inpS, width: "auto", fontSize: 11 }}
+          >
+            <option value="newest">↓ Yangi avval</option>
+            <option value="oldest">↑ Eski avval</option>
+            <option value="name_az">A→Z Ism</option>
+            <option value="name_za">Z→A Ism</option>
+            <option value="lastcall">📞 So'ngi aloqa</option>
+          </select>
           <button
             onClick={() => {
               setFOwner("");
