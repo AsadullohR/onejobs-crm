@@ -1626,7 +1626,7 @@ async function fetchAndSaveFbLead(leadId) {
 
   await pool.query(
     `INSERT INTO leads (id,name,phone,status,country,sector,source,comment,created_at)
-     VALUES ($1,$2,$3,'Yangi',$4,$5,'Bot orqali',$6,NOW())`,
+     VALUES ($1,$2,$3,'Yangi',$4,$5,'Target',$6,NOW())`,
     [newId, fields.name||"", phone, fields.country||"", fields.sector||"", fields.email ? `Email: ${fields.email}` : ""]
   );
   console.log(`FB lead saved: ${newId} ${fields.name} ${phone}`);
