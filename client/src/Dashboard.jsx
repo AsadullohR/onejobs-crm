@@ -70,44 +70,17 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
     .reduce((s, l) => s + Number(l.sofFoyda || 0), 0);
   // Funnel analytics with conversion %
   const funnelGroups = [
-    ["Yangi", ["Yangi", "Qilindi"]],
-    [
-      "Aloqa",
-      [
-        "Bog'landi",
-        "Boglanildi",
-        "Onlayn Suhbat Uchun",
-        "Onlayn Suhbat",
-        "Suhbat",
-      ],
-    ],
-    [
-      "Bitim",
-      [
-        "Shartnoma qildi",
-        "XBA To'lov qildi",
-        "CV Topshirildi",
-        "Interview ga qo'yildi",
-        "Ishga qabul qilindi",
-      ],
-    ],
-    ["To'lov", ["1 - Qism To'landi"]],
-    [
-      "Hujjatlar",
-      [
-        "Hujjatlar Tayyorlanmoqda",
-        "Hujjatlar Jonatilishga Tayyor",
-        "Hujjatlar Jonatildi",
-        "Ish shartnomasi keldi",
-        "Ish shartnomasi imzolandi",
-        "Taklifnoma keldi",
-      ],
-    ],
-    [
-      "Viza",
-      ["Elchixonaga Hujjatlar Tayyor", "Vizaga Topshirildi", "Viza Oldi"],
-    ],
-    ["Jo'nab ketdi", ["Jo'nab ketdi"]],
+    ["Yangi",                          ["Yangi", "Qilindi"]],
+    ["Suhbat",                         ["Bog'landi", "Boglanildi", "Onlayn Suhbat Uchun", "Onlayn Suhbat", "Suhbat"]],
+    ["XBA To'lov",                     ["XBA To'lov qildi"]],
+    ["Shartnoma qildi",                ["Shartnoma qildi", "CV Topshirildi", "Interview ga qo'yildi", "Ishga qabul qilindi", "1 - Qism To'landi"]],
+    ["Hujjatlar jo'natilishga tayyor", ["Hujjatlar Tayyorlanmoqda", "Hujjatlar Jonatilishga Tayyor", "Hujjatlar Jonatildi", "Ish shartnomasi keldi", "Ish shartnomasi imzolandi"]],
+    ["Taklifnoma keldi",               ["Taklifnoma keldi"]],
+    ["Elchixonaga hujjatlar tayyor",   ["Elchixonaga Hujjatlar Tayyor"]],
+    ["Viza topshirdi",                 ["Vizaga Topshirildi"]],
+    ["Viza oldi",                      ["Viza Oldi"]],
+    ["Viza rad etildi",                ["Viza Rad Etildi"]],
+    ["Jo'nab ketti",                   ["Jo'nab ketdi"]],
   ];
   const fData = funnelGroups.map(([g, stages]) => ({
     g,
