@@ -706,7 +706,7 @@ app.get("/api/config", auth, async (req, res) => {
     const { rows } = await pool.query("SELECT key, value FROM config");
     const cfg = {};
     rows.forEach((r) => {
-      cfg[r.key] = r.value;
+      try { cfg[r.key] = JSON.parse(r.value); } catch(e) { cfg[r.key] = r.value; }
     });
     res.json(cfg);
   } catch (err) {

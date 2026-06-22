@@ -57,7 +57,10 @@ export default function App() {
   const setConfig = useCallback((updater) => {
     setConfigRaw(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      Object.entries(next).forEach(([k,v]) => { configAPI.set(k, v).catch(()=>{}); });
+      // Only save keys that actually changed
+      Object.keys(next).forEach(k => {
+        if(next[k] !== prev[k]) configAPI.set(k, next[k]).catch(()=>{});
+      });
       return next;
     });
   }, []);
@@ -284,12 +287,13 @@ const deleteLead = useCallback(async (id) => {
         if(debtsRes?.length) setDebts(debtsRes);
         if(notifsRes?.length) setNotifs(notifsRes);
         if(cfgRes && typeof cfgRes === 'object') {
-          const {roles: savedRoles, ...restCfg} = cfgRes;
-          if(savedRoles && typeof savedRoles === 'object') setRoles(r=>({...r,...savedRoles}));
+          const parse = v => { if(typeof v === 'string') { try { return JSON.parse(v); } catch(e) { return null; } } return v; };
+          const savedRoles = parse(cfgRes.roles);
+          if(savedRoles && typeof savedRoles === 'object') setRolesRaw(r=>({...r,...savedRoles}));
           const cfgKeys=['countries','sectors','sources','positions','txnInc','txnExp','checklistItems'];
           const merged={};
-          cfgKeys.forEach(k=>{ if(restCfg[k]) merged[k]=restCfg[k]; });
-          if(Object.keys(merged).length) setConfig(c=>({...c,...merged}));
+          cfgKeys.forEach(k=>{ const v=parse(cfgRes[k]); if(v) merged[k]=v; });
+          if(Object.keys(merged).length) setConfigRaw(c=>({...c,...merged}));
         }
         if(usersRes?.length) setTeam(usersRes.map(u=>({
           id:u.id, username:u.username, name:u.name, role:u.role,
