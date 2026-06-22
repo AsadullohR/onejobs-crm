@@ -30,8 +30,12 @@ import { Vacancies } from "./Vacancies.jsx";
 import { EmployerPortal } from "./EmployerPortal.jsx";
 import { ImportModal } from "./ImportModal.jsx";
 import { MobileFinance, MobileTasks, MobileDashboard, MobileLeads } from "./MobileViews.jsx";
+import { TrackPage } from "./TrackPage.jsx";
 
 export default function App() {
+  // Public tracking page — no login required
+  const trackParam = new URLSearchParams(window.location.search).get("track");
+  if (trackParam !== null) return <TrackPage leadId={trackParam || ""} />;
   const [dark,setDark]=useState(false); 
   const [col,setCol]=useState(false);
   const [team,setTeam]=useState(INIT_TEAM); 

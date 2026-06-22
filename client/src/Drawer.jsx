@@ -119,7 +119,10 @@ const [form,setForm]=useState({
       <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,background:T.card,flexShrink:0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:7}}>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:10,color:T.accent,fontWeight:700,letterSpacing:"0.08em",marginBottom:2}}>{isNew?"Yangi mijoz":form.id}</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+              <span style={{fontSize:10,color:T.accent,fontWeight:700,letterSpacing:"0.08em"}}>{isNew?"Yangi mijoz":form.id}</span>
+              {!isNew&&<button onClick={()=>{const url=`${window.location.origin}${window.location.pathname}?track=${form.id}`;navigator.clipboard.writeText(url).then(()=>{alert("✅ Tracking havola nusxalandi:\n"+url);});}} title="Klientga tracking havolasini yuboring" style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:`${T.accent}18`,color:T.accent,border:`1px solid ${T.accent}44`,cursor:"pointer",fontWeight:600,lineHeight:1.4}}>🔗 Havola</button>}
+            </div>
             <div style={{fontSize:16,fontWeight:900,color:T.text,marginBottom:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{form.name||"Yangi mijoz"}</div>
             <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><Pill sk={form.status}/>{form.country&&<span style={{fontSize:10,color:T.muted}}>🌍 {form.country}</span>}</div>
           </div>

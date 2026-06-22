@@ -99,6 +99,29 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+// ─── PUBLIC TRACKING ─────────────────────────────────────────────────────────
+// No auth required — clients use this to check their application status
+app.get("/api/track/:id", async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, status, country, position, sector, created_at, history
+       FROM leads WHERE id=$1`,
+      [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: "Topilmadi" });
+    const l = rows[0];
+    // Only expose non-sensitive fields to the public
+    res.json({
+      id: l.id,
+      name: l.name,
+      status: l.status,
+      country: l.country || null,
+      position: l.position || l.sector || null,
+      createdAt: l.created_at,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── LEADS ROUTES ─────────────────────────────────────────────────────────────
 // New leads since timestamp — registered BEFORE /:id to avoid route shadowing
 app.get("/api/leads/new", auth, async (req, res) => {
