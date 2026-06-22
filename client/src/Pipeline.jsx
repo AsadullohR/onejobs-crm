@@ -259,7 +259,11 @@ function Pipeline({
             Pipeline
           </h1>
           <p style={{ color: T.muted, margin: "1px 0 0", fontSize: 10 }}>
-            {flt.length} ta · {stages.length} bosqich
+            {flt.length < leads.length
+              ? <><span style={{color:T.red,fontWeight:700}}>{flt.length}</span>/{leads.length} ta (filter) · </>
+              : <>{flt.length} ta · </>
+            }
+            {stages.length} bosqich
           </p>
         </div>
         <div
