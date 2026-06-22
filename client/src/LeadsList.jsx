@@ -5,13 +5,13 @@ import { uid, fmtMs, isOD, inp, I, Pill, Av, fmtD } from "./helpers.jsx";
 import { leadsAPI } from "./api.js";
 
 // ─── LEADS LIST ─────────────────────────────────────────────────────────────
-function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setLeads, deleteLead, addNotif}) {
+function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setLeads, deleteLead, addNotif, vacancies=[], candidates=[]}) {
   const T=useT();
   const perm=roles[user.role]||{};
   const canBulk=user.role==="admin"||user.role==="manager";
   const [sel,setSel]=useState(new Set());
   const [q,setQ]=useState(""); const [fGroup,setFGroup]=useState("all");
-  const [fC,setFC]=useState(""); const [fSrc,setFSrc]=useState(""); const [fOwn,setFOwn]=useState("");
+  const [fC,setFC]=useState(""); const [fSrc,setFSrc]=useState(""); const [fOwn,setFOwn]=useState(""); const [fVacancy,setFVacancy]=useState("");
   const [fDateField,setFDateField]=useState("createdAt"); const [fDateFrom,setFDateFrom]=useState(""); const [fDateTo,setFDateTo]=useState("");
   const [showDateF,setShowDateF]=useState(false);
   const [pg,setPg]=useState(1); const [sort,setSort]=useState({col:"id",dir:"desc"});
@@ -28,6 +28,7 @@ function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setL
     if(fSrc&&l.source!==fSrc)return false;
     if(fOwn&&l.ownerSales!==parseInt(fOwn)&&l.ownerConsult!==parseInt(fOwn)&&l.ownerDocs!==parseInt(fOwn))return false;
     if(fDateFrom||fDateTo){const v=l[fDateField];if(!v)return false;if(fDateFrom&&v<fDateFrom)return false;if(fDateTo&&v>fDateTo)return false;}
+    if(fVacancy){const vacLeadIds=new Set(candidates.filter(c=>String(c.vacancyId)===String(fVacancy)).map(c=>c.leadId));if(!vacLeadIds.has(l.id))return false;}
     return true;
   });
 
@@ -115,6 +116,7 @@ function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setL
       <select value={fC} onChange={e=>{setFC(e.target.value);setPg(1);}} style={{...inpS,width:"auto"}}><option value="">Mamlakat</option>{config.countries.map(c=><option key={c}>{c}</option>)}</select>
       <select value={fSrc} onChange={e=>{setFSrc(e.target.value);setPg(1);}} style={{...inpS,width:"auto"}}><option value="">Manba</option>{config.sources.map(s=><option key={s}>{s}</option>)}</select>
       <select value={fOwn} onChange={e=>{setFOwn(e.target.value);setPg(1);}} style={{...inpS,width:"auto"}}><option value="">Mas'ul</option>{team.filter(t=>t.role!=="partner").map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select>
+      {vacancies.length>0&&<select value={fVacancy} onChange={e=>{setFVacancy(e.target.value);setPg(1);}} style={{...inpS,width:"auto"}}><option value="">Vakansiya</option>{vacancies.map(v=><option key={v.id} value={v.id}>{v.title}{v.company?` — ${v.company}`:""}</option>)}</select>}
       <div style={{marginLeft:"auto",display:"flex",gap:5}}>
         <button onClick={doCSV} style={{padding:"6px 10px",borderRadius:6,background:T.card2,color:T.muted,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:10}}>📥 CSV</button>
         <button onClick={()=>setShowDateF(s=>!s)} style={{padding:"6px 10px",borderRadius:6,background:showDateF?`${T.accent}22`:T.card2,color:showDateF?T.accent:T.muted,border:`1px solid ${showDateF?T.accent+"44":T.border}`,cursor:"pointer",fontSize:10}}>📅 Sana</button>

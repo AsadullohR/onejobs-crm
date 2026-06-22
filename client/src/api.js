@@ -107,6 +107,7 @@ export const candidatesAPI = {
   update: (id, c) => req("PUT", `/api/candidates/${id}`, c),
   delete: (id) => req("DELETE", `/api/candidates/${id}`),
   getByLead: (leadId) => req("GET", `/api/candidates?lead_id=${leadId}`),
+  getAll: () => req("GET", "/api/candidates/all"),
 };
 
 export const notifAPI = {

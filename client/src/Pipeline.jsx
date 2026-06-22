@@ -17,6 +17,8 @@ function Pipeline({
   roles,
   stages,
   setStages,
+  vacancies = [],
+  candidates = [],
 }) {
   const T = useT();
   const perm = roles[user.role] || {};
@@ -32,6 +34,7 @@ function Pipeline({
   const [fHasTasks, setFHasTasks] = useState(false);
   const [fSource, setFSource] = useState("");
   const [fGender, setFGender] = useState("");
+  const [fVacancy, setFVacancy] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   const [showFilters, setShowFilters] = useState(true);
   const [editMode, setEditMode] = useState(false);
@@ -117,6 +120,10 @@ function Pipeline({
       return false;
     if (fSource && l.source !== fSource) return false;
     if (fGender && l.gender !== fGender) return false;
+    if (fVacancy) {
+      const vacLeadIds = new Set(candidates.filter(c => String(c.vacancyId) === String(fVacancy)).map(c => c.leadId));
+      if (!vacLeadIds.has(l.id)) return false;
+    }
     return true;
   });
 
@@ -534,6 +541,18 @@ function Pipeline({
             <option value="Erkak">Erkak</option>
             <option value="Ayol">Ayol</option>
           </select>
+          {vacancies.length > 0 && (
+            <select
+              value={fVacancy}
+              onChange={(e) => setFVacancy(e.target.value)}
+              style={{ ...inpS, width: "auto", fontSize: 11 }}
+            >
+              <option value="">Vakansiya bo'yicha</option>
+              {vacancies.map((v) => (
+                <option key={v.id} value={v.id}>{v.title}{v.company ? ` — ${v.company}` : ""}</option>
+              ))}
+            </select>
+          )}
           <label
             style={{
               display: "flex",
@@ -576,6 +595,7 @@ function Pipeline({
               setFHasTasks(false);
               setFSource("");
               setFGender("");
+              setFVacancy("");
             }}
             style={{
               padding: "4px 9px",

@@ -25,7 +25,7 @@ import { DocsPipeline } from "./DocsPipeline.jsx";
 import { Dashboard } from "./Dashboard.jsx";
 import { DebtsPage } from "./DebtsPage.jsx";
 import { Analytics } from "./Analytics.jsx";
-import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, configAPI, getToken, clearToken } from "./api.js";
+import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, configAPI, vacanciesAPI, candidatesAPI, getToken, clearToken } from "./api.js";
 import { Vacancies } from "./Vacancies.jsx";
 import { EmployerPortal } from "./EmployerPortal.jsx";
 import { ImportModal } from "./ImportModal.jsx";
@@ -68,6 +68,8 @@ export default function App() {
   const [notifs,setNotifs]=useState([]);
   const [debts,setDebts]=useState([]);
   const [stages,setStages]=useState(STAGES);
+  const [vacancies,setVacancies]=useState([]);
+  const [candidates,setCandidates]=useState([]);
   const [showNotif,setShowNotif]=useState(false);
   const [showImport,setShowImport]=useState(false);
   const T=mkT(dark);
@@ -259,7 +261,7 @@ const deleteLead = useCallback(async (id) => {
     const loadAll = async () => {
       setAppLoading(true);
       try {
-        const [leadsRes, tasksRes, txnsRes, usersRes, notifsRes, extExpsRes, debtsRes, cfgRes] = await Promise.all([
+        const [leadsRes, tasksRes, txnsRes, usersRes, notifsRes, extExpsRes, debtsRes, cfgRes, vacanciesRes, candidatesRes] = await Promise.all([
           leadsAPI.getAll({ limit: 10000 }),
           tasksAPI.getAll(),
           txnAPI.getAll(),
@@ -268,8 +270,12 @@ const deleteLead = useCallback(async (id) => {
           extExpAPI.getAll().catch(()=>[]),
           debtsAPI.getAll().catch(()=>[]),
           configAPI.getAll().catch(()=>({})),
+          vacanciesAPI.getAll().catch(()=>[]),
+          candidatesAPI.getAll().catch(()=>[]),
         ]);
         setLeads((leadsRes.leads||leadsRes||[]).map(mapLead));
+        if(vacanciesRes?.length) setVacancies(vacanciesRes);
+        if(candidatesRes?.length) setCandidates(candidatesRes);
         setTasks((tasksRes||[]).map(t=>({
           id:String(t.id), title:t.title, desc:t.description||"",
           assignee:t.assignee, leadId:t.lead_id,
@@ -446,7 +452,7 @@ const deleteLead = useCallback(async (id) => {
           {page==="dashboard"  && !isMobile && <Dashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
           {page==="dashboard"  && isMobile && <MobileDashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
           {page==="analytics"  && (user.role==="admin"||user.role==="manager") && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user}/>}
-          {page==="pipeline"   && <Pipeline {...PROPS} setLeads={setLeads} tasks={tasks} addLead={()=>openLead(null)} stages={stages} setStages={setStages}/>}
+          {page==="pipeline"   && <Pipeline {...PROPS} setLeads={setLeads} tasks={tasks} addLead={()=>openLead(null)} stages={stages} setStages={setStages} vacancies={vacancies} candidates={candidates}/>}
           {page==="leads"      && !isMobile && <LeadsList
             {...PROPS}
             tasks={tasks}
@@ -454,6 +460,8 @@ const deleteLead = useCallback(async (id) => {
             setLeads={setLeads}
             deleteLead={deleteLead}
             addNotif={addNotif}
+            vacancies={vacancies}
+            candidates={candidates}
           />}
           {page==="leads"      && isMobile && <MobileLeads leads={visibleLeads} user={user} team={team} roles={roles} open={openLead} config={config}/>}
           {page==="tasks"      && !isMobile && <Tasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif} open={openLead}/>}

@@ -1043,6 +1043,18 @@ app.delete("/api/vacancies/:id", auth, async (req, res) => {
 
 // ─── CANDIDATES ──────────────────────────────────────────────────────────────
 
+// Get all candidate pairs (vacancy_id, lead_id) for vacancy filter
+app.get("/api/candidates/all", auth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT c.vacancy_id, c.lead_id, v.title as vacancy_title
+       FROM candidates c
+       LEFT JOIN vacancies v ON v.id = c.vacancy_id`,
+    );
+    res.json(rows.map(r => ({ vacancyId: r.vacancy_id, leadId: r.lead_id, vacancyTitle: r.vacancy_title })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Get all candidacies for a specific lead (for client profile vacancy tab)
 app.get("/api/candidates", auth, async (req, res) => {
   const { lead_id } = req.query;
