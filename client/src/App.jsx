@@ -25,7 +25,7 @@ import { DocsPipeline } from "./DocsPipeline.jsx";
 import { Dashboard } from "./Dashboard.jsx";
 import { DebtsPage } from "./DebtsPage.jsx";
 import { Analytics } from "./Analytics.jsx";
-import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, getToken, clearToken } from "./api.js";
+import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, configAPI, getToken, clearToken } from "./api.js";
 import { Vacancies } from "./Vacancies.jsx";
 import { EmployerPortal } from "./EmployerPortal.jsx";
 import { ImportModal } from "./ImportModal.jsx";
@@ -35,7 +35,14 @@ export default function App() {
   const [dark,setDark]=useState(false); 
   const [col,setCol]=useState(false);
   const [team,setTeam]=useState(INIT_TEAM); 
-  const [roles,setRoles]=useState(INIT_ROLES);
+  const [roles,setRolesRaw]=useState(INIT_ROLES);
+  const setRoles = useCallback((updater) => {
+    setRolesRaw(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      configAPI.set('roles', next).catch(()=>{});
+      return next;
+    });
+  }, []);
   const [user,setUser]=useState(null); 
   const [page,setPage]=useState("dashboard");
   const [leads,setLeads]=useState([]);
@@ -46,7 +53,14 @@ export default function App() {
   const lastPollRef=useRef(new Date().toISOString());
   const [loading,setLoading]=useState(false);
   const [apiError,setApiError]=useState(null);
-  const [config,setConfig]=useState(INIT_CFG);
+  const [config,setConfigRaw]=useState(INIT_CFG);
+  const setConfig = useCallback((updater) => {
+    setConfigRaw(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      Object.entries(next).forEach(([k,v]) => { configAPI.set(k, v).catch(()=>{}); });
+      return next;
+    });
+  }, []);
   const [drawer,setDrawer]=useState(null);
   const [notifs,setNotifs]=useState([]);
   const [debts,setDebts]=useState([]);
@@ -242,7 +256,7 @@ const deleteLead = useCallback(async (id) => {
     const loadAll = async () => {
       setAppLoading(true);
       try {
-        const [leadsRes, tasksRes, txnsRes, usersRes, notifsRes, extExpsRes, debtsRes] = await Promise.all([
+        const [leadsRes, tasksRes, txnsRes, usersRes, notifsRes, extExpsRes, debtsRes, cfgRes] = await Promise.all([
           leadsAPI.getAll({ limit: 10000 }),
           tasksAPI.getAll(),
           txnAPI.getAll(),
@@ -250,6 +264,7 @@ const deleteLead = useCallback(async (id) => {
           notifAPI.getAll().catch(()=>[]),
           extExpAPI.getAll().catch(()=>[]),
           debtsAPI.getAll().catch(()=>[]),
+          configAPI.getAll().catch(()=>({})),
         ]);
         setLeads((leadsRes.leads||leadsRes||[]).map(mapLead));
         setTasks((tasksRes||[]).map(t=>({
@@ -268,6 +283,14 @@ const deleteLead = useCallback(async (id) => {
         if(extExpsRes?.length) setExtExps(extExpsRes);
         if(debtsRes?.length) setDebts(debtsRes);
         if(notifsRes?.length) setNotifs(notifsRes);
+        if(cfgRes && typeof cfgRes === 'object') {
+          const {roles: savedRoles, ...restCfg} = cfgRes;
+          if(savedRoles && typeof savedRoles === 'object') setRoles(r=>({...r,...savedRoles}));
+          const cfgKeys=['countries','sectors','sources','positions','txnInc','txnExp','checklistItems'];
+          const merged={};
+          cfgKeys.forEach(k=>{ if(restCfg[k]) merged[k]=restCfg[k]; });
+          if(Object.keys(merged).length) setConfig(c=>({...c,...merged}));
+        }
         if(usersRes?.length) setTeam(usersRes.map(u=>({
           id:u.id, username:u.username, name:u.name, role:u.role,
           avatar:u.avatar||"", color:u.color||"#6366f1",
