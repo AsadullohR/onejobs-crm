@@ -99,10 +99,12 @@ const clearReadNotifs=()=>{
   notifAPI.clearRead().catch(()=>{});
 }; 
 const saveLead = useCallback(async f => {
+    // New leads have a tmp-* id; existing leads have their real NO-* id
+    const isNew = !f.id || f.id.startsWith("tmp-");
     try {
-
-      await leadsAPI.save({
-        id:f.id,
+      const savedRow = await leadsAPI.save({
+        // Don't send temp id — let server generate the real NO-{timestamp} id
+        ...(isNew ? {} : { id: f.id }),
         name:f.name,
         phone:f.phone,
         telegram:f.telegram,
@@ -139,15 +141,23 @@ const saveLead = useCallback(async f => {
         interviewDate:f.officeSuhbat || null,
       });
 
-      const isNew = !leads.some(l => l.id === f.id);
+      // Use the server-returned row so we have the real ID and DB timestamps
+      const saved = mapLead(savedRow);
 
       setLeads(p =>
-        p.some(l => l.id === f.id)
-          ? p.map(l => l.id === f.id ? f : l)
-          : [...p, f]
+        isNew
+          ? [...p, saved]
+          : p.map(l => l.id === saved.id ? saved : l)
       );
 
-      if(isNew) addNotif(`🆕 Yangi lead: ${f.name}`);
+      if(isNew) {
+        const ownerNames = [f.ownerSales, f.ownerConsult, f.ownerDocs]
+          .filter(Boolean)
+          .map(id => team.find(u => u.id === id)?.name)
+          .filter(Boolean)
+          .join(' / ');
+        addNotif(`🆕 ${saved.id} — ${saved.name}${saved.phone ? ' · ' + saved.phone : ''}${ownerNames ? ' · ' + ownerNames : ''}${saved.country ? ' · ' + saved.country : ''}`);
+      }
 
       setDrawer(null);
 
@@ -161,7 +171,7 @@ const saveLead = useCallback(async f => {
         alert("Lead saqlanmadi: " + (err.message || "Noma'lum xatolik"));
       }
     }
-}, [leads, addNotif]);
+}, [leads, team, mapLead, addNotif]);
 const deleteLead = useCallback(async (id) => {
   if (!confirm("Bu leadni o‘chirishni xohlaysizmi?")) return;
 
@@ -199,7 +209,7 @@ const deleteLead = useCallback(async (id) => {
       } : x));
     } catch(err){ console.warn('Task save failed:', err.message); }
   },[addNotif, team]);
-  const openLead=l=>setDrawer(l||{id:`NO-${Math.floor(Math.random()*9000)+1000}`,name:"",phone:"",telegram:"",status:"Yangi",country:"",sector:"",position:"",ownerSales:null,ownerConsult:null,ownerDocs:null,source:user?.role==="partner"?user.name:"",gender:"",comment:"",q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,q1R:null,q2R:null,q3R:null,xbaR:null,cv:{},history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)});
+  const openLead=l=>setDrawer(l||{id:`tmp-${Date.now()}`,name:"",phone:"",telegram:"",status:"Yangi",country:"",sector:"",position:"",ownerSales:null,ownerConsult:null,ownerDocs:null,source:user?.role==="partner"?user.name:"",gender:"",comment:"",q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,q1R:null,q2R:null,q3R:null,xbaR:null,cv:{},history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)});
 
   const myNotif=user?tasks.filter(t=>t.assignee===user.id&&t.status!=="done"&&(isOD(t.due)||isSoon(t.due))).length:0;
   const totalNotif=myNotif+notifs.filter(n=>!n.read).length;
@@ -237,26 +247,27 @@ const deleteLead = useCallback(async (id) => {
   });
 }, []);
 
+  // ── Map raw DB row → client lead object (used in loadAll and saveLead) ──────
+  const mapLead = useCallback(l => ({
+    id:l.id, name:l.name||"", phone:l.phone||"", telegram:l.telegram||"",
+    status:l.status||"Yangi", country:l.country||"", sector:l.sector||"",
+    position:l.position||"", source:l.source||"", gender:l.gender||"",
+    comment:l.comment||"", note:l.note||"",
+    ownerSales:l.owner_sales, ownerConsult:l.owner_consult, ownerDocs:l.owner_docs,
+    q1:l.q1||false, q2:l.q2||false, q3:l.q3||false, xba:l.xba||false,
+    kpiSales:l.kpi_sales||false, kpiConsult:l.kpi_consult||false, kpiDocs:l.kpi_docs||false,
+    sofFoyda:l.sof_foyda||null, docs:l.docs||{}, cv:l.cv||{}, history:l.history||[],
+    createdAt:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.created_at),
+    lastCall:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.last_contact),
+    shartnomaSana:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.contract_date),
+    officeSuhbat:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.interview_date),
+    docsStage:l.docs_stage||null, archived:l.archived||false,
+    reklamaName:l.reklama_name||"",
+  }), []);
+
   // ── Load all data when user is set ─────────────────────────────────────────
   useEffect(()=>{
     if(!user) return;
-
-    const mapLead = l => ({
-      id:l.id, name:l.name||"", phone:l.phone||"", telegram:l.telegram||"",
-      status:l.status||"Yangi", country:l.country||"", sector:l.sector||"",
-      position:l.position||"", source:l.source||"", gender:l.gender||"",
-      comment:l.comment||"", note:l.note||"",
-      ownerSales:l.owner_sales, ownerConsult:l.owner_consult, ownerDocs:l.owner_docs,
-      q1:l.q1||false, q2:l.q2||false, q3:l.q3||false, xba:l.xba||false,
-      kpiSales:l.kpi_sales||false, kpiConsult:l.kpi_consult||false, kpiDocs:l.kpi_docs||false,
-      sofFoyda:l.sof_foyda||null, docs:l.docs||{}, cv:l.cv||{}, history:l.history||[],
-      createdAt:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.created_at),
-      lastCall:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.last_contact),
-      shartnomaSana:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.contract_date),
-      officeSuhbat:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.interview_date),
-      docsStage:l.docs_stage||null, archived:l.archived||false,
-      reklamaName:l.reklama_name||"",
-    });
 
     const loadAll = async () => {
       setAppLoading(true);

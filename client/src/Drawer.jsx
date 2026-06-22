@@ -7,7 +7,7 @@ import { candidatesAPI, leadDocsAPI } from "./api.js";
 // ─── LEAD DRAWER ──────────────────────────────────────────────────────────────
 function Drawer({lead, user, team, leads, tasks, onSave, onClose, onAddTask, config, roles, addNotif}) {
 const T=useT();
-const isNew=!lead.id;
+const isNew=!lead.id||String(lead.id).startsWith("tmp-");
 const [form,setForm]=useState({
   cv:{},
   history:[],
@@ -49,7 +49,7 @@ const [form,setForm]=useState({
   const isDone=DONE.includes(form.status);
   const leadTasks=tasks.filter(t=>t.leadId===lead.id);
   const addNote=()=>{if(!note.trim())return;f("history",[...(form.history||[]),{text:note,by:user.id,at:new Date().toISOString()}]);setNote("");};
-  const addTask=()=>{if(!tTitle.trim())return;onAddTask({id:uid(),title:tTitle,assignee:Number(tAsgn),leadId:form.id,priority:"medium",status:"todo",due:tDue,createdBy:user.id,at:new Date().toISOString(),desc:""});setTTitle("");setTDue("");};
+  const addTask=()=>{if(!tTitle.trim()||isNew)return;onAddTask({id:uid(),title:tTitle,assignee:Number(tAsgn),leadId:form.id,priority:"medium",status:"todo",due:tDue,createdBy:user.id,at:new Date().toISOString(),desc:""});setTTitle("");setTDue("");};
   const teamOpts=team.filter(t=>t.active!==false&&t.role!=="partner").map(t=>({value:t.id,label:t.name,id:t.id,phone:t.phone}));
 
   const [vacCands, setVacCands] = useState([]);
@@ -119,7 +119,7 @@ const [form,setForm]=useState({
       <div style={{padding:"12px 16px",borderBottom:`1px solid ${T.border}`,background:T.card,flexShrink:0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:7}}>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:10,color:T.accent,fontWeight:700,letterSpacing:"0.08em",marginBottom:2}}>{form.id||"Yangi"}</div>
+            <div style={{fontSize:10,color:T.accent,fontWeight:700,letterSpacing:"0.08em",marginBottom:2}}>{isNew?"Yangi mijoz":form.id}</div>
             <div style={{fontSize:16,fontWeight:900,color:T.text,marginBottom:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{form.name||"Yangi mijoz"}</div>
             <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}><Pill sk={form.status}/>{form.country&&<span style={{fontSize:10,color:T.muted}}>🌍 {form.country}</span>}</div>
           </div>
