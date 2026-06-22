@@ -180,9 +180,31 @@ const saveLead = useCallback(async f => {
 
     } catch(err) {
       if (err.status === 409 || err.duplicates) {
-        const dups = err.duplicates || [];
-        const names = dups.map(d => `${d.name} (${d.phone || d.id})`).join(", ");
-        alert(`⚠️ Bu telefon raqam allaqachon mavjud!\n\n${names}\n\nHar bir mijoz uchun alohida telefon raqam bo'lishi kerak.`);
+        const dup = (err.duplicates || [])[0];
+        if (dup) {
+          const goToExisting = window.confirm(
+            `⚠️ Bu telefon raqam allaqachon mavjud!\n\n` +
+            `Ism: ${dup.name}\n` +
+            `ID: ${dup.id}\n` +
+            `Tel: ${dup.phone || "—"}\n` +
+            `Holat: ${dup.status || "—"}\n\n` +
+            `Mavjud mijozni ochish uchun OK bosing.`
+          );
+          if (goToExisting) {
+            // Try to find in current state; if not (e.g. different owner), fetch from server
+            const existing = leads.find(l => l.id === dup.id);
+            if (existing) {
+              setDrawer(existing);
+            } else {
+              try {
+                const row = await leadsAPI.get(dup.id);
+                setDrawer(mapLead(row));
+              } catch { setDrawer(null); }
+            }
+          }
+        } else {
+          alert(`⚠️ Bu telefon raqam allaqachon mavjud!`);
+        }
       } else {
         console.error(err);
         alert("Lead saqlanmadi: " + (err.message || "Noma'lum xatolik"));
