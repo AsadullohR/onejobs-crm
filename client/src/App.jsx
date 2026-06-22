@@ -286,12 +286,15 @@ const deleteLead = useCallback(async (id) => {
   });
 }, []);
 
+  const [refreshing,setRefreshing]=useState(false);
+  const lastFocusRef=useRef(Date.now());
+
   // ── Load all data when user is set ─────────────────────────────────────────
   useEffect(()=>{
     if(!user) return;
 
-    const loadAll = async () => {
-      setAppLoading(true);
+    const loadAll = async (silent=false) => {
+      if(silent) setRefreshing(true); else setAppLoading(true);
       try {
         const [leadsRes, tasksRes, txnsRes, usersRes, notifsRes, extExpsRes, debtsRes, cfgRes, vacanciesRes, candidatesRes] = await Promise.all([
           leadsAPI.getAll({ limit: 10000 }),
@@ -353,10 +356,20 @@ const deleteLead = useCallback(async (id) => {
         setApiError(err.message);   
         setTasks(INIT_TASKS);   
         setTxns(INIT_TXN);
-      } finally { setAppLoading(false); }
+      } finally { setAppLoading(false); setRefreshing(false); }
     };
 
     loadAll();
+
+    // Refresh on window focus if away for >2 minutes
+    const onFocus = () => {
+      if(Date.now() - lastFocusRef.current > 120000) loadAll(true);
+      lastFocusRef.current = Date.now();
+    };
+    window.addEventListener("focus", onFocus);
+
+    // Expose loadAll for manual refresh button
+    window._crmRefresh = () => loadAll(true);
 
     // Poll every 30s for new leads from Tally/Meta
     const poll = setInterval(async ()=>{
@@ -377,7 +390,7 @@ const deleteLead = useCallback(async (id) => {
   } catch(e){}
 }, 30000);
 
-    return ()=>clearInterval(poll);
+    return ()=>{ clearInterval(poll); window.removeEventListener("focus", onFocus); delete window._crmRefresh; };
   }, [user?.id]);
 
   const isMobile = useIsMobile();
@@ -433,6 +446,9 @@ const deleteLead = useCallback(async (id) => {
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
             <span style={{background:`${roles[user.role]?.color||T.accent}18`,color:roles[user.role]?.color||T.accent,fontSize:9,fontWeight:600,padding:"3px 9px",borderRadius:20,textTransform:"uppercase",letterSpacing:"0.05em"}}>{roles[user.role]?.label}</span>
+            <button onClick={()=>window._crmRefresh?.()} title="Yangilash" disabled={refreshing} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:7,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:refreshing?"default":"pointer",color:T.muted,fontSize:14,transition:"transform 0.4s",transform:refreshing?"rotate(360deg)":"none"}}>
+              🔄
+            </button>
             {(user.role==="admin"||user.role==="manager")&&<button onClick={()=>setShowImport(true)} title="Import CSV" style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:7,height:30,padding:"0 11px",fontSize:11,fontWeight:500,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",gap:4,fontFamily:"inherit"}}>📥 Import</button>}
             <div style={{position:"relative"}}>
               <button onClick={()=>setShowNotif(p=>!p)} style={{position:"relative",background:showNotif?`${T.accent}22`:T.card2,border:`1px solid ${showNotif?T.accent+"66":T.border}`,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:showNotif?T.accent:T.muted}}>
