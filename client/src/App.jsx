@@ -289,7 +289,15 @@ const deleteLead = useCallback(async (id) => {
         if(cfgRes && typeof cfgRes === 'object') {
           const parse = v => { if(typeof v === 'string') { try { return JSON.parse(v); } catch(e) { return null; } } return v; };
           const savedRoles = parse(cfgRes.roles);
-          if(savedRoles && typeof savedRoles === 'object') setRolesRaw(r=>({...r,...savedRoles}));
+          if(savedRoles && typeof savedRoles === 'object') {
+            setRolesRaw(r => {
+              const merged = {...r};
+              Object.entries(savedRoles).forEach(([k,v]) => {
+                merged[k] = {...(r[k]||{}), ...v};
+              });
+              return merged;
+            });
+          }
           const cfgKeys=['countries','sectors','sources','positions','txnInc','txnExp','checklistItems'];
           const merged={};
           cfgKeys.forEach(k=>{ const v=parse(cfgRes[k]); if(v) merged[k]=v; });
