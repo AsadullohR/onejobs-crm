@@ -97,7 +97,24 @@ const markAllRead=()=>{
 const clearReadNotifs=()=>{
   setNotifs(p=>p.filter(n=>!n.read));
   notifAPI.clearRead().catch(()=>{});
-}; 
+};
+// ── Map raw DB row → client lead object (used in loadAll and saveLead) ──────
+const mapLead = useCallback(l => ({
+  id:l.id, name:l.name||"", phone:l.phone||"", telegram:l.telegram||"",
+  status:l.status||"Yangi", country:l.country||"", sector:l.sector||"",
+  position:l.position||"", source:l.source||"", gender:l.gender||"",
+  comment:l.comment||"", note:l.note||"",
+  ownerSales:l.owner_sales, ownerConsult:l.owner_consult, ownerDocs:l.owner_docs,
+  q1:l.q1||false, q2:l.q2||false, q3:l.q3||false, xba:l.xba||false,
+  kpiSales:l.kpi_sales||false, kpiConsult:l.kpi_consult||false, kpiDocs:l.kpi_docs||false,
+  sofFoyda:l.sof_foyda||null, docs:l.docs||{}, cv:l.cv||{}, history:l.history||[],
+  createdAt:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.created_at),
+  lastCall:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.last_contact),
+  shartnomaSana:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.contract_date),
+  officeSuhbat:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.interview_date),
+  docsStage:l.docs_stage||null, archived:l.archived||false,
+  reklamaName:l.reklama_name||"",
+}), []);
 const saveLead = useCallback(async f => {
     // New leads have a tmp-* id; existing leads have their real NO-* id
     const isNew = !f.id || f.id.startsWith("tmp-");
@@ -246,24 +263,6 @@ const deleteLead = useCallback(async (id) => {
   clearToken();
   });
 }, []);
-
-  // ── Map raw DB row → client lead object (used in loadAll and saveLead) ──────
-  const mapLead = useCallback(l => ({
-    id:l.id, name:l.name||"", phone:l.phone||"", telegram:l.telegram||"",
-    status:l.status||"Yangi", country:l.country||"", sector:l.sector||"",
-    position:l.position||"", source:l.source||"", gender:l.gender||"",
-    comment:l.comment||"", note:l.note||"",
-    ownerSales:l.owner_sales, ownerConsult:l.owner_consult, ownerDocs:l.owner_docs,
-    q1:l.q1||false, q2:l.q2||false, q3:l.q3||false, xba:l.xba||false,
-    kpiSales:l.kpi_sales||false, kpiConsult:l.kpi_consult||false, kpiDocs:l.kpi_docs||false,
-    sofFoyda:l.sof_foyda||null, docs:l.docs||{}, cv:l.cv||{}, history:l.history||[],
-    createdAt:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.created_at),
-    lastCall:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.last_contact),
-    shartnomaSana:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.contract_date),
-    officeSuhbat:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.interview_date),
-    docsStage:l.docs_stage||null, archived:l.archived||false,
-    reklamaName:l.reklama_name||"",
-  }), []);
 
   // ── Load all data when user is set ─────────────────────────────────────────
   useEffect(()=>{
