@@ -1675,7 +1675,7 @@ async function fetchAndSaveFbLead(leadId) {
   }
 
   // Generate next NO- id
-  const last = await pool.query("SELECT id FROM leads WHERE id LIKE 'NO-%' ORDER BY CAST(SUBSTRING(id,4) AS INTEGER) DESC LIMIT 1");
+  const last = await pool.query("SELECT id FROM leads WHERE id ~ '^NO-[0-9]+$' ORDER BY CAST(SUBSTRING(id,4) AS BIGINT) DESC LIMIT 1");
   const nextNum = last.rows.length ? parseInt(last.rows[0].id.replace("NO-","")) + 1 : 1;
   const newId = `NO-${nextNum}`;
 
