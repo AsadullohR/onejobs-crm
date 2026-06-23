@@ -255,13 +255,14 @@ app.post("/api/leads", auth, async (req, res) => {
       INSERT INTO leads (id, name, phone, telegram, status, country, sector, position, source, gender,
         comment, note, owner_sales, owner_consult, owner_docs, q1, q2, q3, xba,
         kpi_sales, kpi_consult, kpi_docs, cv, docs, history,
-        last_contact, contract_date, interview_date, dest, sof_foyda)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
+        last_contact, contract_date, interview_date, dest, sof_foyda, quality, quality_note)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
       ON CONFLICT (id) DO UPDATE SET
         name=$2, phone=$3, telegram=$4, status=$5, country=$6, sector=$7, position=$8, source=$9, gender=$10,
         comment=$11, note=$12, owner_sales=$13, owner_consult=$14, owner_docs=$15, q1=$16, q2=$17, q3=$18, xba=$19,
         kpi_sales=$20, kpi_consult=$21, kpi_docs=$22, cv=$23, docs=$24, history=$25,
-        last_contact=$26, contract_date=$27, interview_date=$28, dest=$29, sof_foyda=$30, updated_at=NOW()
+        last_contact=$26, contract_date=$27, interview_date=$28, dest=$29, sof_foyda=$30,
+        quality=$31, quality_note=$32, updated_at=NOW()
       RETURNING *`,
       [
         id,
@@ -294,6 +295,8 @@ app.post("/api/leads", auth, async (req, res) => {
         l.interviewDate || null,
         l.dest || null,
         l.sofFoyda || null,
+        l.quality || null,
+        l.qualityNote || null,
       ],
     );
     res.json(rows[0]);
@@ -1629,12 +1632,19 @@ const msUntilMidnight = (() => {
 setTimeout(() => { createStaleTasks(); setInterval(createStaleTasks, 24*60*60*1000); }, msUntilMidnight);
 
 // ─── START SERVER ─────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 OneJobs CRM API running on port ${PORT}`);
   console.log(
     `   Database: ${process.env.DATABASE_URL ? "Connected" : "Using default localhost"}`,
   );
   console.log(`   Env: ${process.env.NODE_ENV || "development"}`);
+  try {
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS quality TEXT`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS quality_note TEXT`);
+    console.log("   Migrations: quality columns OK");
+  } catch (e) {
+    console.error("   Migrations error:", e.message);
+  }
 
   // Schedule stale lead auto-tasks at midnight daily
   const now = new Date();

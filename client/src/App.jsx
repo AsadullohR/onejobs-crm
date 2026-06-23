@@ -124,6 +124,7 @@ const mapLead = useCallback(l => ({
   officeSuhbat:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.interview_date),
   docsStage:l.docs_stage||null, archived:l.archived||false,
   reklamaName:l.reklama_name||"",
+  quality:l.quality||"", qualityNote:l.quality_note||"",
 }), []);
 const saveLead = useCallback(async f => {
     // New leads have a tmp-* id; existing leads have their real NO-* id
@@ -162,6 +163,8 @@ const saveLead = useCallback(async f => {
         history:f.history,
 
         sofFoyda:f.sofFoyda || null,
+        quality:f.quality || null,
+        qualityNote:f.qualityNote || null,
 
         lastContact:f.lastCall || null,
         contractDate:f.shartnomaSana || null,

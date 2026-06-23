@@ -35,6 +35,7 @@ function Pipeline({
   const [fSource, setFSource] = useState("");
   const [fGender, setFGender] = useState("");
   const [fVacancy, setFVacancy] = useState("");
+  const [fQuality, setFQuality] = useState("");
   const [sortBy, setSortBy] = useState("newest");
   const [showFilters, setShowFilters] = useState(true);
   const [editMode, setEditMode] = useState(false);
@@ -124,6 +125,7 @@ function Pipeline({
       const vacLeadIds = new Set(candidates.filter(c => String(c.vacancyId) === String(fVacancy)).map(c => c.leadId));
       if (!vacLeadIds.has(l.id)) return false;
     }
+    if (fQuality && l.quality !== fQuality) return false;
     return true;
   });
 
@@ -557,6 +559,16 @@ function Pipeline({
               ))}
             </select>
           )}
+          <select
+            value={fQuality}
+            onChange={(e) => setFQuality(e.target.value)}
+            style={{ ...inpS, width: "auto", fontSize: 11 }}
+          >
+            <option value="">Barcha sifat</option>
+            <option value="Sifatli">✅ Sifatli</option>
+            <option value="O'rtacha">🟡 O'rtacha</option>
+            <option value="Sifatsiz">🔴 Sifatsiz</option>
+          </select>
           <label
             style={{
               display: "flex",
@@ -600,6 +612,7 @@ function Pipeline({
               setFSource("");
               setFGender("");
               setFVacancy("");
+              setFQuality("");
             }}
             style={{
               padding: "4px 9px",
@@ -1108,6 +1121,20 @@ function Pipeline({
                             }}
                           >
                             {lead.position}
+                          </span>
+                        )}
+                        {lead.quality && (
+                          <span
+                            style={{
+                              fontSize: 8,
+                              borderRadius: 3,
+                              padding: "0 4px",
+                              fontWeight: 700,
+                              background: lead.quality === "Sifatli" ? `${T.green}22` : lead.quality === "O'rtacha" ? `${T.yellow}22` : `${T.red}22`,
+                              color: lead.quality === "Sifatli" ? T.green : lead.quality === "O'rtacha" ? T.yellow : T.red,
+                            }}
+                          >
+                            {lead.quality === "Sifatli" ? "✅" : lead.quality === "O'rtacha" ? "🟡" : "🔴"} {lead.quality}
                           </span>
                         )}
                       </div>
