@@ -507,7 +507,7 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
       )}
 
       {/* Alerts */}
-      {(overdueTask > 0 || soonTask > 0 || lostLeads > 50) && (
+      {(overdueTask > 0 || soonTask > 0 || visaLeads > 0 || contractLeads > 5) && (
         <div
           style={{
             display: "flex",
