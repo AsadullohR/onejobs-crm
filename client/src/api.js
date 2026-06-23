@@ -113,6 +113,7 @@ export const candidatesAPI = {
 export const notifAPI = {
   getAll: () => req("GET", "/api/notifications"),
   create: (message, type) => req("POST", "/api/notifications", { message, type }),
+  sendTo: (message, type, userIds) => req("POST", "/api/notifications/send", { message, type, userIds }),
   markRead: (id) => req("PUT", `/api/notifications/${id}/read`, {}),
   markAllRead: () => req("PUT", "/api/notifications/read-all", {}),
   delete: (id) => req("DELETE", `/api/notifications/${id}`),

@@ -78,13 +78,19 @@ export default function App() {
   const [showImport,setShowImport]=useState(false);
   const T=mkT(dark);
 
-const addNotif=useCallback((msg,type="info")=>{
+const addNotif=useCallback((msg,type="info",recipients=null)=>{
+  // recipients: null = only current user; array of user IDs = those specific users
   const local={id:uid(),msg,type,at:new Date().toISOString(),read:false};
   setNotifs(p=>[local,...p].slice(0,100));
-  // persist to DB if user is logged in
-  notifAPI.create(msg,type).then(saved=>{
-    setNotifs(p=>p.map(n=>n.id===local.id?{...n,id:saved.id}:n));
-  }).catch(()=>{});
+  if(recipients){
+    // Send to specific users; also show locally if current user is in the list
+    notifAPI.sendTo(msg,type,recipients).catch(()=>{});
+    setNotifs(p=>p.filter(n=>n.id!==local.id)); // remove local; will arrive on next poll
+  } else {
+    notifAPI.create(msg,type).then(saved=>{
+      setNotifs(p=>p.map(n=>n.id===local.id?{...n,id:saved.id}:n));
+    }).catch(()=>{});
+  }
 },[]);
 const markRead=(id)=>{
   setNotifs(p=>p.map(n=>n.id===id?{...n,read:true}:n));
@@ -237,7 +243,11 @@ const deleteLead = useCallback(async (id) => {
   const addTask=useCallback(async t=>{
     // Optimistically add to local state
     setTasks(p=>[...p,t]);
-    addNotif(`📋 Yangi vazifa: ${t.title} → ${team.find(u=>u.id===t.assignee)?.name||'?'}`);
+    // Notify: assignee + all admins/managers (not the current user again — sendTo handles DB only)
+    const supervisors = team.filter(u=>u.role==="admin"||u.role==="manager").map(u=>u.id);
+    const recipients = [...new Set([t.assignee, ...supervisors])];
+    const assigneeName = team.find(u=>u.id===t.assignee)?.name||'?';
+    addNotif(`📋 Yangi vazifa: ${t.title} → ${assigneeName}`, "info", recipients);
     try {
       const saved = await tasksAPI.create({
         title:t.title, description:t.desc||'',
@@ -245,11 +255,7 @@ const deleteLead = useCallback(async (id) => {
         priority:t.priority||'medium', status:t.status||'todo',
         dueDate:t.due||null,
       });
-      // Replace temp task with real DB id
-      setTasks(p=>p.map(x=>x.id===t.id ? {
-        ...x,
-        id:String(saved.id),
-      } : x));
+      setTasks(p=>p.map(x=>x.id===t.id ? {...x, id:String(saved.id)} : x));
     } catch(err){ console.warn('Task save failed:', err.message); }
   },[addNotif, team]);
   const openLead=l=>setDrawer(l||{id:`tmp-${Date.now()}`,name:"",phone:"",telegram:"",status:"Yangi",country:"",sector:"",position:"",ownerSales:null,ownerConsult:null,ownerDocs:null,source:user?.role==="partner"?user.name:"",gender:"",comment:"",q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,q1R:null,q2R:null,q3R:null,xbaR:null,cv:{},history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)});

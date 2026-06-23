@@ -684,6 +684,22 @@ app.get("/api/notifications", auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Send notification to multiple specific users (for task assignments etc.)
+app.post("/api/notifications/send", auth, async (req, res) => {
+  const { message, type, userIds } = req.body;
+  if (!Array.isArray(userIds) || !userIds.length) return res.json({ ok: true });
+  try {
+    const unique = [...new Set(userIds.map(Number).filter(Boolean))];
+    await Promise.all(unique.map(uid =>
+      pool.query(
+        "INSERT INTO notifications (user_id, message, type) VALUES ($1,$2,$3)",
+        [uid, message, type || "info"]
+      )
+    ));
+    res.json({ ok: true, sent: unique.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post("/api/notifications", auth, async (req, res) => {
   const { message, type } = req.body;
   try {
