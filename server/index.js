@@ -249,6 +249,12 @@ app.post("/api/leads", auth, async (req, res) => {
         }
       }
     }
+    // Fetch old status/xba before upsert for change detection
+    const oldRow = await pool.query(`SELECT status, xba, owner_sales FROM leads WHERE id=$1`, [id]);
+    const oldStatus = oldRow.rows[0]?.status || null;
+    const oldXba = oldRow.rows[0]?.xba || false;
+    const oldOwner = oldRow.rows[0]?.owner_sales || null;
+
     // Name duplicate check removed — similar names are allowed
     const { rows } = await pool.query(
       `
@@ -299,7 +305,35 @@ app.post("/api/leads", auth, async (req, res) => {
         l.qualityNote || null,
       ],
     );
-    res.json(rows[0]);
+    const saved = rows[0];
+    const newStatus = saved.status;
+    const newOwner = saved.owner_sales || l.ownerSales || null;
+
+    // Log status change
+    if (newStatus && newStatus !== oldStatus && newOwner) {
+      pool.query(
+        `INSERT INTO status_log (lead_id, owner_id, status, logged_at) VALUES ($1,$2,$3,NOW())`,
+        [saved.id, newOwner, newStatus]
+      ).catch(() => {});
+    }
+
+    // XBA payment notification
+    const newXba = saved.xba || l.xba || false;
+    if (newXba && !oldXba && newOwner) {
+      pool.query(
+        `INSERT INTO notifications (user_id, message, type, created_at) VALUES ($1,$2,'xba_payment',NOW())`,
+        [newOwner, `💰 XBA To'lov! ${saved.name} to'lov qildi! 🎉`]
+      ).catch(() => {});
+    }
+    // Also log when status moves to "XBA To'lov qildi"
+    if (newStatus === "XBA To'lov qildi" && oldStatus !== "XBA To'lov qildi" && newOwner) {
+      pool.query(
+        `INSERT INTO notifications (user_id, message, type, created_at) VALUES ($1,$2,'xba_payment',NOW())`,
+        [newOwner, `💰 XBA To'lov! ${saved.name} to'lov qildi! 🎉`]
+      ).catch(() => {});
+    }
+
+    res.json(saved);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -811,6 +845,41 @@ app.get("/api/stats", auth, async (req, res) => {
       finance: finance.rows,
       sources: sources.rows,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── EMPLOYEE STATS ──────────────────────────────────────────────────────────
+app.get("/api/stats/employees", auth, async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const dateFrom = from || new Date(Date.now() - 30*24*60*60*1000).toISOString();
+    const dateTo = to || new Date().toISOString();
+
+    const { rows } = await pool.query(`
+      SELECT
+        u.id,
+        u.name,
+        u.color,
+        COUNT(*) FILTER (WHERE sl.status = 'Qilindi') AS qilindi,
+        COUNT(*) FILTER (WHERE sl.status = 'Boglanildi') AS boglanildi,
+        COUNT(*) FILTER (WHERE sl.status IN ('Onlayn Suhbat Uchun','Onlayn Suhbat')) AS onlayn_suhbat,
+        COUNT(*) FILTER (WHERE sl.status = 'Suhbat') AS suhbat,
+        COUNT(*) FILTER (WHERE sl.status = 'Shartnoma qildi') AS shartnoma,
+        COUNT(*) FILTER (WHERE sl.status = 'XBA To''lov qildi') AS xba_tolov,
+        COUNT(*) FILTER (WHERE sl.status = 'Jo''nab ketdi') AS jonab_ketdi,
+        COUNT(*) AS total_actions
+      FROM users u
+      LEFT JOIN status_log sl ON sl.owner_id = u.id
+        AND sl.logged_at >= $1::timestamptz
+        AND sl.logged_at <= $2::timestamptz
+      WHERE u.role IN ('sales','manager','admin')
+      GROUP BY u.id, u.name, u.color
+      ORDER BY qilindi DESC, boglanildi DESC
+    `, [dateFrom, dateTo]);
+
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1641,7 +1710,15 @@ app.listen(PORT, async () => {
   try {
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS quality TEXT`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS quality_note TEXT`);
-    console.log("   Migrations: quality columns OK");
+    await pool.query(`CREATE TABLE IF NOT EXISTS status_log (
+      id SERIAL PRIMARY KEY,
+      lead_id TEXT,
+      owner_id INTEGER,
+      status TEXT NOT NULL,
+      logged_at TIMESTAMPTZ DEFAULT NOW()
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_status_log_owner_date ON status_log(owner_id, logged_at)`);
+    console.log("   Migrations: quality + status_log OK");
   } catch (e) {
     console.error("   Migrations error:", e.message);
   }

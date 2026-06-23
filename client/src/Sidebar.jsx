@@ -15,14 +15,15 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     {k:"finance",   l:"Moliya",               ic:I.money, group:"work"},
     {k:"visa",      l:"Viza Ma'lumotlari",    ic:I.flag,  group:"info"},
     {k:"team",      l:"Jamoa",                ic:I.team,  group:"admin"},
+    {k:"turnir",    l:"Turnir 🏆",            ic:"🏆",     group:"main"},
     {k:"settings",  l:"Sozlamalar",           ic:I.gear,  group:"admin"},
     {k:"employer",  l:"Vakansiyalarim",       ic:"💼",     group:"main"},
   ];
   const allowed={
     admin:   NAV.map(n=>n.k),
-    manager: ["dashboard","pipeline","leads","tasks","finance","team","settings","visa","vacancies"],
-    sales:   ["dashboard","pipeline","leads","tasks","vacancies","visa"],
-    docs:    ["dashboard","pipeline","leads","tasks","vacancies","visa"],
+    manager: ["dashboard","pipeline","leads","tasks","finance","team","settings","visa","vacancies","turnir"],
+    sales:   ["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],
+    docs:    ["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],
     partner: ["leads","pipeline","vacancies"],
     employer:["employer"],
     finance_manager:["dashboard","finance","vacancies"],

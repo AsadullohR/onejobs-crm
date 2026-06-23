@@ -31,6 +31,8 @@ import { EmployerPortal } from "./EmployerPortal.jsx";
 import { ImportModal } from "./ImportModal.jsx";
 import { MobileFinance, MobileTasks, MobileDashboard, MobileLeads } from "./MobileViews.jsx";
 import { TrackPage } from "./TrackPage.jsx";
+import { TurnirPage } from "./TurnirPage.jsx";
+import { XbaToast } from "./XbaToast.jsx";
 
 export default function App() {
   // Public tracking page — no login required
@@ -76,6 +78,8 @@ export default function App() {
   const [candidates,setCandidates]=useState([]);
   const [showNotif,setShowNotif]=useState(false);
   const [showImport,setShowImport]=useState(false);
+  const [xbaToasts,setXbaToasts]=useState([]);
+  const seenXbaIds = useRef(new Set());
   const T=mkT(dark);
 
 const addNotif=useCallback((msg,type="info",recipients=null)=>{
@@ -339,7 +343,14 @@ const deleteLead = useCallback(async (id) => {
         })));
         if(extExpsRes?.length) setExtExps(extExpsRes);
         if(debtsRes?.length) setDebts(debtsRes);
-        if(notifsRes?.length) setNotifs(notifsRes);
+        if(notifsRes?.length) {
+          setNotifs(notifsRes);
+          // Show XBA toast for any new xba_payment notifications
+          notifsRes.filter(n => n.type === 'xba_payment' && !n.read && !seenXbaIds.current.has(n.id)).forEach(n => {
+            seenXbaIds.current.add(n.id);
+            setXbaToasts(p => [...p, { id: n.id, message: n.message }]);
+          });
+        }
         if(cfgRes && typeof cfgRes === 'object') {
           const parse = v => { if(typeof v === 'string') { try { return JSON.parse(v); } catch(e) { return null; } } return v; };
           const savedRoles = parse(cfgRes.roles);
@@ -536,6 +547,7 @@ const deleteLead = useCallback(async (id) => {
           {page==="finance"    && !isMobile && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts} roles={roles} extExps={extExps} setExtExps={setExtExps}/>}
           {page==="finance"    && isMobile && <MobileFinance txns={txns} setTxns={setTxns} leads={leads} extExps={extExps} user={user} config={config} addNotif={addNotif}/>}
           {page==="employer"   && user.role==="employer" && <EmployerPortal user={user} leads={leads} team={team} addNotif={addNotif}/>}
+          {page==="turnir"     && <TurnirPage user={user} team={team} />}
         </div>
       </div>
       {isMobile && (()=>{
@@ -576,6 +588,7 @@ const deleteLead = useCallback(async (id) => {
           onDone={()=>{ addNotif("✅ Import muvaffaqiyatli!","success"); }}
         />
       )}
+      <XbaToast toasts={xbaToasts} onDismiss={id => setXbaToasts(p => p.filter(t => t.id !== id))} />
     </div>
   </ThemeCtx.Provider>;
 }
