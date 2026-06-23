@@ -150,6 +150,8 @@ export const reportsAPI = {
 export const importAPI = {
   bulkLeads: (leads, ownerSalesId, skipDuplicates = true) =>
     req("POST", "/api/leads/bulk", { leads, ownerSalesId, skipDuplicates }),
+  bulkFbLeads: (leads, ownerSalesId) =>
+    req("POST", "/api/leads/bulk", { leads, ownerSalesId, checkByPhone: true }),
   checkDuplicate: (name, clientNo) =>
     req("POST", "/api/leads/check-duplicate", { name, clientNo }),
   clearLeadFinance: (leadId) =>

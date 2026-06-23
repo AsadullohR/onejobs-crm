@@ -345,6 +345,7 @@ app.post("/api/leads/bulk", auth, async (req, res) => {
     const leads = req.body.leads || [];
     const ownerSalesId = req.body.ownerSalesId || null;
     const skipDuplicates = req.body.skipDuplicates !== false;
+    const checkByPhone = req.body.checkByPhone === true;
 
     if (!Array.isArray(leads)) {
       return res.status(400).json({ error: "leads must be an array" });
@@ -365,8 +366,20 @@ app.post("/api/leads/bulk", auth, async (req, res) => {
       const status = statusMap[l.status] || l.status || "Yangi";
       const sofFoyda = l.netBalance || l.sofFoyda || null;
       const createdAt = l.createdAt || null;
+      const source = l.source || null;
+      const reklamaName = l.reklama_name || null;
 
-      if (skipDuplicates && (clientNo || l.name)) {
+      if (checkByPhone && l.phone) {
+        const dupCheck = await client.query(
+          `SELECT id FROM leads WHERE phone=$1 LIMIT 1`,
+          [l.phone]
+        );
+        if (dupCheck.rows.length > 0) {
+          skipped++;
+          skippedNames.push(l.name);
+          continue;
+        }
+      } else if (skipDuplicates && (clientNo || l.name)) {
         const dupCheck = await client.query(
           `SELECT id FROM leads WHERE (comment LIKE $1 AND $1 != '') OR (LOWER(name)=LOWER($2) AND $2 != '') LIMIT 1`,
           [`%${clientNo}%`, l.name || ""]
@@ -380,16 +393,19 @@ app.post("/api/leads/bulk", auth, async (req, res) => {
 
       const result = await client.query(
         `INSERT INTO leads
-          (id, name, phone, status, country, sector, comment, note, owner_sales, dest, sof_foyda, cv, docs, history, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'{}','{}','[]', COALESCE($12::timestamptz, NOW()))
+          (id, name, phone, status, country, sector, comment, note, owner_sales, dest, sof_foyda, source, reklama_name, cv, docs, history, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($13,''),NULLIF($14,''),'{}','{}','[]', COALESCE($12::timestamptz, NOW()))
          ON CONFLICT (id) DO UPDATE SET
            name=EXCLUDED.name, status=EXCLUDED.status, country=EXCLUDED.country,
            sector=EXCLUDED.sector, comment=EXCLUDED.comment, note=EXCLUDED.note,
            owner_sales=COALESCE(EXCLUDED.owner_sales, leads.owner_sales),
-           dest=EXCLUDED.dest, sof_foyda=EXCLUDED.sof_foyda, updated_at=NOW()
+           dest=EXCLUDED.dest, sof_foyda=EXCLUDED.sof_foyda,
+           source=COALESCE(EXCLUDED.source, leads.source),
+           reklama_name=COALESCE(EXCLUDED.reklama_name, leads.reklama_name),
+           updated_at=NOW()
          RETURNING xmax`,
         [id, l.name||"", l.phone||"", status, country, sector,
-         clientNo, l.note||"", ownerSalesId, l.dest||"", sofFoyda, createdAt]
+         clientNo, l.note||"", ownerSalesId, l.dest||"", sofFoyda, createdAt, source||"", reklamaName||""]
       );
 
       if (result.rows[0].xmax === "0") inserted++;
