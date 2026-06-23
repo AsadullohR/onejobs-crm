@@ -651,16 +651,16 @@ function VacancyDetail({
                   </div>
                   <div>
                     <label style={labS}>Country / City</label>
-                    <select
+                    <input
+                      list="vacancy-countries"
                       value={form.country || ""}
                       onChange={(e) => f("country", e.target.value)}
                       style={inpS}
-                    >
-                      <option value="">Select...</option>
-                      {COUNTRIES.map((c) => (
-                        <option key={c}>{c}</option>
-                      ))}
-                    </select>
+                      placeholder="Select or type..."
+                    />
+                    <datalist id="vacancy-countries">
+                      {COUNTRIES.map((c) => <option key={c} value={c} />)}
+                    </datalist>
                   </div>
                   <div>
                     <label style={labS}>Job Type / Sector</label>
@@ -2074,16 +2074,13 @@ function Vacancies({ leads, user, team, roles }) {
               </div>
               <div>
                 <label style={lab(T)}>Country</label>
-                <select
+                <input
+                  list="vacancy-countries"
                   value={newForm.country || ""}
                   onChange={(e) => nf("country", e.target.value)}
                   style={inpS}
-                >
-                  <option value="">Select...</option>
-                  {COUNTRIES.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
+                  placeholder="Select or type..."
+                />
               </div>
               <div>
                 <label style={lab(T)}>Job Type / Sector</label>
