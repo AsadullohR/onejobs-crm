@@ -230,7 +230,21 @@ const [form,setForm]=useState({
               <div style={{marginTop:4}}>
                 {form[rcp]?(
                   <div style={{display:"flex",gap:5,alignItems:"center"}}>
-                    <a href={form[rcp]} target="_blank" rel="noopener" style={{fontSize:9,color:c,textDecoration:"none",background:`${c}15`,border:`1px solid ${c}44`,borderRadius:4,padding:"2px 7px"}}>📎 Chek ko'rish</a>
+                    <button onClick={()=>{
+                      const url=form[rcp];
+                      if(!url)return;
+                      if(url.startsWith("data:")){
+                        const [header,b64]=url.split(",");
+                        const mime=header.match(/:(.*?);/)?.[1]||"application/octet-stream";
+                        const bytes=atob(b64);
+                        const arr=new Uint8Array(bytes.length);
+                        for(let i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
+                        const blob=new Blob([arr],{type:mime});
+                        window.open(URL.createObjectURL(blob),"_blank");
+                      } else {
+                        window.open(url,"_blank");
+                      }
+                    }} style={{fontSize:9,color:c,textDecoration:"none",background:`${c}15`,border:`1px solid ${c}44`,borderRadius:4,padding:"2px 7px",cursor:"pointer"}}>📎 Chek ko'rish</button>
                     <button onClick={()=>f(rcp,null)} style={{fontSize:9,color:T.red,background:"none",border:"none",cursor:"pointer"}}>✕</button>
                   </div>
                 ):(
