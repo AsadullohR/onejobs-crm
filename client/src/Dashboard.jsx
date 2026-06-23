@@ -53,8 +53,8 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
     return true;
   });
 
-  const total = leads.length; // always total for funnel
-  const gone = leads.filter((l) => DONE.includes(l.status)).length;
+  const total = filteredLeads.length;
+  const gone = filteredLeads.filter((l) => DONE.includes(l.status)).length;
   const myT = tasks.filter(
     (t) => t.assignee === user.id && t.status !== "done",
   );
@@ -65,7 +65,7 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
   const totalExp = filteredTxns
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + t.amount, 0);
-  const sofF = leads
+  const sofF = filteredLeads
     .filter((l) => DONE.includes(l.status) && l.sofFoyda)
     .reduce((s, l) => s + Number(l.sofFoyda || 0), 0);
   // Funnel analytics with conversion %
@@ -84,12 +84,12 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
   ];
   const fData = funnelGroups.map(([g, stages]) => ({
     g,
-    n: leads.filter((l) => stages.includes(l.status)).length,
+    n: filteredLeads.filter((l) => stages.includes(l.status)).length,
   }));
 
   // Source analytics with revenue
   const bySrc = Object.entries(
-    leads.reduce((m, l) => {
+    filteredLeads.reduce((m, l) => {
       if (l.source) {
         m[l.source] = m[l.source] || {
           count: 0,
@@ -111,7 +111,7 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
 
   // Country analytics with revenue
   const byCon = Object.entries(
-    leads.reduce((m, l) => {
+    filteredLeads.reduce((m, l) => {
       if (l.country) {
         const c = l.country.split(",")[0].trim();
         m[c] = m[c] || { count: 0, gone: 0, revenue: 0 };
@@ -129,7 +129,7 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
   const teamStats = team
     .filter((t) => ["sales", "manager", "docs"].includes(t.role))
     .map((t) => {
-      const myLeads = leads.filter(
+      const myLeads = filteredLeads.filter(
         (l) =>
           l.ownerSales === t.id ||
           l.ownerConsult === t.id ||
@@ -138,17 +138,17 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
       const myGone = myLeads.filter((l) => DONE.includes(l.status)).length;
       const conv =
         myLeads.length > 0 ? ((myGone / myLeads.length) * 100).toFixed(0) : 0;
-      const kpi = leads.filter(
+      const kpi = filteredLeads.filter(
         (l) =>
           (l.ownerSales === t.id && l.kpiSales) ||
           (l.ownerConsult === t.id && l.kpiConsult) ||
           (l.ownerDocs === t.id && l.kpiDocs),
       ).length;
-      const inc = txns
+      const inc = filteredTxns
         .filter(
           (x) =>
             x.type === "income" &&
-            leads.find(
+            filteredLeads.find(
               (l) =>
                 l.id === x.leadId &&
                 (l.ownerSales === t.id ||
@@ -162,35 +162,26 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
     .filter((x) => x.total > 0)
     .sort((a, b) => b.gone - a.gone);
 
-  // Alerts
+  // Alerts (always unfiltered — these are current state, not date-range metrics)
   const overdueTask = tasks.filter(
     (t) => t.status !== "done" && isOD(t.due),
   ).length;
   const soonTask = tasks.filter(
     (t) => t.status !== "done" && isSoon(t.due),
   ).length;
-  const lostLeads = leads.filter((l) => LOST.includes(l.status)).length;
-  const activeLeads = leads.filter(
-    (l) => ![...DONE, ...LOST].includes(l.status),
-  ).length;
-  const contractLeads = leads.filter(
+  const contractLeads = filteredLeads.filter(
     (l) => l.status === "Shartnoma qildi",
   ).length;
-  const visaLeads = leads.filter((l) =>
+  const visaLeads = filteredLeads.filter((l) =>
     ["Vizaga Topshirildi", "Elchixonaga Hujjatlar Tayyor"].includes(l.status),
   ).length;
 
   // KPIs
-  const thisMonthLeads = leads.filter(
-    (l) =>
-      l.createdAt &&
-      new Date(l.createdAt) >
-        new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-  ).length;
+  const periodLabel = preset === "all" ? "barcha vaqt" : preset === "month" ? "bu oy" : preset === "last30" ? "so'ngi 30 kun" : preset === "year" ? "bu yil" : `${dateFrom}–${dateTo}`;
   const contactRate =
     total > 0
       ? (
-          (leads.filter((l) => !["Yangi", "Qilindi"].includes(l.status))
+          (filteredLeads.filter((l) => !["Yangi", "Qilindi"].includes(l.status))
             .length /
             total) *
           100
@@ -377,7 +368,7 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
         }}
       >
         {[
-          ["📥", "Bu Oy Leadlar", thisMonthLeads, "yangi", "#6366f1"],
+          ["📥", preset === "all" ? "Jami Leadlar" : preset === "month" ? "Bu Oy Leadlar" : preset === "last30" ? "30 kun Leadlar" : preset === "year" ? "Bu Yil Leadlar" : "Leadlar", total, periodLabel, "#6366f1"],
           ["📞", "Aloqa %", `${contactRate}%`, "kontakt qilingan", "#f59e0b"],
           [
             "📄",
@@ -452,14 +443,14 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
               "💚",
               "Jami Kirim",
               `+${fmtMs(totalInc)} so'm`,
-              "barcha vaqt",
+              periodLabel,
               T.green,
             ],
             [
               "🔴",
               "Jami Chiqim",
               `-${fmtMs(totalExp)} so'm`,
-              "barcha vaqt",
+              periodLabel,
               T.red,
             ],
             [
