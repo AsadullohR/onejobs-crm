@@ -60,7 +60,7 @@ function parseFbCSV(text) {
       name,
       phone: rawPhone,
       source: "Target",
-      reklama_name: adName,
+      note: adName || "",
       createdAt: createdTime || null,
       status: "Yangi",
     });

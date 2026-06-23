@@ -367,7 +367,6 @@ app.post("/api/leads/bulk", auth, async (req, res) => {
       const sofFoyda = l.netBalance || l.sofFoyda || null;
       const createdAt = l.createdAt || null;
       const source = l.source || null;
-      const reklamaName = l.reklama_name || null;
 
       if (checkByPhone && l.phone) {
         const dupCheck = await client.query(
@@ -393,19 +392,18 @@ app.post("/api/leads/bulk", auth, async (req, res) => {
 
       const result = await client.query(
         `INSERT INTO leads
-          (id, name, phone, status, country, sector, comment, note, owner_sales, dest, sof_foyda, source, reklama_name, cv, docs, history, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($13,''),NULLIF($14,''),'{}','{}','[]', COALESCE($12::timestamptz, NOW()))
+          (id, name, phone, status, country, sector, comment, note, owner_sales, dest, sof_foyda, source, cv, docs, history, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($13,''),'{}','{}','[]', COALESCE($12::timestamptz, NOW()))
          ON CONFLICT (id) DO UPDATE SET
            name=EXCLUDED.name, status=EXCLUDED.status, country=EXCLUDED.country,
            sector=EXCLUDED.sector, comment=EXCLUDED.comment, note=EXCLUDED.note,
            owner_sales=COALESCE(EXCLUDED.owner_sales, leads.owner_sales),
            dest=EXCLUDED.dest, sof_foyda=EXCLUDED.sof_foyda,
            source=COALESCE(EXCLUDED.source, leads.source),
-           reklama_name=COALESCE(EXCLUDED.reklama_name, leads.reklama_name),
            updated_at=NOW()
          RETURNING xmax`,
         [id, l.name||"", l.phone||"", status, country, sector,
-         clientNo, l.note||"", ownerSalesId, l.dest||"", sofFoyda, createdAt, source||"", reklamaName||""]
+         clientNo, l.note||"", ownerSalesId, l.dest||"", sofFoyda, createdAt, source||""]
       );
 
       if (result.rows[0].xmax === "0") inserted++;
