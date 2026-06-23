@@ -360,7 +360,7 @@ app.post("/api/leads/bulk", auth, async (req, res) => {
     const skippedNames = [];
 
     for (const l of leads) {
-      const id = l.uid || l.id || `IMP-${Date.now()}-${Math.floor(Math.random() * 999999)}`;
+      const id = l.uid || l.id || `NO-${Date.now()}${Math.floor(Math.random() * 999)}`;
       const clientNo = l.clientId || "";
       const destParts = (l.dest || l.country || "").split(" ");
       const country = destParts[0] || "";

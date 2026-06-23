@@ -56,7 +56,6 @@ function parseFbCSV(text) {
     if (!name && !rawPhone) continue;
 
     results.push({
-      uid: `FB-${fbId}`,
       name,
       phone: rawPhone,
       source: "Target",
