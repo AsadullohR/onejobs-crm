@@ -42,7 +42,9 @@ function Tasks({tasks, setTasks, leads, user, team, roles, addNotif, open}) {
     setTasks(p=>isNew ? [...p,taskData] : p.map(t=>t.id===taskData.id?taskData:t));
     if(isNew && addNotif){
       const who = team.find(u=>u.id===taskData.assignee)?.name||'?';
-      addNotif(`📋 Yangi vazifa: ${taskData.title} → ${who}`);
+      const supervisors = team.filter(u=>u.role==="admin"||u.role==="manager").map(u=>u.id);
+      const recipients = [...new Set([taskData.assignee, ...supervisors])];
+      addNotif(`📋 Yangi vazifa: ${taskData.title} → ${who}`, "info", recipients);
     }
     setModal(null);
 
