@@ -164,6 +164,84 @@ function ExternalExpenses({ user, addNotif }) {
   );
 }
 
+// ─── RECENT PAYERS ───────────────────────────────────────────────────────────
+function RecentPayers({ filtTxns, leads, T }) {
+  const [showAll, setShowAll] = useState(false);
+
+  const payers = useMemo(() => {
+    // Group income txns by leadId
+    const byLead = {};
+    filtTxns.filter(t => t.type === "income" && t.leadId).forEach(t => {
+      if (!byLead[t.leadId]) byLead[t.leadId] = { totalInc: 0, lastDate: "", txnCount: 0 };
+      byLead[t.leadId].totalInc += t.amount;
+      byLead[t.leadId].txnCount += 1;
+      if (!byLead[t.leadId].lastDate || t.date > byLead[t.leadId].lastDate) byLead[t.leadId].lastDate = t.date;
+    });
+    // Also sum expenses per lead
+    const expByLead = {};
+    filtTxns.filter(t => t.type === "expense" && t.leadId).forEach(t => {
+      expByLead[t.leadId] = (expByLead[t.leadId] || 0) + t.amount;
+    });
+    return Object.entries(byLead)
+      .map(([id, data]) => {
+        const lead = leads.find(l => l.id === id);
+        return { id, name: lead?.name || id, status: lead?.status || "—", totalInc: data.totalInc, totalExp: expByLead[id] || 0, lastDate: data.lastDate, txnCount: data.txnCount };
+      })
+      .sort((a, b) => b.lastDate.localeCompare(a.lastDate));
+  }, [filtTxns, leads]);
+
+  const visible = showAll ? payers : payers.slice(0, 10);
+
+  if (payers.length === 0) return null;
+
+  return (
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: `1px solid ${T.border}` }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: T.text }}>💳 To'lov qilgan mijozlar <span style={{ fontSize: 10, color: T.muted, fontWeight: 400 }}>({payers.length} ta)</span></div>
+        {payers.length > 10 && (
+          <button onClick={() => setShowAll(s => !s)} style={{ fontSize: 10, color: T.accent, background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}>
+            {showAll ? "Kamroq ko'rish" : `Barchasini ko'rish (${payers.length})`}
+          </button>
+        )}
+      </div>
+      {/* Header */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 90px 90px 80px", gap: 0, padding: "7px 20px", background: T.card2, fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>
+        <span>Mijoz</span>
+        <span style={{ textAlign: "right" }}>Kirim</span>
+        <span style={{ textAlign: "right" }}>Chiqim</span>
+        <span style={{ textAlign: "right" }}>Balans</span>
+        <span style={{ textAlign: "right" }}>Oxirgi to'lov</span>
+        <span style={{ textAlign: "center" }}>To'lovlar</span>
+      </div>
+      {visible.map((p, i) => {
+        const net = p.totalInc - p.totalExp;
+        return (
+          <div key={p.id} style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 90px 90px 80px", gap: 0, padding: "10px 20px", borderTop: `1px solid ${T.border}`, background: i % 2 === 0 ? "transparent" : `${T.border}30`, alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.text }}>{p.name}</div>
+              <div style={{ fontSize: 9, color: T.muted }}>{p.id} · {p.status}</div>
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.green, textAlign: "right" }}>{fmtMs(p.totalInc)}</div>
+            <div style={{ fontSize: 11, color: T.red, textAlign: "right" }}>{p.totalExp > 0 ? `-${fmtMs(p.totalExp)}` : "—"}</div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: net >= 0 ? T.green : T.red, textAlign: "right" }}>{net >= 0 ? "+" : ""}{fmtMs(net)}</div>
+            <div style={{ fontSize: 10, color: T.muted, textAlign: "right" }}>{p.lastDate}</div>
+            <div style={{ fontSize: 10, color: T.muted, textAlign: "center" }}>{p.txnCount} ta</div>
+          </div>
+        );
+      })}
+      {/* Total row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 90px 90px 80px", gap: 0, padding: "10px 20px", borderTop: `2px solid ${T.border}`, background: T.card2 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: T.muted }}>JAMI ({payers.length} mijoz)</div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.green, textAlign: "right" }}>{fmtMs(payers.reduce((s, p) => s + p.totalInc, 0))}</div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.red, textAlign: "right" }}>-{fmtMs(payers.reduce((s, p) => s + p.totalExp, 0))}</div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.text, textAlign: "right" }}>{fmtMs(payers.reduce((s, p) => s + p.totalInc - p.totalExp, 0))}</div>
+        <div />
+        <div style={{ fontSize: 10, color: T.muted, textAlign: "center" }}>{payers.reduce((s,p)=>s+p.txnCount,0)} ta</div>
+      </div>
+    </div>
+  );
+}
+
 // ─── DASHBOARD TAB ────────────────────────────────────────────────────────────
 function FinanceDashboard({ txns, leads, extExps }) {
   const T = useT();
@@ -267,7 +345,7 @@ function FinanceDashboard({ txns, leads, extExps }) {
       </div>
 
       {/* Expense breakdown bars */}
-      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20 }}>
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 20, marginBottom: 16 }}>
         <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 14 }}>Xarajat taqsimoti</div>
         {totalExp === 0
           ? <div style={{ color: T.muted, fontSize: 11 }}>Bu davrda xarajat yo'q</div>
@@ -290,6 +368,9 @@ function FinanceDashboard({ txns, leads, extExps }) {
               );
             })}
       </div>
+
+      {/* Recent paid customers */}
+      <RecentPayers filtTxns={filtTxns} leads={leads} T={T} />
     </div>
   );
 }
