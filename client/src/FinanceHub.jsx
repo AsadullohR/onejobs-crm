@@ -273,7 +273,7 @@ function FinanceDashboard({ txns, leads, extExps }) {
   const extTotal  = filtExt.reduce((s, e) => s + Number(e.amount), 0);
   const totalExp  = salaries + clientExp + extTotal;
   const profit    = income - totalExp;
-  const outstanding = leads.filter(l => l.sofFoyda).reduce((s, l) => s + (l.sofFoyda || 0), 0);
+  const outstanding = leads.filter(l => l.sofFoyda).reduce((s, l) => s + Number(l.sofFoyda || 0), 0);
 
   const RANGES = [
     { k: "week",    l: "Hafta" },
