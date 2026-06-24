@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
-import { txnAPI } from "./api.js";
+import { txnAPI, leadsAPI } from "./api.js";
 import {
   uid,
   fmtM,
@@ -92,26 +92,30 @@ function Finance({
   const cf = cur ? lf(cur.id) : { inc: 0, exp: 0, txns: [] };
   const curDebts = cur ? debts.filter((d) => d.leadId === cur.id) : [];
 
-  const markTugagan = (lead) => {
+  const markTugagan = async (lead) => {
     const cf = lf(lead.id);
     const netProfit = cf.inc - cf.exp;
-    if (
-      !window.confirm(
-        `"${lead.name}" uchun Tugagan belgilansinmi?\nTasdiqlangan foyda: ${fmtM(netProfit)} so'm`,
-      )
-    )
-      return;
-    setLeads((prev) =>
-      prev.map((l) =>
-        l.id === lead.id
-          ? { ...l, status: "Jo'nab ketdi", sofFoyda: netProfit }
-          : l,
-      ),
-    );
-    addNotif &&
-      addNotif(
-        `✅ ${lead.name} — Tugagan. Tasdiqlangan foyda: ${fmtMs(netProfit)} so'm`,
-      );
+    if (!window.confirm(`"${lead.name}" uchun Tugagan belgilansinmi?\nTasdiqlangan foyda: ${fmtM(netProfit)} so'm`)) return;
+    const updated = { ...lead, status: "Jo'nab ketdi", sofFoyda: netProfit };
+    setLeads(prev => prev.map(l => l.id === lead.id ? updated : l));
+    try {
+      await leadsAPI.save({ ...updated, ownerSales: updated.ownerSales||null, ownerConsult: updated.ownerConsult||null, ownerDocs: updated.ownerDocs||null });
+      addNotif && addNotif(`✅ ${lead.name} — Tugagan. Tasdiqlangan foyda: ${fmtMs(netProfit)} so'm`);
+    } catch(e) {
+      addNotif && addNotif(`❌ Saqlashda xato: ${e.message}`, "error");
+    }
+  };
+
+  const markQaytarish = async (lead) => {
+    if (!window.confirm(`"${lead.name}" ni faol holatga qaytarasizmi?\nTasdiqlangan foyda o'chadi.`)) return;
+    const updated = { ...lead, status: "Shartnoma qildi", sofFoyda: null };
+    setLeads(prev => prev.map(l => l.id === lead.id ? updated : l));
+    try {
+      await leadsAPI.save({ ...updated, ownerSales: updated.ownerSales||null, ownerConsult: updated.ownerConsult||null, ownerDocs: updated.ownerDocs||null });
+      addNotif && addNotif(`↩️ ${lead.name} — faol holatga qaytarildi`);
+    } catch(e) {
+      addNotif && addNotif(`❌ Saqlashda xato: ${e.message}`, "error");
+    }
   };
   const openAdd = (type = "income", leadId = "") => {
     const incomeCats = config?.txnInc || [
@@ -1013,21 +1017,36 @@ function Finance({
                 >
                   + Chiqim
                 </button>
-                {!DONE.includes(cur.status) && (
+                <button
+                  onClick={() => markTugagan(cur)}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: 6,
+                    background: "#166534",
+                    color: "#86EFAC",
+                    border: "1px solid #166534",
+                    cursor: "pointer",
+                    fontSize: 10,
+                    fontWeight: 700,
+                  }}
+                >
+                  ✈️ Tugagan
+                </button>
+                {DONE.includes(cur.status) && (
                   <button
-                    onClick={() => markTugagan(cur)}
+                    onClick={() => markQaytarish(cur)}
                     style={{
                       padding: "5px 10px",
                       borderRadius: 6,
-                      background: "#166534",
-                      color: "#86EFAC",
-                      border: "1px solid #166534",
+                      background: `${T.yellow}22`,
+                      color: T.yellow,
+                      border: `1px solid ${T.yellow}44`,
                       cursor: "pointer",
                       fontSize: 10,
                       fontWeight: 700,
                     }}
                   >
-                    ✈️ Tugagan
+                    ↩️ Qaytarish
                   </button>
                 )}
                 {cur.sofFoyda && (
