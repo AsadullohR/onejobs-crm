@@ -4,6 +4,7 @@
  */
 
 const express = require("express");
+const compression = require("compression");
 const pg = require("pg");
 const { Pool } = pg;
 // Return timestamps as ISO strings instead of Date objects
@@ -36,6 +37,7 @@ const pool = new Pool({
 });
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
+app.use(compression());
 app.use(
   cors({
     origin: (origin, cb) => cb(null, true), // allow all origins (needed for Tally/Meta)
@@ -253,7 +255,7 @@ app.post("/api/leads", auth, async (req, res) => {
       const digits = (l.phone.match(/\d/g) || []).join("");
       if (digits.length >= 7) {
         const phoneDup = await pool.query(
-          `SELECT id, name, phone, status FROM leads WHERE regexp_replace(phone,'[^0-9]','','g') LIKE $1 LIMIT 1`,
+          `SELECT id, name, phone, status FROM leads WHERE phone LIKE $1 LIMIT 1`,
           [`%${digits.slice(-9)}`]
         );
         if (phoneDup.rows.length > 0 && phoneDup.rows[0].id !== (l.id || "")) {
