@@ -173,7 +173,7 @@ function Finance({
           id: String(saved.id), leadId: saved.lead_id, type: saved.type,
           cat: saved.category || "", desc: saved.description || "",
           amount: Number(saved.amount), date: saved.date?.slice(0, 10) || payload.date,
-          by: saved.created_by,
+          by: saved.created_by, paymentMethod: payload.paymentMethod || 'cash',
         }]);
       }
       setModal(null);
