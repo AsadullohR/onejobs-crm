@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
-import { txnAPI, leadsAPI } from "./api.js";
+import { txnAPI, leadsAPI, debtsAPI } from "./api.js";
 import {
   uid,
   fmtM,
@@ -163,9 +163,9 @@ function Finance({
     try {
       const isEdit = txns.some((t) => t.id === form.id);
       if (isEdit) {
-        const saved = await txnAPI.update(form.id, payload);
+        await txnAPI.update(form.id, payload);
         setTxns((p) => p.map((t) => t.id === form.id
-          ? { ...t, ...payload, id: form.id, cat: payload.category, desc: payload.description }
+          ? { ...t, ...payload, id: form.id, cat: payload.category, desc: payload.description, paymentMethod: payload.paymentMethod }
           : t));
       } else {
         const saved = await txnAPI.create(payload);
@@ -402,40 +402,56 @@ function Finance({
         imported++;
       }
     });
+    // Persist new transactions to DB
+    const prevLen = txns.length;
+    const addedTxns = newTxns.slice(prevLen);
     setTxns(newTxns);
     setImportResult({ done: true, imported, updated });
     setShowImport(false);
     setImportText("");
     setCsvHeaders([]);
     setColMap({});
+    // Fire-and-forget: save each new txn to server
+    addedTxns.forEach(t => {
+      txnAPI.create({ leadId: t.leadId, type: t.type, cat: t.cat, desc: t.desc, amount: t.amount, date: t.date }).catch(() => {});
+    });
     addNotif && addNotif(`📥 Import: ${imported} yangi, ${updated} yangilandi`);
   };
 
   // Debts for current lead
-  const addDebt = () => {
+  const addDebt = async () => {
     if (!cur) return;
-    setDebts((p) => [
-      ...p,
-      {
-        id: uid(),
-        leadId: cur.id,
-        name: cur.name,
-        type: "client",
-        category: "",
-        dueDate: "",
-        desc: "",
-        amount: 0,
-        paid: false,
-        createdAt: new Date().toISOString().slice(0, 10),
-        by: user.id,
-      },
-    ]);
+    const payload = {
+      leadId: cur.id, name: cur.name, type: "client",
+      category: "", dueDate: "", description: "",
+      amount: 0, paid: false,
+    };
+    try {
+      const saved = await debtsAPI.create(payload);
+      setDebts(p => [...p, { id: String(saved.id), leadId: cur.id, name: cur.name, type: "client", category: "", dueDate: "", desc: "", amount: 0, paid: false, createdAt: new Date().toISOString().slice(0,10) }]);
+    } catch(e) { addNotif && addNotif("❌ Qarz qo'shilmadi: " + e.message, "error"); }
   };
-  const toggleDebt = (id) =>
-    setDebts((p) => p.map((d) => (d.id === id ? { ...d, paid: !d.paid } : d)));
-  const deleteDebt = (id) => setDebts((p) => p.filter((d) => d.id !== id));
-  const updateDebt = (id, k, v) =>
-    setDebts((p) => p.map((d) => (d.id === id ? { ...d, [k]: v } : d)));
+  const toggleDebt = async (id) => {
+    const debt = debts.find(d => d.id === id);
+    if (!debt) return;
+    const newPaid = !debt.paid;
+    setDebts(p => p.map(d => d.id === id ? { ...d, paid: newPaid } : d));
+    try { await debtsAPI.update(id, { paid: newPaid }); }
+    catch(e) { setDebts(p => p.map(d => d.id === id ? { ...d, paid: debt.paid } : d)); }
+  };
+  const deleteDebt = async (id) => {
+    if (!confirm("Qarz o'chirilsinmi?")) return;
+    setDebts(p => p.filter(d => d.id !== id));
+    try { await debtsAPI.delete(id); }
+    catch(e) { addNotif && addNotif("❌ O'chirishda xato: " + e.message, "error"); }
+  };
+  const updateDebt = async (id, k, v) => {
+    setDebts(p => p.map(d => d.id === id ? { ...d, [k]: v } : d));
+    try {
+      const debt = debts.find(d => d.id === id);
+      if (debt) await debtsAPI.update(id, { ...debt, [k]: v });
+    } catch(e) {}
+  };
 
   const inpS = inp(T);
   const labS = lab(T);
