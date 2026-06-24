@@ -378,7 +378,7 @@ const deleteLead = useCallback(async (id) => {
               return merged;
             });
           }
-          const cfgKeys=['countries','sectors','sources','positions','txnInc','txnExp','checklistItems'];
+          const cfgKeys=['countries','sectors','sources','positions','txnInc','txnExp','checklistItems','visas'];
           const merged={};
           cfgKeys.forEach(k=>{ const v=parse(cfgRes[k]); if(v) merged[k]=v; });
           if(Object.keys(merged).length) setConfigRaw(c=>({...c,...merged}));
@@ -556,7 +556,7 @@ const deleteLead = useCallback(async (id) => {
           {page==="debts"     && <DebtsPage debts={debts} setDebts={setDebts} user={user} leads={leads}/>}
           {page==="docspipe"  && <DocsPipeline leads={leads} tasks={tasks} team={team} user={user} open={openLead} config={config} roles={roles} setLeads={setLeads}/>}
           {page==="vacancies" && <Vacancies leads={visibleLeads} user={user} team={team} roles={roles}/>}
-          {page==="visa"       && <Visa user={user} roles={roles}/>}
+          {page==="visa"       && <Visa user={user} roles={roles} config={config} setConfig={setConfig}/>}
           {page==="team"       && <TeamPage user={user} team={team} setTeam={setTeam} roles={roles}/>}
           {page==="settings"   && <Settings user={user} config={config} setConfig={setConfig} roles={roles} setRoles={setRoles}/>}
           {page==="finance"    && !isMobile && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts} roles={roles} extExps={extExps} setExtExps={setExtExps}/>}

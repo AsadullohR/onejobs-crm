@@ -5,8 +5,17 @@ import { INIT_VISA } from "./constants.js";
 import { usersAPI } from "./api.js";
 
 // ─── VISA, TEAM, SETTINGS (compact) ──────────────────────────────────────────
-function Visa({user, roles}) {
-  const T=useT(); const [visas,setVisas]=useState(INIT_VISA); const [sel,setSel]=useState(1); const [edit,setEdit]=useState(false); const [form,setForm]=useState(null);
+function Visa({user, roles, config, setConfig}) {
+  const T=useT();
+  const visas = config?.visas?.length ? config.visas : INIT_VISA;
+  const setVisas = (updater) => {
+    setConfig(p => {
+      const prev = p.visas?.length ? p.visas : INIT_VISA;
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      return {...p, visas: next};
+    });
+  };
+  const [sel,setSel]=useState(visas[0]?.id ?? 1); const [edit,setEdit]=useState(false); const [form,setForm]=useState(null);
   const canEdit=roles[user.role]?.canCfg; const cur=visas.find(v=>v.id===sel);
   const save=()=>{if(!form.country)return;const u={...form,docs:form.docsText.split("\n").map(s=>s.trim()).filter(Boolean)};delete u.docsText;setVisas(p=>p.some(v=>v.id===u.id)?p.map(v=>v.id===u.id?u:v):[...p,u]);setSel(u.id);setEdit(false);};
   const inpS=inp(T); const labS=lab(T);
