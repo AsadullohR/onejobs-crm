@@ -36,6 +36,11 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
+async function nextLeadId() {
+  const { rows } = await pool.query(`SELECT 'NO-' || nextval('leads_id_seq') AS id`);
+  return rows[0].id;
+}
+
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
 app.use(compression());
 app.use(
@@ -248,7 +253,7 @@ app.get("/api/leads/:id", auth, async (req, res) => {
 
 app.post("/api/leads", auth, async (req, res) => {
   const l = req.body;
-  const id = l.id || `NO-${Date.now()}`;
+  const id = l.id || await nextLeadId();
   try {
     // Duplicate check: phone (hard block) + name (soft, bypassable with force=true)
     if (l.phone) {
@@ -408,7 +413,7 @@ app.post("/api/leads/bulk", auth, async (req, res) => {
     const skippedNames = [];
 
     for (const l of leads) {
-      const id = l.uid || l.id || `NO-${Date.now()}${Math.floor(Math.random() * 999)}`;
+      const id = l.uid || l.id || await nextLeadId();
       const clientNo = l.clientId || "";
       const destParts = (l.dest || l.country || "").split(" ");
       const country = destParts[0] || "";
@@ -1735,6 +1740,18 @@ app.listen(PORT, async () => {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read, created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_updated ON leads(updated_at DESC)`);
+    // Create sequential ID sequence starting from max existing lead number
+    await pool.query(`
+      DO $$
+      DECLARE max_num INTEGER;
+      BEGIN
+        SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '[^0-9]', '', 'g'), '')::INTEGER), 0)
+        INTO max_num FROM leads WHERE id ~ '^NO-[0-9]+$';
+        IF NOT EXISTS (SELECT 1 FROM pg_sequences WHERE sequencename = 'leads_id_seq') THEN
+          EXECUTE 'CREATE SEQUENCE leads_id_seq START WITH ' || (max_num + 1);
+        END IF;
+      END$$;
+    `);
     pool.query(`ANALYZE leads, tasks, transactions, notifications`).catch(()=>{});
     console.log("   Migrations: quality + status_log + indexes OK");
   } catch (e) {
