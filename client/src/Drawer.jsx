@@ -133,10 +133,6 @@ const [form,setForm]=useState({
           <select value={form.status} onChange={e=>f("status",e.target.value)} style={{...inpS,fontWeight:700,color:s.c}}>
             {STAGES.map(st=><option key={st.key} value={st.key}>{st.label}</option>)}
           </select>
-          {isDone&&<div style={{marginTop:8,background:`${T.green}15`,border:`1px solid ${T.green}44`,borderRadius:7,padding:"8px 10px"}}>
-            <label style={{...labS,color:T.green}}>💰 Sof Foyda (Jo'nab ketganda)</label>
-            <input type="number" value={form.sofFoyda||""} onChange={e=>f("sofFoyda",Number(e.target.value)||null)} style={inpS} placeholder="0"/>
-          </div>}
         </div>}
       </div>
       {/* Tabs */}
