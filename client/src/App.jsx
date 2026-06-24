@@ -265,7 +265,20 @@ const deleteLead = useCallback(async (id) => {
       setTasks(p=>p.map(x=>x.id===t.id ? {...x, id:String(saved.id)} : x));
     } catch(err){ console.warn('Task save failed:', err.message); }
   },[addNotif, team]);
-  const openLead=l=>setDrawer(l||{id:`tmp-${Date.now()}`,name:"",phone:"",telegram:"",status:"Yangi",country:"",sector:"",position:"",ownerSales:null,ownerConsult:null,ownerDocs:null,source:user?.role==="partner"?user.name:"",gender:"",comment:"",q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,q1R:null,q2R:null,q3R:null,xbaR:null,cv:{},history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)});
+  const openLead=useCallback(async l=>{
+    if(!l){
+      setDrawer({id:`tmp-${Date.now()}`,name:"",phone:"",telegram:"",status:"Yangi",country:"",sector:"",position:"",ownerSales:null,ownerConsult:null,ownerDocs:null,source:user?.role==="partner"?user.name:"",gender:"",comment:"",q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,q1R:null,q2R:null,q3R:null,xbaR:null,cv:{},history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)});
+      return;
+    }
+    // Show drawer immediately with cached data, then fetch full data (history/cv/docs)
+    setDrawer(l);
+    if(l.id && !l.id.startsWith("tmp-")){
+      try {
+        const full = await leadsAPI.get(l.id);
+        setDrawer(mapLead(full));
+      } catch(e){}
+    }
+  },[user?.role, mapLead]);
 
   const myNotif=user?tasks.filter(t=>t.assignee===user.id&&t.status!=="done"&&(isOD(t.due)||isSoon(t.due))).length:0;
   const totalNotif=myNotif+notifs.filter(n=>!n.read).length;

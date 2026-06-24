@@ -30,6 +30,9 @@ const pool = new Pool({
     process.env.NODE_ENV === "production"
       ? { rejectUnauthorized: false }
       : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
@@ -180,7 +183,14 @@ app.get("/api/leads", auth, async (req, res) => {
 
   try {
     const query = `
-      SELECT l.*,
+      SELECT
+        l.id, l.name, l.phone, l.telegram, l.status, l.country, l.sector,
+        l.position, l.source, l.gender, l.comment, l.note,
+        l.owner_sales, l.owner_consult, l.owner_docs,
+        l.q1, l.q2, l.q3, l.xba, l.kpi_sales, l.kpi_consult, l.kpi_docs,
+        l.sof_foyda, l.last_contact, l.contract_date, l.interview_date,
+        l.docs_stage, l.archived, l.dest, l.reklama_name,
+        l.quality, l.quality_note, l.created_at, l.updated_at,
         u_s.name as owner_sales_name, u_s.avatar as owner_sales_av, u_s.color as owner_sales_color,
         u_c.name as owner_consult_name, u_c.avatar as owner_consult_av, u_c.color as owner_consult_color,
         u_d.name as owner_docs_name, u_d.avatar as owner_docs_av, u_d.color as owner_docs_color
@@ -1718,7 +1728,11 @@ app.listen(PORT, async () => {
       logged_at TIMESTAMPTZ DEFAULT NOW()
     )`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_status_log_owner_date ON status_log(owner_id, logged_at)`);
-    console.log("   Migrations: quality + status_log OK");
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read, created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_updated ON leads(updated_at DESC)`);
+    pool.query(`ANALYZE leads, tasks, transactions, notifications`).catch(()=>{});
+    console.log("   Migrations: quality + status_log + indexes OK");
   } catch (e) {
     console.error("   Migrations error:", e.message);
   }
