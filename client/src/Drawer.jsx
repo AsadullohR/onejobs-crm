@@ -58,6 +58,18 @@ const [form,setForm]=useState({
     candidatesAPI.getByLead(lead.id).then(setVacCands).catch(() => {});
   }, [lead.id]);
 
+  // When full lead data arrives (after initial list-data open), patch history/cv into form
+  useEffect(() => {
+    if (lead._listOnly === false) {
+      setForm(p => ({
+        ...p,
+        history: lead.history?.length ? lead.history : p.history,
+        cv: Object.keys(lead.cv || {}).length ? lead.cv : p.cv,
+        dest: lead.dest || p.dest,
+      }));
+    }
+  }, [lead._listOnly]);
+
   // Document checklist — from config (customizable by admin), fallback to defaults
   const DEFAULT_DOC_TYPES = [
     { key:"passport",   label:"📘 Pasport",                  desc:"Pasport nusxasi va asl" },

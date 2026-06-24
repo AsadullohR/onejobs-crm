@@ -126,6 +126,7 @@ const mapLead = useCallback(l => ({
   lastCall:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.last_contact),
   shartnomaSana:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.contract_date),
   officeSuhbat:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.interview_date),
+  dest:l.dest||"",
   docsStage:l.docs_stage||null, archived:l.archived||false,
   reklamaName:l.reklama_name||"",
   quality:l.quality||"", qualityNote:l.quality_note||"",
@@ -170,6 +171,7 @@ const saveLead = useCallback(async f => {
         quality:f.quality || null,
         qualityNote:f.qualityNote || null,
 
+        dest:f.dest || null,
         lastContact:f.lastCall || null,
         contractDate:f.shartnomaSana || null,
         interviewDate:f.officeSuhbat || null,
@@ -270,13 +272,13 @@ const deleteLead = useCallback(async (id) => {
       setDrawer({id:`tmp-${Date.now()}`,name:"",phone:"",telegram:"",status:"Yangi",country:"",sector:"",position:"",ownerSales:null,ownerConsult:null,ownerDocs:null,source:user?.role==="partner"?user.name:"",gender:"",comment:"",q1:false,q2:false,q3:false,xba:false,kpiSales:false,kpiConsult:false,kpiDocs:false,q1R:null,q2R:null,q3R:null,xbaR:null,cv:{},history:[],sofFoyda:null,docs:{},createdAt:new Date().toISOString().slice(0,10)});
       return;
     }
-    // Show drawer immediately with cached data, then fetch full data (history/cv/docs)
-    setDrawer(l);
+    // Show drawer immediately (fast), then patch in history/cv/docs from full fetch
+    setDrawer({...l, _listOnly: true});
     if(l.id && !l.id.startsWith("tmp-")){
       try {
         const full = await leadsAPI.get(l.id);
-        setDrawer(mapLead(full));
-      } catch(e){}
+        setDrawer({...mapLead(full), _listOnly: false});
+      } catch(e){ setDrawer(l); }
     }
   },[user?.role, mapLead]);
 
