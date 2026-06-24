@@ -189,7 +189,7 @@ app.get("/api/leads", auth, async (req, res) => {
         l.owner_sales, l.owner_consult, l.owner_docs,
         l.q1, l.q2, l.q3, l.xba, l.kpi_sales, l.kpi_consult, l.kpi_docs,
         l.sof_foyda, l.last_contact, l.contract_date, l.interview_date,
-        l.docs_stage, l.archived, l.dest, l.reklama_name,
+        l.docs_stage, l.dest, l.reklama_name,
         l.quality, l.quality_note, l.created_at, l.updated_at,
         u_s.name as owner_sales_name, u_s.avatar as owner_sales_av, u_s.color as owner_sales_color,
         u_c.name as owner_consult_name, u_c.avatar as owner_consult_av, u_c.color as owner_consult_color,
