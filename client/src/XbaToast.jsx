@@ -111,7 +111,7 @@ function XbaToastItem({ toast, onDismiss, T }) {
           <div style={{ fontSize: 36, animation: "xba-bounce 0.6s ease-in-out 0.3s 3", flexShrink: 0 }}>💰</div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 800, color: "#f97316", marginBottom: 3 }}>XBA TO'LOV! 🎉</div>
-            <div style={{ fontSize: 12, color: "#fed7aa", lineHeight: 1.4 }}>{toast.message.replace("💰 XBA To'lov! ", "").replace(" 🎉", "")}</div>
+            <div style={{ fontSize: 12, color: "#fed7aa", lineHeight: 1.4 }}>{(toast.message||"").replace("💰 XBA To'lov! ", "").replace(" 🎉", "")}</div>
           </div>
         </div>
 
