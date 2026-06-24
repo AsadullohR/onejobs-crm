@@ -1741,12 +1741,15 @@ app.listen(PORT, async () => {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_updated ON leads(updated_at DESC)`);
     // Create sequential ID sequence starting from max existing lead number
+    // Use BIGINT to avoid overflow (old IDs were timestamp-based, up to 13 digits)
+    // If all existing IDs are timestamp-based (>1e9), start fresh from 1
     await pool.query(`
       DO $$
-      DECLARE max_num INTEGER;
+      DECLARE max_num BIGINT;
       BEGIN
-        SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '[^0-9]', '', 'g'), '')::INTEGER), 0)
+        SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '[^0-9]', '', 'g'), '')::BIGINT), 0)
         INTO max_num FROM leads WHERE id ~ '^NO-[0-9]+$';
+        IF max_num > 1000000 THEN max_num := 0; END IF;
         IF NOT EXISTS (SELECT 1 FROM pg_sequences WHERE sequencename = 'leads_id_seq') THEN
           EXECUTE 'CREATE SEQUENCE leads_id_seq START WITH ' || (max_num + 1);
         END IF;
