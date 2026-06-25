@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ThemeCtx, useT, mkT } from "./theme.js";
 import { inp, I, Av, fmtD } from "./helpers.jsx";
 import { authAPI, setToken, getToken } from "./api.js";
-import { useLang } from "./i18n.js";
+import { useLang } from "./i18n.jsx";
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol}) {
