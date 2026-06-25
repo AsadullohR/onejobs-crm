@@ -310,8 +310,11 @@ const deleteLead = useCallback(async (id) => {
 .then(r=>r.json())
 .then(users=>{
     const me = users.find(u=>u.id===payload.id);
-    if(me) setUser({...me, token:tok, password:me.username});
-    else clearToken();
+    if(me) {
+      setUser({...me, token:tok, password:me.username});
+      if(me.role==="employer") setPage("employer");
+      else if(me.role==="finance_manager") setPage("finance");
+    } else clearToken();
   }).catch((err)=>{
   console.error("Session restore failed:", err.message);
   clearToken();
