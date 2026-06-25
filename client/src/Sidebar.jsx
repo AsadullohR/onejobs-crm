@@ -2,22 +2,24 @@ import { useState } from "react";
 import { ThemeCtx, useT, mkT } from "./theme.js";
 import { inp, I, Av, fmtD } from "./helpers.jsx";
 import { authAPI, setToken, getToken } from "./api.js";
+import { useLang } from "./i18n.js";
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol}) {
   const T=useT();
+  const { t, lang, setLang } = useLang();
   const NAV=[
-    {k:"dashboard", l:"Dashboard",            ic:I.dash,  group:"main"},
-    {k:"pipeline",  l:"Pipeline",             ic:I.pipe,  group:"main"},
-    {k:"leads",     l:"Mijozlar",             ic:I.list,  group:"main"},
-    {k:"tasks",     l:"Vazifalar",            ic:I.task,  group:"main"},
-    {k:"vacancies", l:"Vakansiyalar",         ic:"💼",     group:"work"},
-    {k:"finance",   l:"Moliya",               ic:I.money, group:"work"},
-    {k:"visa",      l:"Viza Ma'lumotlari",    ic:I.flag,  group:"info"},
-    {k:"team",      l:"Jamoa",                ic:I.team,  group:"admin"},
-    {k:"turnir",    l:"Turnir 🏆",            ic:"🏆",     group:"main"},
-    {k:"settings",  l:"Sozlamalar",           ic:I.gear,  group:"admin"},
-    {k:"employer",  l:"Vakansiyalarim",       ic:"💼",     group:"main"},
+    {k:"dashboard", lk:"nav_dashboard", ic:I.dash,  group:"main"},
+    {k:"pipeline",  lk:"nav_pipeline",  ic:I.pipe,  group:"main"},
+    {k:"leads",     lk:"nav_leads",     ic:I.list,  group:"main"},
+    {k:"tasks",     lk:"nav_tasks",     ic:I.task,  group:"main"},
+    {k:"vacancies", lk:"nav_vacancies", ic:"💼",     group:"work"},
+    {k:"finance",   lk:"nav_finance",   ic:I.money, group:"work"},
+    {k:"visa",      lk:"nav_visa",      ic:I.flag,  group:"info"},
+    {k:"team",      lk:"nav_team",      ic:I.team,  group:"admin"},
+    {k:"turnir",    lk:"nav_turnir",    ic:"🏆",     group:"main"},
+    {k:"settings",  lk:"nav_settings",  ic:I.gear,  group:"admin"},
+    {k:"employer",  lk:"nav_employer",  ic:"🏢",     group:"main"},
   ];
   const allowed={
     admin:   NAV.map(n=>n.k),
@@ -31,7 +33,7 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
   const vis = NAV.filter(n=>(allowed[user.role]||[]).includes(n.k));
   const W = col ? 52 : 200;
 
-  const SB = "#0f172a";   // sidebar bg always dark
+  const SB = "#0f172a";
   const SBorder = "#1e293b";
   const activeC = "#2563eb";
   const activeBg = "rgba(37,99,235,0.15)";
@@ -52,11 +54,13 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
   });
 
   const GROUPS = [
-    {id:"main",  label:"ANA MENYU"},
-    {id:"work",  label:"ISH"},
-    {id:"info",  label:"MA'LUMOT"},
-    {id:"admin", label:"BOSHQARUV"},
+    {id:"main",  lk:"nav_group_main"},
+    {id:"work",  lk:"nav_group_work"},
+    {id:"info",  lk:"nav_group_info"},
+    {id:"admin", lk:"nav_group_admin"},
   ];
+
+  const LANG_FLAGS = { uz: "🇺🇿", ru: "🇷🇺", en: "🇬🇧" };
 
   return (
     <div style={{width:W, background:SB, borderRight:`1px solid ${SBorder}`,
@@ -96,14 +100,14 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
           return (
             <div key={group.id} style={{marginBottom:4}}>
               {!col && <div style={{color:"#334155",fontSize:8,fontWeight:700,letterSpacing:"0.1em",
-                padding:"8px 12px 4px",textTransform:"uppercase"}}>{group.label}</div>}
-              {items.map(({k,l,ic})=>(
-                <button key={k} onClick={()=>go(k)} title={col?l:""} style={btn(pg===k)}>
+                padding:"8px 12px 4px",textTransform:"uppercase"}}>{t(group.lk)}</div>}
+              {items.map(({k,lk,ic})=>(
+                <button key={k} onClick={()=>go(k)} title={col?t(lk):""} style={btn(pg===k)}>
                   <span style={{fontSize:15, color:pg===k?"#60a5fa":mutedC, flexShrink:0,
                     transition:"color 0.15s"}}>{ic}</span>
                   {!col && <span style={{color:pg===k?"#e2e8f0":txtC, fontSize:12, fontWeight:pg===k?600:400,
                     whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
-                    transition:"color 0.15s", flex:1}}>{l}</span>}
+                    transition:"color 0.15s", flex:1}}>{t(lk)}</span>}
                   {k==="tasks" && notif>0 && (
                     <span style={{position:col?"absolute":undefined, top:col?2:undefined,
                       right:col?2:undefined, marginLeft:col?0:"auto",
@@ -138,8 +142,33 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
             <Av id={user.id} team={[user]} size={28}/>
           </div>
         )}
+
+        {/* Language switcher */}
+        {!col && (
+          <div style={{display:"flex",gap:3,marginBottom:6}}>
+            {["uz","ru","en"].map(l=>(
+              <button key={l} onClick={()=>setLang(l)}
+                style={{flex:1,height:24,borderRadius:6,fontSize:9,fontWeight:700,cursor:"pointer",
+                  fontFamily:"inherit",border:`1px solid ${lang===l?"#2563eb":"#1e293b"}`,
+                  background:lang===l?"rgba(37,99,235,0.2)":"rgba(255,255,255,0.03)",
+                  color:lang===l?"#60a5fa":"#64748b",letterSpacing:"0.03em"}}>
+                {LANG_FLAGS[l]} {l.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        )}
+        {col && (
+          <div style={{marginBottom:6}}>
+            <select value={lang} onChange={e=>setLang(e.target.value)}
+              style={{width:"100%",background:"rgba(255,255,255,0.06)",border:`1px solid ${SBorder}`,
+                borderRadius:6,color:"#94a3b8",fontSize:9,padding:"2px 0",textAlign:"center",cursor:"pointer"}}>
+              {["uz","ru","en"].map(l=><option key={l} value={l}>{LANG_FLAGS[l]}</option>)}
+            </select>
+          </div>
+        )}
+
         <div style={{display:"flex",gap:4}}>
-          <button onClick={()=>setDark(d=>!d)} title={dark?"Kunduzgi rejim":"Tungi rejim"}
+          <button onClick={()=>setDark(d=>!d)} title={dark?"Light mode":"Dark mode"}
             style={{width:32,height:30,borderRadius:7,background:"rgba(255,255,255,0.06)",
               border:`1px solid ${SBorder}`,cursor:"pointer",display:"flex",
               alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:13,
@@ -152,11 +181,11 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
                 color:"#f87171",border:"1px solid rgba(220,38,38,0.2)",cursor:"pointer",
                 fontSize:11,fontWeight:600,display:"flex",alignItems:"center",
                 justifyContent:"center",gap:5, fontFamily:"inherit"}}>
-              {I.logout} Chiqish
+              {I.logout} {lang==="ru"?"Выйти":lang==="en"?"Logout":"Chiqish"}
             </button>
           )}
           {col && (
-            <button onClick={logout} title="Chiqish"
+            <button onClick={logout} title="Logout"
               style={{flex:1,height:30,borderRadius:7,background:"rgba(220,38,38,0.1)",
                 color:"#f87171",border:"1px solid rgba(220,38,38,0.2)",
                 cursor:"pointer",display:"flex",alignItems:"center",
@@ -208,17 +237,6 @@ function Login({onLogin, team, roles}) {
         </div>
         {e&&<p style={{color:"#f87171",fontSize:12,marginBottom:14,textAlign:"center",background:"rgba(220,38,38,0.08)",padding:"8px 12px",borderRadius:8,border:"1px solid rgba(220,38,38,0.2)"}}>{e}</p>}
         <button onClick={go} disabled={loading} style={{width:"100%",padding:"12px",borderRadius:10,background:"linear-gradient(135deg,#2563eb,#1d4ed8)",color:"#fff",fontWeight:700,fontSize:14,border:"none",cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 14px rgba(37,99,235,.4)",letterSpacing:"-0.01em",marginBottom:18}}>{loading?"Yuklanmoqda...":"Kirish →"}</button>
-        {/* <div style={{borderTop:`1px solid ${T.border}`,paddingTop:14}}>
-          <p style={{color:T.muted,fontSize:9,textAlign:"center",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em"}}>Tez kirish</p>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
-            {team.map(x=>(
-              <div key={x.id} onClick={()=>{su(x.username);sp(x.password);}} style={{cursor:"pointer",padding:"6px 9px",borderRadius:7,border:`1px solid ${T.border}`,background:T.card2,display:"flex",alignItems:"center",gap:6}}>
-                <Av id={x.id} team={team} size={18}/>
-                <div><div style={{fontSize:10,fontWeight:600,color:T.text}}>{x.name}</div><div style={{fontSize:8,color:roles[x.role]?.color||T.muted,fontWeight:600}}>{roles[x.role]?.label||x.role}</div></div>
-              </div>
-            ))}
-          </div>
-        </div> */}
       </div>
     </div>
   </ThemeCtx.Provider>;

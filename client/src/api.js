@@ -117,6 +117,11 @@ export const candidatesAPI = {
   getAll: () => req("GET", "/api/candidates/all"),
 };
 
+export const employerAPI = {
+  getWorkers: () => req("GET", "/api/employer/workers"),
+  requestVacancy: (v) => req("POST", "/api/employer/vacancy-request", v),
+};
+
 export const notifAPI = {
   getAll: () => req("GET", "/api/notifications"),
   create: (message, type) => req("POST", "/api/notifications", { message, type }),

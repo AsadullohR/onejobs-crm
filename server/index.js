@@ -1092,7 +1092,8 @@ app.get("/api/vacancies", auth, async (req, res) => {
     let whereClause = "";
     let params = [];
     if (role === "employer") {
-      whereClause = "WHERE v.created_by=$1";
+      // Match by employer's user name against vacancy company field
+      whereClause = "WHERE LOWER(v.company) = LOWER((SELECT name FROM users WHERE id=$1))";
       params = [req.user.id];
     } else if (role === "partner") {
       whereClause = "WHERE v.allowed_partners @> $1::jsonb";
@@ -1217,6 +1218,49 @@ app.get("/api/candidates", auth, async (req, res) => {
       name: r.name, phone: r.phone, status: r.status, note: r.note,
       appliedAt: r.applied_at,
     })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Employer: get all hired workers across their vacancies with full lead status
+app.get("/api/employer/workers", auth, async (req, res) => {
+  if (req.user.role !== "employer") return res.status(403).json({ error: "Forbidden" });
+  try {
+    const { rows } = await pool.query(
+      `SELECT c.*, v.title as vacancy_title, v.country as vacancy_country,
+              l.name as lead_name, l.phone as lead_phone, l.status as lead_status,
+              l.dest as lead_dest, l.country as lead_country
+       FROM candidates c
+       JOIN vacancies v ON v.id = c.vacancy_id
+       LEFT JOIN leads l ON l.id = c.lead_id
+       WHERE LOWER(v.company) = LOWER((SELECT name FROM users WHERE id=$1))
+       ORDER BY c.updated_at DESC`,
+      [req.user.id]
+    );
+    res.json(rows.map(r => ({
+      id: String(r.id), vacancyId: r.vacancy_id, vacancyTitle: r.vacancy_title,
+      vacancyCountry: r.vacancy_country, leadId: r.lead_id,
+      name: r.lead_name || r.name, phone: r.lead_phone || r.phone,
+      status: r.status, leadStatus: r.lead_status || "–",
+      leadCountry: r.lead_country || r.vacancy_country || "–",
+      leadDest: r.lead_dest || "–", note: r.note,
+      appliedAt: r.applied_at, updatedAt: r.updated_at,
+    })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Employer: submit a new vacancy request (saved as vacancy with status 'pending')
+app.post("/api/employer/vacancy-request", auth, async (req, res) => {
+  if (req.user.role !== "employer") return res.status(403).json({ error: "Forbidden" });
+  const b = req.body;
+  const id = `VAC-REQ-${Date.now()}`;
+  try {
+    const empName = req.user.name;
+    const { rows } = await pool.query(
+      `INSERT INTO vacancies (id, title, company, country, job_type, positions, salary, description, status, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9) RETURNING *`,
+      [id, b.title, empName, b.country||null, b.jobType||null, b.positions||1, b.salary||null, b.description||null, req.user.id]
+    );
+    res.json({ ok: true, id: rows[0].id });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
