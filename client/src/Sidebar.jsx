@@ -145,13 +145,14 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
 
         {/* Language switcher */}
         {!col && (
-          <div style={{display:"flex",gap:3,marginBottom:6}}>
+          <div style={{display:"flex",gap:4,marginBottom:8}}>
             {["uz","ru","en"].map(l=>(
               <button key={l} onClick={()=>setLang(l)}
-                style={{flex:1,height:24,borderRadius:6,fontSize:9,fontWeight:700,cursor:"pointer",
-                  fontFamily:"inherit",border:`1px solid ${lang===l?"#2563eb":"#1e293b"}`,
-                  background:lang===l?"rgba(37,99,235,0.2)":"rgba(255,255,255,0.03)",
-                  color:lang===l?"#60a5fa":"#64748b",letterSpacing:"0.03em"}}>
+                style={{flex:1,height:28,borderRadius:7,fontSize:10,fontWeight:700,cursor:"pointer",
+                  fontFamily:"inherit",
+                  border:`2px solid ${lang===l?"#3b82f6":"#334155"}`,
+                  background:lang===l?"#2563eb":"#1e293b",
+                  color:lang===l?"#fff":"#94a3b8"}}>
                 {LANG_FLAGS[l]} {l.toUpperCase()}
               </button>
             ))}

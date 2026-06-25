@@ -319,7 +319,7 @@ function RequestTab({ t, T, addNotif }) {
 // ─── EMPLOYER PORTAL ─────────────────────────────────────────────────────────
 function EmployerPortal({ user, leads, team, addNotif }) {
   const T = useT();
-  const { t } = useLang();
+  const { t, lang, setLang } = useLang();
   const [vacancies, setVacancies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("vacancies");
@@ -341,14 +341,31 @@ function EmployerPortal({ user, leads, team, addNotif }) {
     { k: "request",   label: `📋 ${t("emp_request")}` },
   ];
 
+  const LANG_FLAGS = { uz: "🇺🇿", ru: "🇷🇺", en: "🇬🇧" };
+
   return (
     <div style={{ minHeight: "100%" }}>
       {/* Header */}
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 900, color: T.text, margin: "0 0 4px" }}>
-          {t("emp_welcome")}, {user.name}! 👋
-        </h1>
-        <p style={{ color: T.muted, margin: 0, fontSize: 11 }}>{t("emp_subtitle")}</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 900, color: T.text, margin: "0 0 4px" }}>
+            {t("emp_welcome")}, {user.name}! 👋
+          </h1>
+          <p style={{ color: T.muted, margin: 0, fontSize: 11 }}>{t("emp_subtitle")}</p>
+        </div>
+        {/* Language switcher in header */}
+        <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+          {["uz", "ru", "en"].map(l => (
+            <button key={l} onClick={() => setLang(l)}
+              style={{ padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700,
+                cursor: "pointer", fontFamily: "inherit",
+                border: `2px solid ${lang === l ? T.accent : T.border}`,
+                background: lang === l ? T.accent : T.card,
+                color: lang === l ? "#fff" : T.muted }}>
+              {LANG_FLAGS[l]} {l.toUpperCase()}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Stats */}
@@ -366,14 +383,16 @@ function EmployerPortal({ user, leads, team, addNotif }) {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, borderBottom: `1px solid ${T.border}`, paddingBottom: 0 }}>
+      {/* Tabs — pill style, always visible */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 18, background: T.card2, borderRadius: 12, padding: 6, border: `1px solid ${T.border}` }}>
         {TABS.map(tb => (
           <button key={tb.k} onClick={() => setTab(tb.k)}
-            style={{ padding: "8px 16px", borderRadius: "8px 8px 0 0", fontSize: 11, fontWeight: 700,
-              cursor: "pointer", border: `1px solid ${T.border}`, borderBottom: tab === tb.k ? "none" : undefined,
-              background: tab === tb.k ? T.bg : T.card2, color: tab === tb.k ? T.accent : T.muted,
-              fontFamily: "inherit", marginBottom: tab === tb.k ? -1 : 0 }}>
+            style={{ flex: 1, padding: "10px 16px", borderRadius: 8, fontSize: 12, fontWeight: 700,
+              cursor: "pointer", border: "none", fontFamily: "inherit",
+              background: tab === tb.k ? T.accent : "transparent",
+              color: tab === tb.k ? "#fff" : T.muted,
+              boxShadow: tab === tb.k ? "0 2px 8px rgba(37,99,235,0.25)" : "none",
+              transition: "all 0.15s" }}>
             {tb.label}
           </button>
         ))}
