@@ -655,7 +655,7 @@ app.delete("/api/tasks/:id", auth, async (req, res) => {
 app.get("/api/users", auth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      "SELECT id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,salary_items FROM users ORDER BY id",
+      "SELECT id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,salary_items,company FROM users ORDER BY id",
     );
     const canSalary = ["admin", "finance_manager"].includes(req.user.role);
     const data = canSalary ? rows : rows.map(({ salary, salary_type, salary_pct, salary_items, ...rest }) => rest);
@@ -670,10 +670,10 @@ app.post("/api/users", auth, adminOnly, async (req, res) => {
   const hash = await bcrypt.hash(u.password || "password123", 10);
   try {
     const { rows } = await pool.query(
-      `INSERT INTO users (username,password,name,role,avatar,color,phone,email,salary,salary_type,salary_pct)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-       ON CONFLICT (username) DO UPDATE SET name=$3,role=$4,avatar=$5,color=$6,phone=$7,email=$8,salary=$9,salary_type=$10,salary_pct=$11
-       RETURNING id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct`,
+      `INSERT INTO users (username,password,name,role,avatar,color,phone,email,salary,salary_type,salary_pct,company)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ON CONFLICT (username) DO UPDATE SET name=$3,role=$4,avatar=$5,color=$6,phone=$7,email=$8,salary=$9,salary_type=$10,salary_pct=$11,company=$12
+       RETURNING id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,company`,
       [
         u.username,
         hash,
@@ -686,6 +686,7 @@ app.post("/api/users", auth, adminOnly, async (req, res) => {
         u.salary || 0,
         u.salaryType || "fixed",
         u.salaryPct || 0,
+        u.company || null,
       ],
     );
     res.json(rows[0]);
@@ -711,6 +712,7 @@ app.put("/api/users/:id", auth, adminOnly, async (req, res) => {
       salaryType: "salary_type",
       salaryPct: "salary_pct",
       salaryItems: "salary_items",
+      company: "company",
     };
     Object.entries(fields).forEach(([k, col]) => {
       if (u[k] !== undefined) {
@@ -1092,8 +1094,8 @@ app.get("/api/vacancies", auth, async (req, res) => {
     let whereClause = "";
     let params = [];
     if (role === "employer") {
-      // Match by employer's user name against vacancy company field
-      whereClause = "WHERE LOWER(v.company) = LOWER((SELECT name FROM users WHERE id=$1))";
+      // Match by employer's company field (or fallback to name) against vacancy company
+      whereClause = "WHERE LOWER(v.company) = LOWER(COALESCE(NULLIF((SELECT company FROM users WHERE id=$1),''), (SELECT name FROM users WHERE id=$1)))";
       params = [req.user.id];
     } else if (role === "partner") {
       whereClause = "WHERE v.allowed_partners @> $1::jsonb";
@@ -1232,7 +1234,7 @@ app.get("/api/employer/workers", auth, async (req, res) => {
        FROM candidates c
        JOIN vacancies v ON v.id = c.vacancy_id
        LEFT JOIN leads l ON l.id = c.lead_id
-       WHERE LOWER(v.company) = LOWER((SELECT name FROM users WHERE id=$1))
+       WHERE LOWER(v.company) = LOWER(COALESCE(NULLIF((SELECT company FROM users WHERE id=$1),''), (SELECT name FROM users WHERE id=$1)))
        ORDER BY c.updated_at DESC`,
       [req.user.id]
     );
@@ -1773,6 +1775,7 @@ app.listen(PORT, async () => {
   try {
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS quality TEXT`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS quality_note TEXT`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS company TEXT`);
     await pool.query(`CREATE TABLE IF NOT EXISTS status_log (
       id SERIAL PRIMARY KEY,
       lead_id TEXT,

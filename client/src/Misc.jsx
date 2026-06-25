@@ -100,6 +100,7 @@ function TeamPage({user, team, setTeam, roles}) {
         salary: Number(form.salary || 0),
         salary_type: form.salType || form.salary_type || "fixed",
         salary_pct: Number(form.pct || form.salary_pct || 0),
+        company: form.company || null,
       };
       let saved;
       if (form.id) {
@@ -156,7 +157,7 @@ function TeamPage({user, team, setTeam, roles}) {
             </div>
             <div style={{fontSize:10,color:T.muted,marginBottom:4}}>@{m.username}{m.phone&&` · ${m.phone}`}</div>
             {activeTab==="partner"&&<div style={{fontSize:9,color:T.muted,marginBottom:3}}>Komissiya: {m.pct||0}%</div>}
-            {activeTab==="employer"&&<div style={{fontSize:9,color:T.muted,marginBottom:3}}>Kompaniya: {m.name}</div>}
+            {activeTab==="employer"&&<div style={{fontSize:9,color:T.muted,marginBottom:3}}>🏢 {m.company||m.name}</div>}
             <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
               <span style={{background:`${roles[m.role]?.color||T.accent}22`,color:roles[m.role]?.color||T.accent,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:20}}>{roles[m.role]?.label||m.role}</span>
               {(user.role==="admin"||user.role==="manager")&&activeTab==="staff"&&<select value={m.role} onChange={async e=>{
@@ -191,8 +192,12 @@ function TeamPage({user, team, setTeam, roles}) {
           <button onClick={()=>setModal(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted}}>{I.x}</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
-          <div style={{gridColumn:"1/-1"}}><label style={labS}>{activeTab==="employer"?"Kompaniya nomi *":"To'liq ismi *"}</label><input value={form.name||""} onChange={e=>f("name",e.target.value)} style={inpS}/></div>
-          {activeTab==="employer"&&<div style={{gridColumn:"1/-1"}}><label style={labS}>Kontakt shaxs</label><input value={form.contactPerson||""} onChange={e=>f("contactPerson",e.target.value)} style={inpS} placeholder="Direktor ismi"/></div>}
+          <div style={{gridColumn:"1/-1"}}><label style={labS}>To'liq ismi *</label><input value={form.name||""} onChange={e=>f("name",e.target.value)} style={inpS} placeholder={activeTab==="employer"?"Masul shaxs ismi":"Ism Familiya"}/></div>
+          {activeTab==="employer"&&<div style={{gridColumn:"1/-1",border:`1px solid ${T.accent}44`,borderRadius:8,padding:"8px 10px",background:`${T.accent}08`}}>
+            <label style={{...labS,color:T.accent}}>🏢 Kompaniya nomi (Vakansiya bilan mos kelishi shart) *</label>
+            <input value={form.company||""} onChange={e=>f("company",e.target.value)} style={inpS} placeholder="Masalan: Elprom, ABC LLC..."/>
+            <div style={{fontSize:9,color:T.muted,marginTop:3}}>⚠️ Bu nom vakansiya kompaniya nomiga aynan mos kelishi kerak</div>
+          </div>}
           <div><label style={labS}>Username *</label><input value={form.username||""} onChange={e=>f("username",e.target.value)} style={inpS}/></div>
           <div><label style={labS}>Parol</label><input value={form.password||""} onChange={e=>f("password",e.target.value)} style={inpS}/></div>
           <div><label style={labS}>Telefon</label><input value={form.phone||""} onChange={e=>f("phone",e.target.value)} style={inpS}/></div>

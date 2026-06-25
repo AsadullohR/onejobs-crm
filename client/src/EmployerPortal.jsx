@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useT } from "./theme.js";
-import { useLang } from "./i18n.js";
+import { useLang } from "./i18n.jsx";
 import { fmtMs, inp, lab, I } from "./helpers.jsx";
 import { vacanciesAPI, candidatesAPI, employerAPI } from "./api.js";
 
@@ -351,7 +351,9 @@ function EmployerPortal({ user, leads, team, addNotif }) {
           <h1 style={{ fontSize: 20, fontWeight: 900, color: T.text, margin: "0 0 4px" }}>
             {t("emp_welcome")}, {user.name}! 👋
           </h1>
-          <p style={{ color: T.muted, margin: 0, fontSize: 11 }}>{t("emp_subtitle")}</p>
+          <p style={{ color: T.muted, margin: 0, fontSize: 11 }}>
+            {user.company ? `🏢 ${user.company} · ` : ""}{t("emp_subtitle")}
+          </p>
         </div>
         {/* Language switcher in header */}
         <div style={{ display: "flex", gap: 4, marginTop: 4 }}>

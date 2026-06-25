@@ -496,10 +496,10 @@ const deleteLead = useCallback(async (id) => {
             </button>
             {(user.role==="admin"||user.role==="manager")&&<button onClick={()=>setShowImport(true)} title="Import CSV" style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:7,height:30,padding:"0 11px",fontSize:11,fontWeight:500,color:T.muted,cursor:"pointer",display:"flex",alignItems:"center",gap:4,fontFamily:"inherit"}}>📥 Import</button>}
             <div style={{position:"relative"}}>
-              <button onClick={()=>setShowNotif(p=>!p)} style={{position:"relative",background:showNotif?`${T.accent}22`:T.card2,border:`1px solid ${showNotif?T.accent+"66":T.border}`,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:showNotif?T.accent:T.muted}}>
+              {user.role!=="employer" && <button onClick={()=>setShowNotif(p=>!p)} style={{position:"relative",background:showNotif?`${T.accent}22`:T.card2,border:`1px solid ${showNotif?T.accent+"66":T.border}`,borderRadius:6,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:showNotif?T.accent:T.muted}}>
                 {I.bell}
                 {totalNotif>0&&<span style={{position:"absolute",top:-3,right:-3,background:T.red,color:"#fff",borderRadius:10,fontSize:7,fontWeight:700,padding:"0 3px",minWidth:13,textAlign:"center"}}>{totalNotif}</span>}
-              </button>
+              </button>}
             {showNotif&&(()=>{
               const overdueTaskNotifs=tasks.filter(t=>t.assignee===user.id&&t.status!=="done"&&(isOD(t.due)||isSoon(t.due)));
               const unreadNotifs=notifs.filter(n=>!n.read);
