@@ -301,6 +301,9 @@ const deleteLead = useCallback(async (id) => {
 
   const payload = decodeJWT(tok);
   if (!payload) { clearToken(); return; }
+  // Set page immediately from JWT so employer never sees dashboard while API loads
+  if (payload.role === "employer") setPage("employer");
+  else if (payload.role === "finance_manager") setPage("finance");
 
   fetch(`${import.meta.env.VITE_API_URL}/api/users`, {
   headers: {
@@ -539,8 +542,9 @@ const deleteLead = useCallback(async (id) => {
           </div>
         </div>
         <div style={{flex:1,padding:(page==="finance"||page==="docspipe")?0:"14px 18px",overflow:(page==="finance"||page==="docspipe")?"hidden":"auto",display:"flex",flexDirection:"column",minHeight:0}}>
-          {page==="dashboard"  && !isMobile && <Dashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
-          {page==="dashboard"  && isMobile && <MobileDashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
+          {page==="dashboard"  && user.role!=="employer" && !isMobile && <Dashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
+          {page==="dashboard"  && user.role!=="employer" && isMobile && <MobileDashboard leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles}/>}
+          {page==="employer"   && user.role!=="employer" && null}
           {page==="analytics"  && (user.role==="admin"||user.role==="manager") && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user}/>}
           {page==="pipeline"   && <Pipeline {...PROPS} setLeads={setLeads} tasks={tasks} addLead={()=>openLead(null)} stages={stages} setStages={setStages} vacancies={vacancies} candidates={candidates}/>}
           {page==="leads"      && !isMobile && <LeadsList
