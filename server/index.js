@@ -1476,7 +1476,7 @@ app.get("/api/leads/:id/documents", auth, async (req, res) => {
       UNIQUE(lead_id, doc_type)
     )`);
     const { rows } = await pool.query("SELECT * FROM lead_documents WHERE lead_id=$1 ORDER BY id", [req.params.id]);
-    res.json(rows.map(r => ({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes, updatedBy:r.updated_by, updatedAt:r.updated_at })));
+    res.json(rows.map(r => ({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes, fileData:r.file_data, fileName:r.file_name, updatedBy:r.updated_by, updatedAt:r.updated_at })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1649,32 +1649,45 @@ const ensureLeadDocsTable = () => pool.query(`CREATE TABLE IF NOT EXISTS lead_do
   doc_type TEXT NOT NULL,
   status TEXT DEFAULT 'pending',
   notes TEXT,
+  file_data TEXT,
+  file_name TEXT,
   updated_by INTEGER,
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(lead_id, doc_type)
-)`).catch(()=>{});
+)`).then(()=>Promise.all([
+  pool.query(`ALTER TABLE lead_documents ADD COLUMN IF NOT EXISTS file_data TEXT`).catch(()=>{}),
+  pool.query(`ALTER TABLE lead_documents ADD COLUMN IF NOT EXISTS file_name TEXT`).catch(()=>{}),
+])).catch(()=>{});
 
 app.get("/api/leads/:id/documents", auth, async (req, res) => {
   try {
     await ensureLeadDocsTable();
     const { rows } = await pool.query("SELECT * FROM lead_documents WHERE lead_id=$1 ORDER BY id", [req.params.id]);
-    res.json(rows.map(r => ({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes, updatedBy:r.updated_by, updatedAt:r.updated_at })));
+    res.json(rows.map(r => ({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes, fileData:r.file_data, fileName:r.file_name, updatedBy:r.updated_by, updatedAt:r.updated_at })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put("/api/leads/:leadId/documents/:docType", auth, async (req, res) => {
-  const { status, notes } = req.body;
+  const { status, notes, fileData, fileName } = req.body;
   try {
     await ensureLeadDocsTable();
+    const hasFile = fileData != null;
     const { rows } = await pool.query(
-      `INSERT INTO lead_documents (lead_id, doc_type, status, notes, updated_by, updated_at)
-       VALUES ($1,$2,$3,$4,$5,NOW())
-       ON CONFLICT (lead_id, doc_type) DO UPDATE SET status=EXCLUDED.status, notes=EXCLUDED.notes, updated_by=EXCLUDED.updated_by, updated_at=NOW()
-       RETURNING *`,
-      [req.params.leadId, req.params.docType, status||'pending', notes||null, req.user.id]
+      hasFile
+        ? `INSERT INTO lead_documents (lead_id, doc_type, status, notes, file_data, file_name, updated_by, updated_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+           ON CONFLICT (lead_id, doc_type) DO UPDATE SET status=EXCLUDED.status, notes=EXCLUDED.notes, file_data=EXCLUDED.file_data, file_name=EXCLUDED.file_name, updated_by=EXCLUDED.updated_by, updated_at=NOW()
+           RETURNING *`
+        : `INSERT INTO lead_documents (lead_id, doc_type, status, notes, updated_by, updated_at)
+           VALUES ($1,$2,$3,$4,$5,NOW())
+           ON CONFLICT (lead_id, doc_type) DO UPDATE SET status=EXCLUDED.status, notes=EXCLUDED.notes, updated_by=EXCLUDED.updated_by, updated_at=NOW()
+           RETURNING *`,
+      hasFile
+        ? [req.params.leadId, req.params.docType, status||'pending', notes||null, fileData, fileName||null, req.user.id]
+        : [req.params.leadId, req.params.docType, status||'pending', notes||null, req.user.id]
     );
     const r = rows[0];
-    res.json({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes });
+    res.json({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes, fileData:r.file_data, fileName:r.file_name });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

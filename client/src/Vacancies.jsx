@@ -299,7 +299,7 @@ function VacancyDetail({
   const [form, setForm] = useState({ ...v });
   const f = (k, val) => setForm((p) => ({ ...p, [k]: val }));
   const perm = roles[user.role] || {};
-  const canEdit = perm.canEdit || perm.canCfg;
+  const canEdit = perm.canEdit || perm.canCfg || perm.canEditVacancy;
   const inpS = inp(T);
   const labS = lab(T);
 
@@ -1446,7 +1446,7 @@ function PartnerVacanciesView({ user, leads, vacancies, T }) {
 function Vacancies({ leads, user, team, roles }) {
   const T = useT();
   const perm = roles[user.role] || {};
-  const canEdit = perm.canEdit || perm.canCfg;
+  const canEdit = perm.canEdit || perm.canCfg || perm.canEditVacancy;
 
   const [vacancies, setVacancies] = useState([]);
   const [selected, setSelected] = useState(null);

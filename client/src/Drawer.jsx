@@ -276,9 +276,63 @@ const [form,setForm]=useState({
         {tab==="docs"&&<div>
           <div style={{fontSize:11,color:T.muted,marginBottom:12}}>Hujjatlar yuklash (Hamkor uchun ham mavjud)</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            {[["passport","Pasport"],["cv_file","CV (fayl)"],["photo","Rasm (3x4)"],["id_card","ID karta"],["diploma","Diplom"],["doc1","Qo'shimcha 1"],["doc2","Qo'shimcha 2"],["doc3","Qo'shimcha 3"]].map(([k,lb])=>(
-              <input type="file" key={k} label={lb} value={(form.docs||{})[k]} onChange={v=>d(k,v)}/>
-            ))}
+            {[["passport","Pasport"],["cv_file","CV (fayl)"],["photo","Rasm (3x4)"],["id_card","ID karta"],["diploma","Diplom"],["doc1","Qo'shimcha 1"],["doc2","Qo'shimcha 2"],["doc3","Qo'shimcha 3"]].map(([k,lb])=>{
+              const docEntry = leadDocs[k]||{};
+              const hasFile = !!docEntry.fileData;
+              const openFile = () => {
+                const w = window.open();
+                if(docEntry.fileData.startsWith("data:application/pdf")){
+                  w.document.write(`<iframe src="${docEntry.fileData}" style="width:100%;height:100%;border:none"></iframe>`);
+                } else {
+                  w.document.write(`<img src="${docEntry.fileData}" style="max-width:100%"/>`);
+                }
+              };
+              const downloadFile = () => {
+                const a = document.createElement("a");
+                a.href = docEntry.fileData;
+                a.download = docEntry.fileName || k;
+                a.click();
+              };
+              return (
+                <div key={k} style={{background:T.card,border:`1px solid ${hasFile?T.accent+"66":T.border}`,borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:6}}>{lb}</div>
+                  {hasFile ? (
+                    <div>
+                      <div style={{fontSize:9,color:T.muted,marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{docEntry.fileName||k}</div>
+                      <div style={{display:"flex",gap:5}}>
+                        <button onClick={openFile} style={{flex:1,padding:"4px 0",fontSize:10,borderRadius:5,border:`1px solid ${T.accent}`,background:`${T.accent}22`,color:T.accent,cursor:"pointer",fontWeight:700}}>👁 Ko'rish</button>
+                        <button onClick={downloadFile} style={{flex:1,padding:"4px 0",fontSize:10,borderRadius:5,border:`1px solid ${T.green}`,background:`${T.green}22`,color:T.green,cursor:"pointer",fontWeight:700}}>⬇ Yuklab</button>
+                        <label style={{flex:1,padding:"4px 0",fontSize:10,borderRadius:5,border:`1px solid ${T.border}`,background:T.card2,color:T.muted,cursor:"pointer",fontWeight:700,textAlign:"center",display:"block"}}>
+                          ✏️
+                          <input type="file" accept="image/*,application/pdf" style={{display:"none"}} onChange={e=>{
+                            const file=e.target.files[0];if(!file)return;
+                            const reader=new FileReader();
+                            reader.onload=async ev=>{
+                              const saved=await leadDocsAPI.upsert(lead.id,k,{status:docEntry.status||"pending",notes:docEntry.notes||null,fileData:ev.target.result,fileName:file.name});
+                              setLeadDocs(p=>({...p,[k]:{...p[k],...saved,fileData:ev.target.result,fileName:file.name}}));
+                            };
+                            reader.readAsDataURL(file);e.target.value="";
+                          }}/>
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <label style={{display:"block",textAlign:"center",padding:"8px 0",fontSize:10,color:T.muted,border:`1px dashed ${T.border}`,borderRadius:6,cursor:"pointer"}}>
+                      📎 Fayl yuklash
+                      <input type="file" accept="image/*,application/pdf" style={{display:"none"}} onChange={e=>{
+                        const file=e.target.files[0];if(!file)return;
+                        const reader=new FileReader();
+                        reader.onload=async ev=>{
+                          const saved=await leadDocsAPI.upsert(lead.id,k,{status:docEntry.status||"pending",notes:docEntry.notes||null,fileData:ev.target.result,fileName:file.name});
+                          setLeadDocs(p=>({...p,[k]:{...p[k],...saved,fileData:ev.target.result,fileName:file.name}}));
+                        };
+                        reader.readAsDataURL(file);e.target.value="";
+                      }}/>
+                    </label>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>}
 
