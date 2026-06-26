@@ -12,11 +12,13 @@ const V_STATUS = {
 };
 
 const CAND_STATUS = {
-  submitted: { label: "Submitted", c: "#2563eb" },
-  approved: { label: "Approved", c: "#16a34a" },
-  rejected: { label: "Rejected", c: "#dc2626" },
-  interview: { label: "Interview", c: "#d97706" },
-  hired: { label: "Hired", c: "#9333ea" },
+  added:              { label: "Добавен кандидат",    c: "#3b82f6" },
+  interview:          { label: "За интервю",           c: "#d97706" },
+  approved_final:     { label: "Одобрен финално",     c: "#16a34a" },
+  rejected_final:     { label: "Отказан финално",     c: "#dc2626" },
+  reserve:            { label: "Резерва",              c: "#6b7280" },
+  rejected_recruiter: { label: "Отказан от Рекрутер", c: "#ea580c" },
+  approved_client:    { label: "Одобрен от Клиент",   c: "#9333ea" },
 };
 
 const CONTRACT_TYPES = [
@@ -307,7 +309,7 @@ function VacancyDetail({
   const [candidates, setCandidates] = useState([]);
   const [candLoading, setCandLoading] = useState(false);
   const [candModal, setCandModal] = useState(false);
-  const [candForm, setCandForm] = useState({ leadId: "", status: "submitted", note: "" });
+  const [candForm, setCandForm] = useState({ leadId: "", status: "added", note: "" });
   const cf = (k, val) => setCandForm((p) => ({ ...p, [k]: val }));
 
   // Partner access management
@@ -347,7 +349,7 @@ function VacancyDetail({
       });
       setCandidates(p => [saved, ...p]);
       setCandModal(false);
-      setCandForm({ leadId: "", status: "submitted", note: "" });
+      setCandForm({ leadId: "", status: "added", note: "" });
     } catch (err) { alert("Xato: " + err.message); }
   };
 
@@ -1065,7 +1067,7 @@ function VacancyDetail({
                       {candidates.map((c, i) => {
                         const lead = leads.find((l) => l.id === c.leadId);
                         const cs =
-                          CAND_STATUS[c.status] || CAND_STATUS.submitted;
+                          CAND_STATUS[c.status] || CAND_STATUS.added;
                         return (
                           <tr
                             key={c.id}
@@ -1366,7 +1368,7 @@ function PartnerVacanciesView({ user, leads, vacancies, T }) {
         leadId: candForm.leadId,
         leadName: lead?.name||"",
         addedByName: user.name,
-        status: "submitted",
+        status: "added",
         note: candForm.note||"",
       });
       setCandidates(p=>[...p,saved]);
@@ -1404,7 +1406,7 @@ function PartnerVacanciesView({ user, leads, vacancies, T }) {
       <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:10}}>Mening yuborishlarim</div>
       {myCands.length===0&&<div style={{color:T.muted,fontSize:12,padding:20}}>Hali nomzod yuborilmagan</div>}
       {myCands.map(c=>{
-        const cs=CAND_STATUS[c.status]||CAND_STATUS.submitted;
+        const cs=CAND_STATUS[c.status]||CAND_STATUS.added;
         const lead=leads.find(l=>l.id===c.leadId);
         return <div key={c.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>

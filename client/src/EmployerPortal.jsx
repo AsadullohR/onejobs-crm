@@ -5,16 +5,19 @@ import { fmtMs, inp, lab, I } from "./helpers.jsx";
 import { vacanciesAPI, candidatesAPI, employerAPI } from "./api.js";
 
 // ─── CANDIDATE STATUS MAP ─────────────────────────────────────────────────────
-const CAND_STATUS_KEYS = ["submitted", "approved", "rejected", "interview", "hired"];
+const CAND_STATUS_KEYS = ["added", "interview", "approved_final", "rejected_final", "reserve", "rejected_recruiter", "approved_client"];
 
 function candStatusMap(t) {
   return {
-    submitted: { label: t("emp_cand_submitted"), c: "#2563eb" },
-    applied:   { label: t("emp_cand_submitted"), c: "#2563eb" },
-    approved:  { label: t("emp_cand_approved"),  c: "#16a34a" },
-    rejected:  { label: t("emp_cand_rejected"),  c: "#dc2626" },
-    interview: { label: t("emp_cand_interview"), c: "#d97706" },
-    hired:     { label: t("emp_cand_hired"),     c: "#9333ea" },
+    added:              { label: t("cand_added"),              c: "#3b82f6" },
+    interview:          { label: t("cand_interview"),          c: "#d97706" },
+    approved_final:     { label: t("cand_approved_final"),     c: "#16a34a" },
+    rejected_final:     { label: t("cand_rejected_final"),     c: "#dc2626" },
+    reserve:            { label: t("cand_reserve"),            c: "#6b7280" },
+    rejected_recruiter: { label: t("cand_rejected_recruiter"), c: "#ea580c" },
+    approved_client:    { label: t("cand_approved_client"),    c: "#9333ea" },
+    submitted:          { label: t("cand_added"),              c: "#3b82f6" },
+    applied:            { label: t("cand_added"),              c: "#3b82f6" },
   };
 }
 
@@ -161,7 +164,7 @@ function WorkersTab({ t, T }) {
 
   if (loading) return <div style={{ color: T.muted, textAlign: "center", padding: 40, fontSize: 12 }}>{t("loading")}</div>;
 
-  const CAND_STATUS_KEYS_ALL = ["all", "submitted", "approved", "interview", "hired", "rejected"];
+  const CAND_STATUS_KEYS_ALL = ["all", "added", "interview", "approved_final", "rejected_final", "reserve", "rejected_recruiter", "approved_client"];
   const filtered = filter === "all" ? workers : workers.filter(w => w.status === filter);
 
   if (workers.length === 0) return (
