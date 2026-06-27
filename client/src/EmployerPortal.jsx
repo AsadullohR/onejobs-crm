@@ -5,7 +5,7 @@ import { fmtMs, inp, lab, I } from "./helpers.jsx";
 import { vacanciesAPI, candidatesAPI, employerAPI } from "./api.js";
 
 // ─── CANDIDATE STATUS MAP ─────────────────────────────────────────────────────
-const CAND_STATUS_KEYS = ["added", "interview", "approved_final", "rejected_final", "reserve", "rejected_recruiter", "approved_client"];
+const CAND_STATUS_KEYS = ["added","interview","approved_final","rejected_final","reserve","rejected_recruiter","approved_client","docs_prep","filed_migration","permit_received","scheduled_visa","visa_docs_sent","submitted_embassy","visa_received"];
 
 function candStatusMap(t) {
   return {
@@ -16,6 +16,13 @@ function candStatusMap(t) {
     reserve:            { label: t("cand_reserve"),            c: "#6b7280" },
     rejected_recruiter: { label: t("cand_rejected_recruiter"), c: "#ea580c" },
     approved_client:    { label: t("cand_approved_client"),    c: "#9333ea" },
+    docs_prep:          { label: t("cand_docs_prep"),          c: "#0891b2" },
+    filed_migration:    { label: t("cand_filed_migration"),    c: "#7c3aed" },
+    permit_received:    { label: t("cand_permit_received"),    c: "#059669" },
+    scheduled_visa:     { label: t("cand_scheduled_visa"),     c: "#b45309" },
+    visa_docs_sent:     { label: t("cand_visa_docs_sent"),     c: "#0369a1" },
+    submitted_embassy:  { label: t("cand_submitted_embassy"),  c: "#1d4ed8" },
+    visa_received:      { label: t("cand_visa_received"),      c: "#15803d" },
     submitted:          { label: t("cand_added"),              c: "#3b82f6" },
     applied:            { label: t("cand_added"),              c: "#3b82f6" },
   };
@@ -164,7 +171,7 @@ function WorkersTab({ t, T }) {
 
   if (loading) return <div style={{ color: T.muted, textAlign: "center", padding: 40, fontSize: 12 }}>{t("loading")}</div>;
 
-  const CAND_STATUS_KEYS_ALL = ["all", "added", "interview", "approved_final", "rejected_final", "reserve", "rejected_recruiter", "approved_client"];
+  const CAND_STATUS_KEYS_ALL = ["all","added","interview","approved_final","rejected_final","reserve","rejected_recruiter","approved_client","docs_prep","filed_migration","permit_received","scheduled_visa","visa_docs_sent","submitted_embassy","visa_received"];
   const filtered = filter === "all" ? workers : workers.filter(w => w.status === filter);
 
   if (workers.length === 0) return (

@@ -409,8 +409,8 @@ const [form,setForm]=useState({
           {vacCands.length===0?(
             <div style={{textAlign:"center",padding:"30px 0",color:T.muted,fontSize:12}}>Hech qanday vakansiyaga qo'shilmagan</div>
           ):vacCands.map(c=>{
-            const CAND_COLORS={added:"#3b82f6",interview:"#d97706",approved_final:"#16a34a",rejected_final:"#dc2626",reserve:"#6b7280",rejected_recruiter:"#ea580c",approved_client:"#9333ea",submitted:"#3b82f6",approved:"#16a34a",rejected:"#dc2626",hired:"#9333ea"};
-            const CAND_LABELS={added:"Добавен кандидат",interview:"За интервю",approved_final:"Одобрен финално",rejected_final:"Отказан финально",reserve:"Резерва",rejected_recruiter:"Отказан от Рекрутер",approved_client:"Одобрен от Клиент",submitted:"Добавен кандидат",approved:"Одобрен финально",rejected:"Отказан финально",hired:"Одобрен от Клиент"};
+            const CAND_COLORS={added:"#3b82f6",interview:"#d97706",approved_final:"#16a34a",rejected_final:"#dc2626",reserve:"#6b7280",rejected_recruiter:"#ea580c",approved_client:"#9333ea",docs_prep:"#0891b2",filed_migration:"#7c3aed",permit_received:"#059669",scheduled_visa:"#b45309",visa_docs_sent:"#0369a1",submitted_embassy:"#1d4ed8",visa_received:"#15803d",submitted:"#3b82f6",approved:"#16a34a",rejected:"#dc2626",hired:"#9333ea"};
+            const CAND_LABELS={added:"Добавен кандидат",interview:"За интервю",approved_final:"Одобрен финально",rejected_final:"Отказан финально",reserve:"Резерва",rejected_recruiter:"Отказан от Рекрутер",approved_client:"Одобрен от Клиент",docs_prep:"Подготовка документов",filed_migration:"Filed with Migration / A3",permit_received:"Permit received",scheduled_visa:"Scheduled for visa",visa_docs_sent:"Visa documents sent",submitted_embassy:"Submitted at the embassy",visa_received:"Visa received ✅",submitted:"Добавен кандидат",approved:"Одобрен финально",rejected:"Отказан финально",hired:"Одобрен от Клиент"};
             const sc=CAND_COLORS[c.status]||"#6b7280";
             return(
               <div key={c.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 12px",marginBottom:8,borderLeft:`3px solid ${sc}`}}>

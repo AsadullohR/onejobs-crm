@@ -12,13 +12,20 @@ const V_STATUS = {
 };
 
 const CAND_STATUS = {
-  added:              { label: "Добавен кандидат",    c: "#3b82f6" },
-  interview:          { label: "За интервю",           c: "#d97706" },
-  approved_final:     { label: "Одобрен финално",     c: "#16a34a" },
-  rejected_final:     { label: "Отказан финално",     c: "#dc2626" },
-  reserve:            { label: "Резерва",              c: "#6b7280" },
-  rejected_recruiter: { label: "Отказан от Рекрутер", c: "#ea580c" },
-  approved_client:    { label: "Одобрен от Клиент",   c: "#9333ea" },
+  added:              { label: "Добавен кандидат",          c: "#3b82f6" },
+  interview:          { label: "За интервю",                 c: "#d97706" },
+  approved_final:     { label: "Одобрен финално",           c: "#16a34a" },
+  rejected_final:     { label: "Отказан финально",          c: "#dc2626" },
+  reserve:            { label: "Резерва",                    c: "#6b7280" },
+  rejected_recruiter: { label: "Отказан от Рекрутер",       c: "#ea580c" },
+  approved_client:    { label: "Одобрен от Клиент",         c: "#9333ea" },
+  docs_prep:          { label: "Подготовка на документи",   c: "#0891b2" },
+  filed_migration:    { label: "Filed with Migration / A3", c: "#7c3aed" },
+  permit_received:    { label: "Permit received",           c: "#059669" },
+  scheduled_visa:     { label: "Scheduled for visa",        c: "#b45309" },
+  visa_docs_sent:     { label: "Visa documents sent",       c: "#0369a1" },
+  submitted_embassy:  { label: "Submitted at the embassy",  c: "#1d4ed8" },
+  visa_received:      { label: "Visa received ✅",           c: "#15803d" },
 };
 
 const CONTRACT_TYPES = [
