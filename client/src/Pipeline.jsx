@@ -25,6 +25,7 @@ function Pipeline({
   const [search, setSearch] = useState("");
   const [fOwner, setFOwner] = useState("");
   const [fCountry, setFCountry] = useState("");
+  const [fSector, setFSector] = useState("");
   const [fPosition, setFPosition] = useState("");
   const [fDate, setFDate] = useState("");
   const [fDateField, setFDateField] = useState("createdAt");
@@ -104,6 +105,7 @@ function Pipeline({
       if (!owners.includes(String(fOwner))) return false;
     }
     if (fCountry && !l.country?.includes(fCountry)) return false;
+    if (fSector && l.sector !== fSector) return false;
     if (fPosition && l.position !== fPosition) return false;
     const leadDate = l[fDateField]?.slice(0, 10);
 
@@ -404,6 +406,16 @@ function Pipeline({
             ))}
           </select>
           <select
+            value={fSector}
+            onChange={(e) => setFSector(e.target.value)}
+            style={{ ...inpS, width: "auto", fontSize: 11 }}
+          >
+            <option value="">Ish sektori</option>
+            {config.sectors.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+          <select
             value={fPosition}
             onChange={(e) => setFPosition(e.target.value)}
             style={{ ...inpS, width: "auto", fontSize: 11 }}
@@ -602,6 +614,7 @@ function Pipeline({
             onClick={() => {
               setFOwner("");
               setFCountry("");
+              setFSector("");
               setFPosition("");
               setFDate("");
               setFDateField("createdAt");
