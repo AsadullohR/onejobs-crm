@@ -289,7 +289,7 @@ const [form,setForm]=useState({
                 )}
               </div>
             </div>
-          ))}
+          )})}
         </div>}
 
         {/* PARTNER DOCS */}
