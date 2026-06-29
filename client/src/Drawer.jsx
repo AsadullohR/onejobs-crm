@@ -232,7 +232,7 @@ const [form,setForm]=useState({
             ["q2","2-Qism","q2R","#8b5cf6","q2Receipt","q2Date","2-Qism To'lov sana"],
             ["q3","3-Qism","q3R","#3b82f6","q3Receipt","q3Date","3-Qism To'lov sana"],
           ].map(([k,lb,rk,c,rcp,dateKey,dateLabel])=>{
-            const canChangeDate=["admin","manager"].includes(user.role);
+            const canChangeDate=!form[dateKey]||["admin","manager"].includes(user.role);
             const rcpData=form[rcp];
             const openRcp=()=>{
               if(!rcpData)return;
