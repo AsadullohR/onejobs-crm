@@ -12,10 +12,11 @@ function Tasks({tasks, setTasks, leads, user, team, roles, addNotif, open}) {
   const [dragTaskOver,setDragTaskOver]=useState(null);
 
   // ── Filters ──────────────────────────────────────────────
-  const [fAssignee,setFAssignee]=useState("");       // "" = all
+  const [fAssignee,setFAssignee]=useState("");
   const [fDateFrom,setFDateFrom]=useState("");
   const [fDateTo,setFDateTo]=useState("");
-  const [fStatus,setFStatus]=useState("");           // "" = all
+  const [fStatus,setFStatus]=useState("");
+  const [fDatePreset,setFDatePreset]=useState("");   // today|week|month|custom|""
 
   const PC={high:T.red,medium:T.yellow,low:T.green};
   const COLS={
@@ -33,13 +34,32 @@ function Tasks({tasks, setTasks, leads, user, team, roles, addNotif, open}) {
     return true;
   });
 
+  // Resolve date preset to [from, to]
+  const today = new Date().toISOString().slice(0,10);
+  const weekAgo = new Date(Date.now()-6*86400000).toISOString().slice(0,10);
+  const monthStart = `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}-01`;
+  const applyPreset = (preset) => {
+    setFDatePreset(preset);
+    if(preset==="today") { setFDateFrom(today); setFDateTo(today); }
+    else if(preset==="week") { setFDateFrom(weekAgo); setFDateTo(today); }
+    else if(preset==="month") { setFDateFrom(monthStart); setFDateTo(today); }
+    else if(preset==="custom") { /* keep existing */ }
+    else { setFDateFrom(""); setFDateTo(""); }
+  };
+
   const save = async () => {
     if(!form.title) return;
-    const isNew = !tasks.some(t=>t.id===form.id);
-    const taskData = {...form, id: form.id||uid(), createdBy:user.id, at: form.at||new Date().toISOString()};
+    // isNew: form.id must be a numeric DB id (not a temp uid) to be an update
+    const isDBId = /^\d+$/.test(String(form.id||""));
+    const isNew = !isDBId;
+    const tempId = form.id && !isDBId ? form.id : uid(); // reuse temp id if retrying unsaved task
+    const taskData = {...form, id: isDBId ? form.id : tempId, createdBy:user.id, at: form.at||new Date().toISOString()};
 
-    // Optimistic update
-    setTasks(p=>isNew ? [...p,taskData] : p.map(t=>t.id===taskData.id?taskData:t));
+    // Optimistic update — replace temp-id task if retrying, otherwise add or update
+    setTasks(p=>{
+      const exists = p.some(t=>t.id===taskData.id);
+      return exists ? p.map(t=>t.id===taskData.id?taskData:t) : [...p,taskData];
+    });
     if(isNew && addNotif){
       const who = team.find(u=>u.id===taskData.assignee)?.name||'?';
       const supervisors = team.filter(u=>u.role==="admin"||u.role==="manager").map(u=>u.id);
@@ -100,7 +120,6 @@ function Tasks({tasks, setTasks, leads, user, team, roles, addNotif, open}) {
     {/* Filters */}
     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,padding:"9px 12px",background:T.card,border:`1px solid ${T.border}`,borderRadius:8,alignItems:"center"}}>
       <span style={{fontSize:10,color:T.muted,fontWeight:600}}>Filter:</span>
-      {/* Assignee filter */}
       <select value={fAssignee} onChange={e=>setFAssignee(e.target.value)} style={{...inpS,width:140,fontSize:10}}>
         <option value="">👥 Barcha xodimlar</option>
         <option value={String(user.id)}>🙋 Mening vazifalarim</option>
@@ -108,24 +127,33 @@ function Tasks({tasks, setTasks, leads, user, team, roles, addNotif, open}) {
           <option key={t.id} value={String(t.id)}>{t.label}</option>
         ))}
       </select>
-      {/* Status filter */}
       <select value={fStatus} onChange={e=>setFStatus(e.target.value)} style={{...inpS,width:130,fontSize:10}}>
         <option value="">📊 Barcha holatlar</option>
         <option value="todo">📋 Bajarilmagan</option>
         <option value="inprogress">⚡ Jarayonda</option>
         <option value="done">✅ Bajarildi</option>
       </select>
-      {/* Date range */}
-      <div style={{display:"flex",gap:4,alignItems:"center"}}>
-        <span style={{fontSize:10,color:T.muted}}>Dan:</span>
-        <input type="date" value={fDateFrom} onChange={e=>setFDateFrom(e.target.value)} style={{...inpS,width:120,fontSize:10}}/>
+      {/* Date quick-select */}
+      <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
+        {[["","Barchasi"],["today","Bugun"],["week","Bu hafta"],["month","Bu oy"],["custom","Sana"]].map(([p,l])=>(
+          <button key={p} onClick={()=>applyPreset(p)}
+            style={{padding:"4px 10px",borderRadius:14,fontSize:10,fontWeight:700,cursor:"pointer",
+              border:`1px solid ${fDatePreset===p?T.accent:T.border}`,
+              background:fDatePreset===p?`${T.accent}22`:T.card2,
+              color:fDatePreset===p?T.accent:T.muted}}>
+            {l}
+          </button>
+        ))}
       </div>
-      <div style={{display:"flex",gap:4,alignItems:"center"}}>
-        <span style={{fontSize:10,color:T.muted}}>Gacha:</span>
-        <input type="date" value={fDateTo} onChange={e=>setFDateTo(e.target.value)} style={{...inpS,width:120,fontSize:10}}/>
-      </div>
-      {(fAssignee||fStatus||fDateFrom||fDateTo)&&
-        <button onClick={()=>{setFAssignee("");setFStatus("");setFDateFrom("");setFDateTo("");}}
+      {fDatePreset==="custom"&&(
+        <div style={{display:"flex",gap:4,alignItems:"center"}}>
+          <input type="date" value={fDateFrom} onChange={e=>setFDateFrom(e.target.value)} style={{...inpS,width:120,fontSize:10}}/>
+          <span style={{color:T.muted,fontSize:10}}>—</span>
+          <input type="date" value={fDateTo} onChange={e=>setFDateTo(e.target.value)} style={{...inpS,width:120,fontSize:10}}/>
+        </div>
+      )}
+      {(fAssignee||fStatus||fDatePreset)&&
+        <button onClick={()=>{setFAssignee("");setFStatus("");setFDateFrom("");setFDateTo("");setFDatePreset("");}}
           style={{padding:"4px 9px",borderRadius:5,background:`${T.red}22`,color:T.red,border:`1px solid ${T.red}44`,cursor:"pointer",fontSize:10,fontWeight:600}}>
           ✕ Tozalash
         </button>
