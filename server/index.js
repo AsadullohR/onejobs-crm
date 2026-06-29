@@ -282,8 +282,9 @@ app.post("/api/leads", auth, async (req, res) => {
         comment, note, owner_sales, owner_consult, owner_docs, q1, q2, q3, xba,
         kpi_sales, kpi_consult, kpi_docs, cv, docs, history,
         last_contact, contract_date, interview_date, dest, sof_foyda, quality, quality_note,
-        xba_date, q1_date, q2_date, q3_date)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36)
+        xba_date, q1_date, q2_date, q3_date,
+        xba_receipt, q1_receipt, q2_receipt, q3_receipt)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)
       ON CONFLICT (id) DO UPDATE SET
         name=$2, phone=$3, telegram=$4, status=$5, country=$6, sector=$7, position=$8, source=$9, gender=$10,
         comment=$11, note=$12, owner_sales=$13, owner_consult=$14, owner_docs=$15, q1=$16, q2=$17, q3=$18, xba=$19,
@@ -291,6 +292,7 @@ app.post("/api/leads", auth, async (req, res) => {
         last_contact=$26, contract_date=$27, interview_date=$28, dest=$29, sof_foyda=$30,
         quality=$31, quality_note=$32,
         xba_date=$33, q1_date=$34, q2_date=$35, q3_date=$36,
+        xba_receipt=$37, q1_receipt=$38, q2_receipt=$39, q3_receipt=$40,
         updated_at=NOW()
       RETURNING *`,
       [
@@ -330,6 +332,10 @@ app.post("/api/leads", auth, async (req, res) => {
         l.q1Date || null,
         l.q2Date || null,
         l.q3Date || null,
+        l.xbaReceipt || null,
+        l.q1Receipt || null,
+        l.q2Receipt || null,
+        l.q3Receipt || null,
       ],
     );
     const saved = rows[0];

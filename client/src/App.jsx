@@ -122,6 +122,7 @@ const mapLead = useCallback(l => ({
   q1:l.q1||false, q2:l.q2||false, q3:l.q3||false, xba:l.xba||false,
   kpiSales:l.kpi_sales||false, kpiConsult:l.kpi_consult||false, kpiDocs:l.kpi_docs||false,
   xbaDate:l.xba_date||null, q1Date:l.q1_date||null, q2Date:l.q2_date||null, q3Date:l.q3_date||null,
+  xbaReceipt:l.xba_receipt||null, q1Receipt:l.q1_receipt||null, q2Receipt:l.q2_receipt||null, q3Receipt:l.q3_receipt||null,
   sofFoyda:l.sof_foyda||null, docs:l.docs||{}, cv:l.cv||{}, history:l.history||[],
   createdAt:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.created_at),
   lastCall:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.last_contact),
@@ -167,6 +168,10 @@ const saveLead = useCallback(async f => {
         q1Date:f.q1Date||null,
         q2Date:f.q2Date||null,
         q3Date:f.q3Date||null,
+        xbaReceipt:f.xbaReceipt||null,
+        q1Receipt:f.q1Receipt||null,
+        q2Receipt:f.q2Receipt||null,
+        q3Receipt:f.q3Receipt||null,
 
         cv:f.cv,
         docs:f.docs,
