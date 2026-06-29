@@ -197,8 +197,7 @@ app.get("/api/leads", auth, async (req, res) => {
         l.q1, l.q2, l.q3, l.xba,
         l.q1_receipt, l.q2_receipt, l.q3_receipt, l.xba_receipt,
         l.kpi_sales, l.kpi_consult, l.kpi_docs,
-        l.kpi_sales_date, l.kpi_consult_date, l.kpi_docs_date,
-        l.kpi_sales_receipt, l.kpi_consult_receipt, l.kpi_docs_receipt,
+        l.xba_date, l.q1_date, l.q2_date, l.q3_date,
         l.total_income, l.total_expense, l.net_balance, l.sof_foyda,
         l.last_contact, l.contract_date, l.interview_date, l.dest,
         l.quality, l.quality_note, l.created_at, l.updated_at,
@@ -283,17 +282,15 @@ app.post("/api/leads", auth, async (req, res) => {
         comment, note, owner_sales, owner_consult, owner_docs, q1, q2, q3, xba,
         kpi_sales, kpi_consult, kpi_docs, cv, docs, history,
         last_contact, contract_date, interview_date, dest, sof_foyda, quality, quality_note,
-        kpi_sales_date, kpi_consult_date, kpi_docs_date,
-        kpi_sales_receipt, kpi_consult_receipt, kpi_docs_receipt)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
+        xba_date, q1_date, q2_date, q3_date)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36)
       ON CONFLICT (id) DO UPDATE SET
         name=$2, phone=$3, telegram=$4, status=$5, country=$6, sector=$7, position=$8, source=$9, gender=$10,
         comment=$11, note=$12, owner_sales=$13, owner_consult=$14, owner_docs=$15, q1=$16, q2=$17, q3=$18, xba=$19,
         kpi_sales=$20, kpi_consult=$21, kpi_docs=$22, cv=$23, docs=$24, history=$25,
         last_contact=$26, contract_date=$27, interview_date=$28, dest=$29, sof_foyda=$30,
         quality=$31, quality_note=$32,
-        kpi_sales_date=$33, kpi_consult_date=$34, kpi_docs_date=$35,
-        kpi_sales_receipt=$36, kpi_consult_receipt=$37, kpi_docs_receipt=$38,
+        xba_date=$33, q1_date=$34, q2_date=$35, q3_date=$36,
         updated_at=NOW()
       RETURNING *`,
       [
@@ -329,12 +326,10 @@ app.post("/api/leads", auth, async (req, res) => {
         l.sofFoyda || null,
         l.quality || null,
         l.qualityNote || null,
-        l.kpiSalesDate || null,
-        l.kpiConsultDate || null,
-        l.kpiDocsDate || null,
-        l.kpiSalesReceipt || null,
-        l.kpiConsultReceipt || null,
-        l.kpiDocsReceipt || null,
+        l.xbaDate || null,
+        l.q1Date || null,
+        l.q2Date || null,
+        l.q3Date || null,
       ],
     );
     const saved = rows[0];
@@ -1802,12 +1797,10 @@ app.listen(PORT, async () => {
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS quality TEXT`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS quality_note TEXT`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS company TEXT`);
-    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS kpi_sales_date DATE`);
-    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS kpi_consult_date DATE`);
-    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS kpi_docs_date DATE`);
-    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS kpi_sales_receipt TEXT`);
-    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS kpi_consult_receipt TEXT`);
-    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS kpi_docs_receipt TEXT`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS xba_date DATE`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS q1_date DATE`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS q2_date DATE`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS q3_date DATE`);
     await pool.query(`CREATE TABLE IF NOT EXISTS status_log (
       id SERIAL PRIMARY KEY,
       lead_id TEXT,

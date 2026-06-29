@@ -207,30 +207,9 @@ const [form,setForm]=useState({
         {/* KPI */}
         {tab==="kpi"&&<div>
           <div style={{fontSize:11,color:T.muted,marginBottom:14}}>KPI belgilar mas'ul shaxs ishini tasdiqlaydi</div>
-          {[
-            ["kpiSales","💼 Sotuv KPI","ownerSales","#f97316","kpiSalesDate","kpiSalesReceipt"],
-            ["kpiConsult","🎓 Konsultant KPI","ownerConsult","#22c55e","kpiConsultDate","kpiConsultReceipt"],
-            ["kpiDocs","📁 Hujjatchi KPI","ownerDocs","#06b6d4","kpiDocsDate","kpiDocsReceipt"],
-          ].map(([k,label,ownerKey,c,dateKey,rcpKey])=>{
+          {[["kpiSales","💼 Sotuv KPI","ownerSales","#f97316"],["kpiConsult","🎓 Konsultant KPI","ownerConsult","#22c55e"],["kpiDocs","📁 Hujjatchi KPI","ownerDocs","#06b6d4"]].map(([k,label,ownerKey,c])=>{
             const owner=team.find(t=>t.id===form[ownerKey]);
-            const canChangeDate=["admin","manager"].includes(user.role);
-            const rcp=form[rcpKey];
-            const openRcp=()=>{
-              if(!rcp)return;
-              if(rcp.startsWith("data:")){
-                const w=window.open();
-                if(rcp.startsWith("data:application/pdf"))w.document.write(`<iframe src="${rcp}" style="width:100%;height:100%;border:none"></iframe>`);
-                else w.document.write(`<img src="${rcp}" style="max-width:100%"/>`);
-              } else { window.open(rcp,"_blank"); }
-            };
-            const downloadRcp=()=>{
-              const a=document.createElement("a");
-              a.href=rcp;
-              a.download=`${label}-chek`;
-              a.click();
-            };
             return <div key={k} style={{background:form[k]?`${c}15`:T.card2,border:`1px solid ${form[k]?c+"44":T.border}`,borderRadius:9,padding:"12px 14px",marginBottom:10}}>
-              {/* Top row: checkbox + avatar + status */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <label style={{display:"flex",alignItems:"center",gap:8,cursor:canOwner||(user.id===form[ownerKey])?"pointer":"default",fontSize:13,fontWeight:700,color:form[k]?c:T.sub}}>
                   <input type="checkbox" checked={form[k]||false} onChange={e=>f(k,e.target.checked)} disabled={!canOwner&&user.id!==form[ownerKey]} style={{width:16,height:16,accentColor:c}}/>{label}
@@ -241,91 +220,63 @@ const [form,setForm]=useState({
                 </div>
               </div>
               {owner&&<div style={{fontSize:10,color:T.muted,marginTop:4}}>Mas'ul: {owner.name}</div>}
-
-              {/* Date + Receipt row */}
-              <div style={{display:"flex",gap:8,alignItems:"center",marginTop:10,flexWrap:"wrap"}}>
-                {/* Muhim sana */}
-                <div style={{display:"flex",alignItems:"center",gap:5,flex:1,minWidth:140}}>
-                  <span style={{fontSize:10,color:T.muted,whiteSpace:"nowrap"}}>📅 Muhim sana:</span>
-                  <input
-                    type="date"
-                    value={form[dateKey]||""}
-                    onChange={e=>f(dateKey,e.target.value)}
-                    disabled={!canChangeDate}
-                    title={canChangeDate?"":"Faqat menejer/admin o'zgartira oladi"}
-                    style={{...inpS,flex:1,fontSize:10,padding:"3px 7px",
-                      opacity:canChangeDate?1:0.6,
-                      cursor:canChangeDate?"pointer":"not-allowed",
-                      borderColor:form[dateKey]?c:T.border}}
-                  />
-                </div>
-
-                {/* Receipt icons */}
-                {rcp ? (
-                  <div style={{display:"flex",gap:5}}>
-                    <button onClick={openRcp}
-                      style={{display:"flex",alignItems:"center",gap:3,fontSize:10,fontWeight:700,padding:"4px 10px",borderRadius:6,border:`1px solid ${c}`,background:`${c}15`,color:c,cursor:"pointer"}}>
-                      👁 Ko'rish
-                    </button>
-                    <button onClick={downloadRcp}
-                      style={{display:"flex",alignItems:"center",gap:3,fontSize:10,fontWeight:700,padding:"4px 10px",borderRadius:6,border:`1px solid ${T.green}`,background:`${T.green}15`,color:T.green,cursor:"pointer"}}>
-                      ⬇ Yuklab
-                    </button>
-                    <button onClick={()=>f(rcpKey,null)}
-                      style={{fontSize:10,padding:"4px 8px",borderRadius:6,border:`1px solid ${T.border}`,background:T.card2,color:T.muted,cursor:"pointer"}}>
-                      ✕
-                    </button>
-                  </div>
-                ) : (
-                  <label style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:T.muted,cursor:"pointer",background:T.card,border:`1px dashed ${T.border}`,borderRadius:6,padding:"4px 10px",whiteSpace:"nowrap"}}>
-                    📎 Chek yuklash
-                    <input type="file" accept="image/*,application/pdf" style={{display:"none"}} onChange={e=>{
-                      const file=e.target.files[0];if(!file)return;
-                      const reader=new FileReader();
-                      reader.onload=ev=>f(rcpKey,ev.target.result);
-                      reader.readAsDataURL(file);
-                      e.target.value="";
-                    }}/>
-                  </label>
-                )}
-              </div>
             </div>;
           })}
         </div>}
 
         {/* PAYMENTS */}
         {tab==="pay"&&!isPartner&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          {[["q1","1-Qism","q1R","#ec4899","q1Receipt"],["q2","2-Qism","q2R","#8b5cf6","q2Receipt"],["q3","3-Qism","q3R","#3b82f6","q3Receipt"],["xba","XBA","xbaR","#f97316","xbaReceipt"]].map(([k,lb,rk,c,rcp])=>(
-            <div key={k} style={{background:form[k]?`${c}15`:T.card2,border:`1px solid ${form[k]?c+"44":T.border}`,borderRadius:9,padding:"12px 13px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+          {[
+            ["xba","XBA To'lov","xbaR","#f97316","xbaReceipt","xbaDate","XBA To'lov sana"],
+            ["q1","1-Qism","q1R","#ec4899","q1Receipt","q1Date","1-Qism To'lov sana"],
+            ["q2","2-Qism","q2R","#8b5cf6","q2Receipt","q2Date","2-Qism To'lov sana"],
+            ["q3","3-Qism","q3R","#3b82f6","q3Receipt","q3Date","3-Qism To'lov sana"],
+          ].map(([k,lb,rk,c,rcp,dateKey,dateLabel])=>{
+            const canChangeDate=["admin","manager"].includes(user.role);
+            const rcpData=form[rcp];
+            const openRcp=()=>{
+              if(!rcpData)return;
+              if(rcpData.startsWith("data:")){
+                const w=window.open();
+                if(rcpData.startsWith("data:application/pdf"))w.document.write(`<iframe src="${rcpData}" style="width:100%;height:100%;border:none"></iframe>`);
+                else w.document.write(`<img src="${rcpData}" style="max-width:100%"/>`);
+              } else { window.open(rcpData,"_blank"); }
+            };
+            const downloadRcp=()=>{
+              const a=document.createElement("a");
+              a.href=rcpData;
+              a.download=`${lb}-chek`;
+              a.click();
+            };
+            return (
+            <div key={k} style={{background:form[k]?`${c}15`:T.card2,border:`1px solid ${form[k]?c+"44":T.border}`,borderRadius:9,padding:"12px 13px",display:"flex",flexDirection:"column",gap:8}}>
+              {/* Checkbox row */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,fontWeight:700,color:form[k]?c:T.sub}}>
                   <input type="checkbox" checked={form[k]||false} onChange={e=>f(k,e.target.checked)} style={{width:16,height:16,accentColor:c}}/>{lb}
                 </label>
                 <span style={{fontSize:16}}>{form[k]?"✅":"⬜"}</span>
               </div>
-              {/* Receipt upload */}
-              <div style={{marginTop:4}}>
-                {form[rcp]?(
-                  <div style={{display:"flex",gap:5,alignItems:"center"}}>
-                    <button onClick={()=>{
-                      const url=form[rcp];
-                      if(!url)return;
-                      if(url.startsWith("data:")){
-                        const [header,b64]=url.split(",");
-                        const mime=header.match(/:(.*?);/)?.[1]||"application/octet-stream";
-                        const bytes=atob(b64);
-                        const arr=new Uint8Array(bytes.length);
-                        for(let i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
-                        const blob=new Blob([arr],{type:mime});
-                        window.open(URL.createObjectURL(blob),"_blank");
-                      } else {
-                        window.open(url,"_blank");
-                      }
-                    }} style={{fontSize:9,color:c,textDecoration:"none",background:`${c}15`,border:`1px solid ${c}44`,borderRadius:4,padding:"2px 7px",cursor:"pointer"}}>📎 Chek ko'rish</button>
-                    <button onClick={()=>f(rcp,null)} style={{fontSize:9,color:T.red,background:"none",border:"none",cursor:"pointer"}}>✕</button>
+              {/* Date */}
+              <div>
+                <div style={{fontSize:9,fontWeight:700,color:T.muted,marginBottom:3}}>{dateLabel}</div>
+                <input type="date" value={form[dateKey]||""} onChange={e=>f(dateKey,e.target.value)}
+                  disabled={!canChangeDate}
+                  title={canChangeDate?"":"Faqat menejer/admin o'zgartira oladi"}
+                  style={{...inpS,fontSize:10,padding:"3px 7px",width:"100%",
+                    opacity:canChangeDate?1:0.55,cursor:canChangeDate?"pointer":"not-allowed",
+                    borderColor:form[dateKey]?c:T.border}}/>
+              </div>
+              {/* Receipt */}
+              <div>
+                {rcpData?(
+                  <div style={{display:"flex",gap:4}}>
+                    <button onClick={openRcp} style={{flex:1,fontSize:9,fontWeight:700,padding:"4px 0",borderRadius:5,border:`1px solid ${c}`,background:`${c}15`,color:c,cursor:"pointer"}}>👁 Ko'rish</button>
+                    <button onClick={downloadRcp} style={{flex:1,fontSize:9,fontWeight:700,padding:"4px 0",borderRadius:5,border:`1px solid ${T.green}`,background:`${T.green}15`,color:T.green,cursor:"pointer"}}>⬇ Yuklab</button>
+                    <button onClick={()=>f(rcp,null)} style={{fontSize:9,padding:"4px 6px",borderRadius:5,border:`1px solid ${T.border}`,background:T.card2,color:T.muted,cursor:"pointer"}}>✕</button>
                   </div>
                 ):(
-                  <label style={{display:"inline-flex",alignItems:"center",gap:4,fontSize:9,color:T.muted,cursor:"pointer",background:T.card,border:`1px dashed ${T.border}`,borderRadius:4,padding:"3px 8px"}}>
+                  <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,fontSize:9,color:T.muted,cursor:"pointer",background:T.card,border:`1px dashed ${T.border}`,borderRadius:5,padding:"5px 0"}}>
                     📎 Chek yuklash
                     <input type="file" accept="image/*,application/pdf" style={{display:"none"}} onChange={e=>{
                       const file=e.target.files[0];if(!file)return;

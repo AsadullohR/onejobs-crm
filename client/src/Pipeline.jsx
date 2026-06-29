@@ -431,9 +431,13 @@ function Pipeline({
             style={{ ...inpS, width: "auto", fontSize: 11 }}
           >
             <option value="createdAt">📅 Qayd qilingan</option>
-            <option value="lastCall">📞 So‘ngi aloqa</option>
+            <option value="lastCall">📞 So’ngi aloqa</option>
             <option value="officeSuhbat">🏢 Suhbatga kelgan</option>
             <option value="shartnomaSana">📄 Shartnoma qilgan</option>
+            <option value="xbaDate">💰 XBA To’lov sana</option>
+            <option value="q1Date">💳 1-Qism To’lov sana</option>
+            <option value="q2Date">💳 2-Qism To’lov sana</option>
+            <option value="q3Date">💳 3-Qism To’lov sana</option>
           </select>
 
           <input
