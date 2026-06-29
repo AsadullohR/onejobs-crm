@@ -89,7 +89,7 @@ function XbaToastItem({ toast, onDismiss, T }) {
         position: "relative",
         pointerEvents: "auto",
         cursor: "pointer",
-        width: 320,
+        width: 380,
         background: "linear-gradient(135deg, #1a0a00 0%, #2d1200 50%, #1a0a00 100%)",
         border: "2px solid #f97316",
         borderRadius: 16,
@@ -108,17 +108,17 @@ function XbaToastItem({ toast, onDismiss, T }) {
 
       <div style={{ position: "relative", zIndex: 1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ fontSize: 36, animation: "xba-bounce 0.6s ease-in-out 0.3s 3", flexShrink: 0 }}>💰</div>
+          <div style={{ fontSize: 48, animation: "xba-bounce 0.6s ease-in-out 0.3s 3", flexShrink: 0 }}>💰</div>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "#f97316", marginBottom: 3 }}>XBA TO'LOV! 🎉</div>
-            <div style={{ fontSize: 12, color: "#fed7aa", lineHeight: 1.4 }}>{(toast.message||"").replace("💰 XBA To'lov! ", "").replace(" 🎉", "")}</div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: "#f97316", marginBottom: 4 }}>XBA TO'LOV! 🎉</div>
+            <div style={{ fontSize: 13, color: "#fed7aa", lineHeight: 1.4 }}>{(toast.message||"").replace("💰 XBA To'lov! ", "").replace(" 🎉", "")}</div>
           </div>
         </div>
 
         {/* Progress bar */}
         <div style={{ marginTop: 12, height: 3, background: "rgba(249,115,22,0.2)", borderRadius: 2, overflow: "hidden" }}>
           <div style={{
-            height: "100%", background: "#f97316", borderRadius: 2,
+            height: "100%", width: "100%", background: "#f97316", borderRadius: 2,
             animation: "xba-progress 6s linear forwards",
           }} />
         </div>

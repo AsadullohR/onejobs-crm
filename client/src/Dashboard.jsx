@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
 import { fmtMs, fmtD, isOD, isSoon, I, Pill, Av, inp } from "./helpers.jsx";
@@ -1341,6 +1341,7 @@ function Dashboard({ leads, tasks, user, team, txns, roles }) {
 
   const tabs = [
     { k: "kpi",    l: "📈 Biznes KPI" },
+    { k: "calls",  l: "📞 Qo'ng'iroqlar" },
     { k: "team",   l: "👔 Xodimlar" },
     { k: "time",   l: "⏱️ Vaqt Tahlili" },
     ...(perm.canSalary ? [{ k: "salary", l: "💰 Maosh Tahlili" }] : []),
@@ -1360,9 +1361,195 @@ function Dashboard({ leads, tasks, user, team, txns, roles }) {
       </div>
       <div style={{ flex: 1, overflow: "auto" }}>
         {tab === "kpi"    && <DashboardKPI leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles} />}
+        {tab === "calls"  && <CallsDashboard leads={leads} team={team} user={user} roles={roles} />}
         {tab === "team"   && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user} initialTab="productivity" />}
         {tab === "time"   && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user} initialTab="time" />}
         {tab === "salary" && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user} initialTab="salary" />}
+      </div>
+    </div>
+  );
+}
+
+// ─── CALLS DASHBOARD ─────────────────────────────────────────────────────────
+function CallsDashboard({ leads, team, user, roles }) {
+  const T = useT();
+  const inpS = inp(T);
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const weekAgo   = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const perm = roles[user.role] || {};
+  const seeAll = perm.seeAll;
+
+  const [dateFrom, setDateFrom] = useState(today);
+  const [dateTo,   setDateTo]   = useState(today);
+  const [selOwner, setSelOwner] = useState("all");
+
+  const QUICK = [
+    { l: "Bugun",     from: today,     to: today },
+    { l: "Kecha",     from: yesterday, to: yesterday },
+    { l: "Bu hafta",  from: weekAgo,   to: today },
+    { l: "Bu oy",     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10), to: today },
+  ];
+
+  // leads called in range (lastCall within dateFrom–dateTo)
+  const called = useMemo(() => leads.filter(l => {
+    if (!l.lastCall) return false;
+    if (l.lastCall < dateFrom || l.lastCall > dateTo) return false;
+    return true;
+  }), [leads, dateFrom, dateTo]);
+
+  // per-employee stats
+  const staffStats = useMemo(() => {
+    const byId = {};
+    const activeTeam = seeAll
+      ? team.filter(m => m.active !== false && !["employer","partner"].includes(m.role))
+      : team.filter(m => m.id === user.id);
+
+    activeTeam.forEach(m => {
+      byId[m.id] = { member: m, count: 0, leads: [] };
+    });
+
+    called.forEach(l => {
+      const ownerId = l.ownerSales || l.ownerConsult || l.ownerDocs;
+      if (ownerId && byId[ownerId]) {
+        byId[ownerId].count++;
+        byId[ownerId].leads.push(l);
+      }
+    });
+
+    return Object.values(byId).sort((a, b) => b.count - a.count);
+  }, [called, team, seeAll, user.id]);
+
+  const totalCalls = staffStats.reduce((s, e) => s + e.count, 0);
+  const topCaller  = staffStats[0];
+
+  // Table rows: called leads filtered by selected owner
+  const tableLeads = useMemo(() => {
+    const base = selOwner === "all" ? called : called.filter(l => {
+      const ownerId = l.ownerSales || l.ownerConsult || l.ownerDocs;
+      return String(ownerId) === selOwner;
+    });
+    return [...base].sort((a, b) => (b.lastCall || "") > (a.lastCall || "") ? 1 : -1);
+  }, [called, selOwner]);
+
+  const STATUS_C = {
+    "Yangi":"#6366f1","Boglanildi":"#0891b2","Onlayn Suhbat":"#0ea5e9","Suhbat":"#10b981",
+    "Shartnoma qildi":"#22c55e","Hujjat":"#84cc16","XBA To'lov qildi":"#f97316",
+    "Ishga qabul qilindi":"#16a34a","Jo'nab ketdi":"#15803d",
+    "Rad etildi":"#ef4444","Bekor qildi":"#6b7280",
+  };
+
+  return (
+    <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+      {/* Date controls */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+        {QUICK.map(q => (
+          <button key={q.l} onClick={() => { setDateFrom(q.from); setDateTo(q.to); }}
+            style={{ padding: "6px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer",
+              border: `1px solid ${T.border}`,
+              background: dateFrom === q.from && dateTo === q.to ? T.accent : T.card,
+              color:      dateFrom === q.from && dateTo === q.to ? "#fff"    : T.muted }}>
+            {q.l}
+          </button>
+        ))}
+        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ ...inpS, width: "auto", fontSize: 11 }} />
+        <span style={{ color: T.muted }}>—</span>
+        <input type="date" value={dateTo}   onChange={e => setDateTo(e.target.value)}   style={{ ...inpS, width: "auto", fontSize: 11 }} />
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 24 }}>
+        {[
+          ["📞", "JAMI QO'NG'IROQLAR", totalCalls + " ta", T.accent],
+          ["🏆", "ENG KO'P QO'NGIRAGAN", topCaller ? `${topCaller.member.name} (${topCaller.count})` : "—", T.green],
+          ["👥", "QILINGAN MIJOZLAR", tableLeads.length + " ta", T.text],
+        ].map(([ic, lb, val, c]) => (
+          <div key={lb} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "16px 18px", borderTop: `3px solid ${c}` }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 6 }}>{ic} {lb}</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: c }}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Employee leaderboard */}
+      {seeAll && (
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 18, marginBottom: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 14 }}>📊 Xodimlar reytingi</div>
+          {staffStats.map((e, i) => {
+            const pct = totalCalls > 0 ? Math.round((e.count / totalCalls) * 100) : 0;
+            const barC = i === 0 ? T.green : i === 1 ? T.accent : i === 2 ? "#f59e0b" : T.muted;
+            return (
+              <div key={e.member.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, cursor: "pointer" }}
+                onClick={() => setSelOwner(selOwner === String(e.member.id) ? "all" : String(e.member.id))}>
+                <div style={{ width: 24, fontWeight: 800, fontSize: 12, color: T.muted, textAlign: "center" }}>
+                  {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i+1}`}
+                </div>
+                <Av id={e.member.id} team={[e.member]} size={28} />
+                <div style={{ width: 110, fontSize: 11, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.member.name}</div>
+                <div style={{ flex: 1, height: 8, background: T.card2, borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${pct}%`, background: barC, borderRadius: 4, transition: "width 0.4s" }} />
+                </div>
+                <div style={{ width: 50, textAlign: "right", fontSize: 12, fontWeight: 800, color: barC }}>{e.count} ta</div>
+                <div style={{ width: 36, textAlign: "right", fontSize: 10, color: T.muted }}>{pct}%</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Called leads table */}
+      <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: T.text }}>
+            📋 Qo'ng'iroq qilingan mijozlar
+            {selOwner !== "all" && (
+              <span style={{ fontSize: 10, color: T.accent, marginLeft: 8, fontWeight: 400 }}>
+                — {team.find(m => String(m.id) === selOwner)?.name}
+                <button onClick={() => setSelOwner("all")} style={{ marginLeft: 6, fontSize: 9, color: T.muted, background: "none", border: "none", cursor: "pointer" }}>✕</button>
+              </span>
+            )}
+          </div>
+          <select value={selOwner} onChange={e => setSelOwner(e.target.value)} style={{ ...inpS, width: "auto", fontSize: 11 }}>
+            <option value="all">Barcha xodimlar</option>
+            {team.filter(m => m.active !== false && !["employer","partner"].includes(m.role)).map(m => (
+              <option key={m.id} value={String(m.id)}>{m.name}</option>
+            ))}
+          </select>
+        </div>
+        {tableLeads.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "40px 0", color: T.muted, fontSize: 13 }}>Bu davrda qo'ng'iroq qilingan mijoz topilmadi</div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: T.card2 }}>
+                {["Mijoz", "Telefon", "Holat", "So'ngi aloqa", "Mas'ul"].map(h => (
+                  <th key={h} style={{ padding: "9px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, color: T.muted, borderBottom: `1px solid ${T.border}` }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tableLeads.map((l, i) => {
+                const stC = STATUS_C[l.status] || "#6b7280";
+                const owner = team.find(m => m.id === (l.ownerSales || l.ownerConsult || l.ownerDocs));
+                return (
+                  <tr key={l.id} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? T.card : T.card2 }}>
+                    <td style={{ padding: "9px 14px", fontSize: 11, fontWeight: 700, color: T.text }}>{l.name}</td>
+                    <td style={{ padding: "9px 14px", fontSize: 11, color: T.muted }}>{l.phone || "—"}</td>
+                    <td style={{ padding: "9px 14px" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 9px", borderRadius: 10, background: `${stC}22`, color: stC, border: `1px solid ${stC}44`, whiteSpace: "nowrap" }}>
+                        {l.status || "—"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "9px 14px", fontSize: 11, color: T.muted }}>{l.lastCall || "—"}</td>
+                    <td style={{ padding: "9px 14px" }}>
+                      {owner ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Av id={owner.id} team={[owner]} size={22}/><span style={{ fontSize: 10, color: T.text }}>{owner.name}</span></div> : <span style={{ color: T.muted, fontSize: 10 }}>—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

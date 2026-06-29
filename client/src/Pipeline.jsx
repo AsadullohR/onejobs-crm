@@ -40,6 +40,9 @@ function Pipeline({
   const [sortBy, setSortBy] = useState("newest");
   const [showFilters, setShowFilters] = useState(true);
   const [editMode, setEditMode] = useState(false);
+  const [showLastCallReport, setShowLastCallReport] = useState(false);
+  const [lcDateFrom, setLcDateFrom] = useState(() => new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10));
+  const [lcDateTo,   setLcDateTo]   = useState(() => new Date().toISOString().slice(0, 10));
   const searchRef = useRef(null);
 
   useEffect(() => {
@@ -331,6 +334,21 @@ function Pipeline({
               ⚙️ Bosqichlar
             </button>
           )}
+          <button
+            onClick={() => setShowLastCallReport(v => !v)}
+            style={{
+              padding: "7px 11px",
+              borderRadius: 7,
+              border: `1px solid ${showLastCallReport ? "#0891b2" : T.border}`,
+              background: showLastCallReport ? "#0891b222" : T.card,
+              color: showLastCallReport ? "#0891b2" : T.muted,
+              cursor: "pointer",
+              fontSize: 11,
+              fontWeight: showLastCallReport ? 700 : 400,
+            }}
+          >
+            📞 So'ngi aloqa
+          </button>
           <button
             onClick={exportPipelineCSV}
             style={{
@@ -946,6 +964,84 @@ function Pipeline({
           </div>
         </div>
       )}
+      {/* So'ngi aloqa report panel */}
+      {showLastCallReport && (() => {
+        const today = new Date().toISOString().slice(0, 10);
+        const lcLeads = leads.filter(l => {
+          if (!l.lastCall) return false;
+          const d = l.lastCall.slice(0, 10);
+          if (d < lcDateFrom || d > lcDateTo) return false;
+          return true;
+        }).sort((a, b) => (b.lastCall || "") > (a.lastCall || "") ? 1 : -1);
+        const inpS2 = inp(T);
+        return (
+          <div style={{ background: T.card, border: `1px solid #0891b244`, borderRadius: 14, padding: 18, marginBottom: 14, borderTop: `3px solid #0891b2` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: T.text }}>📞 So'ngi aloqa hisoboti — {lcLeads.length} ta mijoz</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {[
+                  { l: "Bugun", from: today, to: today },
+                  { l: "Bu hafta", from: new Date(Date.now() - 6*86400000).toISOString().slice(0,10), to: today },
+                  { l: "Bu oy", from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10), to: today },
+                ].map(q => (
+                  <button key={q.l} onClick={() => { setLcDateFrom(q.from); setLcDateTo(q.to); }}
+                    style={{ padding: "4px 10px", borderRadius: 14, fontSize: 10, fontWeight: 700, cursor: "pointer",
+                      border: `1px solid ${T.border}`,
+                      background: lcDateFrom === q.from && lcDateTo === q.to ? "#0891b2" : T.card2,
+                      color:      lcDateFrom === q.from && lcDateTo === q.to ? "#fff"     : T.muted }}>
+                    {q.l}
+                  </button>
+                ))}
+                <input type="date" value={lcDateFrom} onChange={e => setLcDateFrom(e.target.value)} style={{ ...inpS2, width: "auto", fontSize: 10 }} />
+                <span style={{ color: T.muted, fontSize: 10 }}>—</span>
+                <input type="date" value={lcDateTo}   onChange={e => setLcDateTo(e.target.value)}   style={{ ...inpS2, width: "auto", fontSize: 10 }} />
+                <button onClick={() => setShowLastCallReport(false)} style={{ background: "none", border: "none", color: T.muted, cursor: "pointer", fontSize: 14 }}>✕</button>
+              </div>
+            </div>
+            {lcLeads.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "24px 0", color: T.muted, fontSize: 13 }}>Bu davrda so'ngi aloqa qilingan mijoz topilmadi</div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ background: T.card2 }}>
+                      {["Mijoz", "Telefon", "Holat", "So'ngi aloqa", "Mas'ul", "Mamlakat", "Lavozim"].map(h => (
+                        <th key={h} style={{ padding: "7px 12px", textAlign: "left", fontWeight: 700, color: T.muted, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lcLeads.map((l, i) => {
+                      const stageObj = stages.find(s => s.key === l.status);
+                      const stC = stageObj ? stageObj.c : "#6b7280";
+                      const stLb = stageObj ? stageObj.label : (l.status || "—");
+                      const owner = team.find(m => m.id === (l.ownerSales || l.ownerConsult || l.ownerDocs));
+                      const isToday = l.lastCall?.slice(0,10) === today;
+                      return (
+                        <tr key={l.id} onClick={() => open(l)} style={{ borderBottom: `1px solid ${T.border}`, background: i%2===0?T.card:T.card2, cursor: "pointer" }}>
+                          <td style={{ padding: "7px 12px", fontWeight: 700, color: T.text }}>{l.name}</td>
+                          <td style={{ padding: "7px 12px", color: T.muted }}>{l.phone || "—"}</td>
+                          <td style={{ padding: "7px 12px" }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: `${stC}22`, color: stC, border: `1px solid ${stC}44`, whiteSpace: "nowrap" }}>{stLb}</span>
+                          </td>
+                          <td style={{ padding: "7px 12px", color: isToday ? "#10b981" : T.muted, fontWeight: isToday ? 700 : 400 }}>
+                            {l.lastCall?.slice(0,10) || "—"}{isToday ? " ✓" : ""}
+                          </td>
+                          <td style={{ padding: "7px 12px" }}>
+                            {owner ? <div style={{ display:"flex", alignItems:"center", gap:5 }}><Av id={owner.id} team={[owner]} size={20}/><span style={{color:T.text}}>{owner.name}</span></div> : <span style={{color:T.muted}}>—</span>}
+                          </td>
+                          <td style={{ padding: "7px 12px", color: T.muted }}>{l.country || "—"}</td>
+                          <td style={{ padding: "7px 12px", color: T.muted }}>{l.position || "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
       <div
         style={{
           display: "flex",
