@@ -44,11 +44,154 @@ const STAGE_COLORS = {
   "Bekor qildi":            "#6b7280",
 };
 
+// ─── CANDIDATE FULL PROFILE ───────────────────────────────────────────────────
+function CandidateProfile({ candidate, vacancy, lead, onClose, T, t }) {
+  const CMAP = candStatusMap(t);
+  const cs = CMAP[candidate.status] || CMAP.added;
+  const cv = lead?.cv || {};
+  const docs = lead?.docs || {};
+
+  const Section = ({ title, children }) => (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: T.text, borderBottom: `2px solid ${T.accent}`, paddingBottom: 6, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</div>
+      {children}
+    </div>
+  );
+  const Field = ({ label, value, span = false }) => (
+    <div style={{ gridColumn: span ? "1/-1" : undefined }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 11, color: T.text, padding: "7px 10px", background: T.card2, borderRadius: 6, border: `1px solid ${T.border}`, minHeight: 32 }}>{value || "–"}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "center", background: "rgba(0,0,0,0.55)", overflowY: "auto", paddingTop: 20, paddingBottom: 20 }}>
+      <div style={{ background: T.card, borderRadius: 16, width: "100%", maxWidth: 780, margin: "0 14px", boxShadow: "0 24px 80px rgba(0,0,0,0.35)", overflow: "hidden" }}>
+        {/* Header */}
+        <div style={{ background: `linear-gradient(135deg, ${T.accent}, #7c3aed)`, padding: "20px 24px", color: "#fff" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.8, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                {t("emp_candidate_list")} — {vacancy?.title || "–"}
+              </div>
+              <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 6 }}>{lead?.name || candidate.leadName || "–"}</div>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 10, background: `${cs.c}33`, color: "#fff", border: `1px solid ${cs.c}88`, borderRadius: 12, padding: "3px 10px", fontWeight: 700 }}>{cs.label}</span>
+                {lead?.phone && <span style={{ fontSize: 11, opacity: 0.85 }}>📞 {lead.phone}</span>}
+                {lead?.country && <span style={{ fontSize: 11, opacity: 0.85 }}>🌍 {lead.country}</span>}
+              </div>
+            </div>
+            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, color: "#fff", width: 36, height: 36, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          </div>
+        </div>
+
+        <div style={{ padding: 24 }}>
+          {/* Basic data */}
+          <Section title="Asosiy ma'lumotlar">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              <Field label="Arizaning №" value={lead?.id || "–"} />
+              <Field label="Pasport №" value={cv.passport} />
+              <Field label="Tug'ilgan sana" value={cv.dob} />
+              <Field label="Fuqarolik" value={lead?.country} />
+              <Field label="Telefon" value={lead?.phone} />
+              <Field label="Konsalting / Manba" value={lead?.source} />
+              <Field label="Jinsi" value={lead?.gender === "male" ? "Erkak" : lead?.gender === "female" ? "Ayol" : lead?.gender} />
+              <Field label="Lavozim / Soha" value={lead?.position || lead?.sector} />
+              <Field label="Holat (Pipeline)" value={lead?.status} />
+            </div>
+          </Section>
+
+          {/* Vacancy & logistics */}
+          <Section title="Vakansiya va Logistika">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Field label="Vakansiya" value={vacancy?.title} />
+              <Field label="Kompaniya / Mehmonxona" value={vacancy?.company} />
+              <Field label="Mamlakat" value={vacancy?.country} />
+              <Field label="Shahar / Kurort" value={vacancy?.city} />
+              <Field label="Maosh" value={vacancy?.salary ? `€${vacancy.salary}/oy` : undefined} />
+              <Field label="Ish turi" value={vacancy?.jobType} />
+              <Field label="Boshlash sanasi" value={vacancy?.periodStart} />
+              <Field label="Tugash sanasi" value={vacancy?.periodEnd} />
+            </div>
+          </Section>
+
+          {/* Pipeline status */}
+          <Section title="Pipeline holati">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              <Field label="Vakansiya holati" value={cs.label} />
+              <Field label="Qo'shilgan sana" value={candidate.addedAt?.slice(0, 10)} />
+              <Field label="Qo'shgan xodim" value={candidate.addedByName} />
+            </div>
+            {candidate.note && (
+              <div style={{ marginTop: 10 }}>
+                <Field label="Izoh" value={candidate.note} span />
+              </div>
+            )}
+          </Section>
+
+          {/* Education & Languages */}
+          {(cv.edu || cv.languages?.length) && (
+            <Section title="Ta'lim va Tillar">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <Field label="Ta'lim" value={cv.edu} />
+                <Field label="Tillar" value={Array.isArray(cv.languages) ? cv.languages.join(", ") : cv.languages} />
+              </div>
+            </Section>
+          )}
+
+          {/* Payments */}
+          <Section title="To'lov holati">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
+              {[
+                { label: "XBA To'lov", v: lead?.xba, date: lead?.xbaDate, c: "#f97316" },
+                { label: "1-Qism", v: lead?.q1, date: lead?.q1Date, c: "#ec4899" },
+                { label: "2-Qism", v: lead?.q2, date: lead?.q2Date, c: "#8b5cf6" },
+                { label: "3-Qism", v: lead?.q3, date: lead?.q3Date, c: "#3b82f6" },
+              ].map(p => (
+                <div key={p.label} style={{ padding: "10px 12px", borderRadius: 8, background: p.v ? `${p.c}15` : T.card2, border: `1px solid ${p.v ? p.c + "44" : T.border}`, textAlign: "center" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 4 }}>{p.label}</div>
+                  <div style={{ fontSize: 18 }}>{p.v ? "✅" : "⬜"}</div>
+                  {p.date && <div style={{ fontSize: 8, color: p.c, marginTop: 3, fontWeight: 600 }}>{p.date}</div>}
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          {/* Documents */}
+          {Object.keys(docs).length > 0 && (
+            <Section title="Hujjatlar">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {Object.entries(docs).map(([k, v]) => (
+                  v ? (
+                    <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: `${T.green}12`, border: `1px solid ${T.green}33`, borderRadius: 8 }}>
+                      <span style={{ fontSize: 10, color: T.text, fontWeight: 600 }}>📄 {k}</span>
+                      <span style={{ fontSize: 10, color: T.green, fontWeight: 700 }}>✓ Yuklangan</span>
+                    </div>
+                  ) : null
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* Notes */}
+          {(lead?.comment || lead?.note) && (
+            <Section title="Izohlar">
+              {lead.comment && <Field label="Izoh" value={lead.comment} span />}
+              {lead.note && <div style={{ marginTop: 8 }}><Field label="Qaydlar" value={lead.note} span /></div>}
+            </Section>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── VACANCIES TAB ────────────────────────────────────────────────────────────
-function VacanciesTab({ vacancies, loading, t, T }) {
+function VacanciesTab({ vacancies, loading, leads, t, T }) {
   const [selVac, setSelVac] = useState(null);
   const [candidates, setCandidates] = useState([]);
   const [candLoading, setCandLoading] = useState(false);
+  const [selCand, setSelCand] = useState(null);
   const CMAP = candStatusMap(t);
 
   useEffect(() => {
@@ -131,24 +274,51 @@ function VacanciesTab({ vacancies, loading, t, T }) {
           )}
           {!candLoading && candidates.map(c => {
             const cs = CMAP[c.status] || CMAP.submitted;
+            const lead = leads?.find(l => l.id === c.leadId);
             return (
               <div key={c.id} style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8,
-                padding: "10px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                padding: "10px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
+                cursor: "pointer", transition: "border-color 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = T.accent + "88"}
+                onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
+                <div style={{ flex: 1, minWidth: 0 }} onClick={() => setSelCand(c)}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: T.text, marginBottom: 1 }}>{c.leadName || "–"}</div>
                   <div style={{ fontSize: 9, color: T.muted }}>{t("emp_added_by")}: {c.addedByName || "–"} · {c.addedAt?.slice(0, 10) || ""}</div>
                   {c.note && <div style={{ fontSize: 9, color: T.muted, marginTop: 2 }}>{c.note}</div>}
+                  {lead && (
+                    <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+                      {lead.country && <span style={{ fontSize: 8, color: T.muted }}>🌍 {lead.country}</span>}
+                      {lead.phone && <span style={{ fontSize: 8, color: T.muted }}>📞 {lead.phone}</span>}
+                      {lead.position && <span style={{ fontSize: 8, color: T.muted }}>💼 {lead.position}</span>}
+                    </div>
+                  )}
                 </div>
-                <select value={c.status} onChange={e => updateStatus(c.id, e.target.value)}
-                  style={{ fontSize: 10, fontWeight: 700, color: cs.c, background: `${cs.c}18`,
-                    border: `1px solid ${cs.c}44`, borderRadius: 6, padding: "4px 8px", cursor: "pointer", outline: "none" }}>
-                  {CAND_STATUS_KEYS.map(k => (
-                    <option key={k} value={k}>{(CMAP[k] || { label: k }).label}</option>
-                  ))}
-                </select>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+                  <select value={c.status} onChange={e => { e.stopPropagation(); updateStatus(c.id, e.target.value); }}
+                    onClick={e => e.stopPropagation()}
+                    style={{ fontSize: 10, fontWeight: 700, color: cs.c, background: `${cs.c}18`,
+                      border: `1px solid ${cs.c}44`, borderRadius: 6, padding: "4px 8px", cursor: "pointer", outline: "none" }}>
+                    {CAND_STATUS_KEYS.map(k => (
+                      <option key={k} value={k}>{(CMAP[k] || { label: k }).label}</option>
+                    ))}
+                  </select>
+                  <button onClick={() => setSelCand(c)}
+                    style={{ fontSize: 9, color: T.accent, background: `${T.accent}15`, border: `1px solid ${T.accent}44`, borderRadius: 5, padding: "3px 9px", cursor: "pointer", fontWeight: 600 }}>
+                    👁 Profil
+                  </button>
+                </div>
               </div>
             );
           })}
+          {selCand && (
+            <CandidateProfile
+              candidate={selCand}
+              vacancy={selVac}
+              lead={leads?.find(l => l.id === selCand.leadId)}
+              onClose={() => setSelCand(null)}
+              T={T} t={t}
+            />
+          )}
         </div>
       )}
     </div>
@@ -411,7 +581,7 @@ function EmployerPortal({ user, leads, team, addNotif }) {
       </div>
 
       {/* Tab content */}
-      {tab === "vacancies" && <VacanciesTab vacancies={vacancies} loading={loading} t={t} T={T} />}
+      {tab === "vacancies" && <VacanciesTab vacancies={vacancies} loading={loading} leads={leads} t={t} T={T} />}
       {tab === "workers"   && <WorkersTab t={t} T={T} />}
       {tab === "request"   && <RequestTab t={t} T={T} addNotif={addNotif} />}
     </div>
