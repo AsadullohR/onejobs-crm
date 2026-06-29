@@ -488,6 +488,166 @@ function DonutChart({ salaries, clientExp, extTotal, T }) {
   );
 }
 
+// ─── KPI PAYMENT REPORT ───────────────────────────────────────────────────────
+const KPI_CATS = ["XBA To'lov", "1-Qism", "2-Qism", "3-Qism"];
+const KPI_COLORS = { "XBA To'lov": "#f59e0b", "1-Qism": "#3b82f6", "2-Qism": "#8b5cf6", "3-Qism": "#10b981" };
+
+function KpiReport({ txns, team, leads }) {
+  const T = useT();
+  const inpS = inp(T);
+  const today = new Date().toISOString().slice(0, 10);
+  const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10);
+  const [dateFrom, setDateFrom] = useState(firstOfMonth);
+  const [dateTo, setDateTo] = useState(today);
+  const [selMember, setSelMember] = useState("all");
+
+  const QUICK = [
+    { l: "Bu oy", from: firstOfMonth, to: today },
+    { l: "O'tgan oy", from: (() => { const d = new Date(); d.setMonth(d.getMonth()-1); return new Date(d.getFullYear(),d.getMonth(),1).toISOString().slice(0,10); })(), to: (() => { const d = new Date(); return new Date(d.getFullYear(),d.getMonth(),0).toISOString().slice(0,10); })() },
+    { l: "Bu yil", from: `${new Date().getFullYear()}-01-01`, to: today },
+  ];
+
+  const filtered = useMemo(() => txns.filter(t => {
+    if (t.type !== "income") return false;
+    if (!KPI_CATS.includes(t.cat)) return false;
+    if (dateFrom && t.date < dateFrom) return false;
+    if (dateTo && t.date > dateTo) return false;
+    return true;
+  }), [txns, dateFrom, dateTo]);
+
+  const members = useMemo(() => {
+    const byId = {};
+    filtered.forEach(t => {
+      const id = t.by || t.addedBy || 0;
+      if (!byId[id]) {
+        const m = team.find(tm => tm.id === id);
+        byId[id] = { id, name: m?.name || `ID:${id}`, av: m?.av || "?", color: m?.color || "#6b7280", cats: {}, total: 0, count: 0, txns: [] };
+      }
+      byId[id].cats[t.cat] = (byId[id].cats[t.cat] || 0) + t.amount;
+      byId[id].total += t.amount;
+      byId[id].count++;
+      byId[id].txns.push(t);
+    });
+    return Object.values(byId).sort((a, b) => b.total - a.total);
+  }, [filtered, team]);
+
+  const grandTotal = filtered.reduce((s, t) => s + t.amount, 0);
+  const catTotals = useMemo(() => {
+    const out = {};
+    KPI_CATS.forEach(c => { out[c] = filtered.filter(t => t.cat === c).reduce((s, t) => s + t.amount, 0); });
+    return out;
+  }, [filtered]);
+
+  const showMember = selMember === "all" ? members : members.filter(m => String(m.id) === selMember);
+
+  return (
+    <div style={{ maxWidth: 960, margin: "0 auto" }}>
+      {/* Date controls */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+        {QUICK.map(q => (
+          <button key={q.l} onClick={() => { setDateFrom(q.from); setDateTo(q.to); }}
+            style={{ padding: "6px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer", border: `1px solid ${T.border}`,
+              background: dateFrom === q.from && dateTo === q.to ? T.accent : T.card,
+              color: dateFrom === q.from && dateTo === q.to ? "#fff" : T.muted }}>
+            {q.l}
+          </button>
+        ))}
+        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ ...inpS, width: "auto", fontSize: 11 }} />
+        <span style={{ color: T.muted }}>—</span>
+        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ ...inpS, width: "auto", fontSize: 11 }} />
+        <select value={selMember} onChange={e => setSelMember(e.target.value)} style={{ ...inpS, width: "auto", fontSize: 11, marginLeft: 8 }}>
+          <option value="all">Barcha xodimlar</option>
+          {team.filter(m => m.active !== false).map(m => <option key={m.id} value={String(m.id)}>{m.name}</option>)}
+        </select>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${KPI_CATS.length + 1}, 1fr)`, gap: 10, marginBottom: 22 }}>
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px", borderTop: `3px solid ${T.accent}` }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 6 }}>💰 JAMI TO'LOVLAR</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: T.accent }}>{fmtMs(grandTotal)}</div>
+          <div style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>{filtered.length} ta tranzaksiya</div>
+        </div>
+        {KPI_CATS.map(cat => (
+          <div key={cat} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px", borderTop: `3px solid ${KPI_COLORS[cat]}` }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 6 }}>{cat}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: KPI_COLORS[cat] }}>{fmtMs(catTotals[cat] || 0)}</div>
+            <div style={{ fontSize: 10, color: T.muted, marginTop: 4 }}>{filtered.filter(t => t.cat === cat).length} ta</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Per-employee table */}
+      {showMember.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "40px 0", color: T.muted, fontSize: 13 }}>Bu davrda to'lovlar topilmadi</div>
+      ) : showMember.map(m => {
+        const leadMap = {};
+        m.txns.forEach(t => {
+          if (!t.leadId) return;
+          if (!leadMap[t.leadId]) {
+            const lead = leads.find(l => l.id === t.leadId);
+            leadMap[t.leadId] = { leadId: t.leadId, name: lead?.name || t.leadId, txns: [] };
+          }
+          leadMap[t.leadId].txns.push(t);
+        });
+        const clientRows = Object.values(leadMap).sort((a, b) =>
+          b.txns.reduce((s, t) => s + t.amount, 0) - a.txns.reduce((s, t) => s + t.amount, 0)
+        );
+
+        return (
+          <div key={m.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, marginBottom: 16, overflow: "hidden" }}>
+            {/* Employee header */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", background: T.card2, borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ width: 36, height: 36, borderRadius: "50%", background: m.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff", flexShrink: 0 }}>{m.av}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{m.name}</div>
+                <div style={{ fontSize: 10, color: T.muted }}>{m.count} ta to'lov · {clientRows.length} ta mijoz</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 18, fontWeight: 900, color: T.green }}>{fmtMs(m.total)} so'm</div>
+                <div style={{ display: "flex", gap: 6, marginTop: 4, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                  {KPI_CATS.filter(c => m.cats[c]).map(c => (
+                    <span key={c} style={{ fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: `${KPI_COLORS[c]}22`, color: KPI_COLORS[c], border: `1px solid ${KPI_COLORS[c]}44` }}>
+                      {c}: {fmtMs(m.cats[c])}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Client breakdown */}
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: T.card2 }}>
+                  {["Mijoz", "Sana", "Kategoriya", "Summa", "Izoh"].map(h => (
+                    <th key={h} style={{ padding: "8px 14px", textAlign: "left", fontSize: 10, fontWeight: 700, color: T.muted, borderBottom: `1px solid ${T.border}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {m.txns.sort((a, b) => b.date?.localeCompare(a.date)).map((t, i) => {
+                  const lead = leads.find(l => l.id === t.leadId);
+                  return (
+                    <tr key={t.id || i} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? T.card : T.card2 }}>
+                      <td style={{ padding: "9px 14px", fontSize: 11, fontWeight: 600, color: T.text }}>{lead?.name || t.leadId || "–"}</td>
+                      <td style={{ padding: "9px 14px", fontSize: 11, color: T.muted }}>{t.date || "–"}</td>
+                      <td style={{ padding: "9px 14px" }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 8, background: `${KPI_COLORS[t.cat] || "#6b7280"}22`, color: KPI_COLORS[t.cat] || T.muted, border: `1px solid ${KPI_COLORS[t.cat] || T.border}44` }}>{t.cat}</span>
+                      </td>
+                      <td style={{ padding: "9px 14px", fontSize: 12, fontWeight: 800, color: T.green }}>{fmtMs(t.amount)} so'm</td>
+                      <td style={{ padding: "9px 14px", fontSize: 10, color: T.muted }}>{t.desc || "–"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── FINANCE HUB ─────────────────────────────────────────────────────────────
 function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNotif, debts, setDebts, roles, extExps=[], setExtExps }) {
   const T = useT();
@@ -496,6 +656,7 @@ function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNot
   const TABS = [
     { k: "dashboard", l: "📊 Dashboard" },
     { k: "clients",   l: "💼 Mijozlar Moliyasi" },
+    { k: "kpi",       l: "🏆 KPI To'lovlar" },
     ...(canSalary ? [{ k: "salary", l: "👷 Xodim Xarajatlari" }] : []),
     { k: "external",  l: "🏢 Tashqi Xarajatlar" },
     { k: "debts",     l: "⚠️ Qarzlar" },
@@ -528,6 +689,9 @@ function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNot
           <Finance leads={leads} setLeads={setLeads} team={team} user={user}
             txns={txns} setTxns={setTxns} config={config} addNotif={addNotif}
             debts={debts} setDebts={setDebts} extExps={extExps} />
+        )}
+        {tab === "kpi" && (
+          <KpiReport txns={txns} team={team} leads={leads} />
         )}
         {tab === "salary" && (
           <SalaryPage team={team} txns={txns} setTxns={setTxns} user={user} />
