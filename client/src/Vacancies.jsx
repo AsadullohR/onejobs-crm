@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { useT } from "./theme.js";
+import { useLang } from "./i18n.jsx";
 import { inp, lab, I, Modal, SearchSelect, Av } from "./helpers.jsx";
-import { vacanciesAPI, candidatesAPI } from "./api.js";
+import { vacanciesAPI, candidatesAPI, leadsAPI } from "./api.js";
+import { CandidateProfile } from "./EmployerPortal.jsx";
 // ─── STATUS CONFIG ────────────────────────────────────────────────────────────
 const V_STATUS = {
   active: { label: "Active", c: "#16a34a", bg: "#dcfce7" },
@@ -302,7 +304,9 @@ function VacancyDetail({
   onSave,
   onDelete,
   T,
+  setLeads,
 }) {
+  const { t } = useLang();
   const [tab, setTab] = useState("info");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...v });
@@ -316,6 +320,19 @@ function VacancyDetail({
   const [candidates, setCandidates] = useState([]);
   const [candLoading, setCandLoading] = useState(false);
   const [candModal, setCandModal] = useState(false);
+  const [selCandProfile, setSelCandProfile] = useState(null);
+
+  const saveCandidateProfile = async (cForm, lForm) => {
+    if (!selCandProfile) return;
+    const cId = selCandProfile.id;
+    await candidatesAPI.update(cId, { status: cForm.status, note: cForm.note });
+    setCandidates(p => p.map(c => c.id === cId ? { ...c, status: cForm.status, note: cForm.note } : c));
+    const leadId = selCandProfile.leadId;
+    if (leadId) {
+      const updatedLead = await leadsAPI.updateProfileFields(leadId, lForm);
+      setLeads?.(p => p.map(l => l.id === leadId ? { ...l, ...lForm, position: updatedLead.position, cv: updatedLead.cv } : l));
+    }
+  };
   const [candForm, setCandForm] = useState({ leadId: "", status: "added", note: "" });
   const cf = (k, val) => setCandForm((p) => ({ ...p, [k]: val }));
 
@@ -1147,7 +1164,21 @@ function VacancyDetail({
                                 </span>
                               )}
                             </td>
-                            <td style={{ padding: "10px 12px" }}>
+                            <td style={{ padding: "10px 12px", display: "flex", gap: 10, alignItems: "center" }}>
+                              <button
+                                onClick={() => setSelCandProfile(c)}
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  color: T.accent,
+                                  fontSize: 14,
+                                  padding: 0,
+                                }}
+                                title="View profile"
+                              >
+                                👁
+                              </button>
                               {canEdit && (
                                 <button
                                   onClick={() => removeCandidate(c.id)}
@@ -1176,6 +1207,20 @@ function VacancyDetail({
           )}
         </div>
       </div>
+
+      {/* Candidate Profile Modal (editable for internal staff) */}
+      {selCandProfile && (
+        <CandidateProfile
+          candidate={selCandProfile}
+          vacancy={v}
+          lead={leads.find((l) => l.id === selCandProfile.leadId)}
+          onClose={() => setSelCandProfile(null)}
+          T={T}
+          t={t}
+          editable={canEdit}
+          onSave={saveCandidateProfile}
+        />
+      )}
 
       {/* Add Candidate Modal */}
       {candModal && (
@@ -1452,7 +1497,7 @@ function PartnerVacanciesView({ user, leads, vacancies, T }) {
 }
 
 // ─── VACANCIES PAGE ───────────────────────────────────────────────────────────
-function Vacancies({ leads, user, team, roles }) {
+function Vacancies({ leads, user, team, roles, setLeads }) {
   const T = useT();
   const perm = roles[user.role] || {};
   const canEdit = perm.canEdit || perm.canCfg || perm.canEditVacancy;
@@ -2017,6 +2062,7 @@ function Vacancies({ leads, user, team, roles }) {
           user={user}
           roles={roles}
           T={T}
+          setLeads={setLeads}
           onClose={() => setSelected(null)}
           onSave={saveVacancy}
           onDelete={deleteVacancy}

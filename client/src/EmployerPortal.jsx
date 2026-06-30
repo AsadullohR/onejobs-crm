@@ -57,11 +57,52 @@ const STAGE_COLORS = {
 };
 
 // ─── CANDIDATE FULL PROFILE ───────────────────────────────────────────────────
-function CandidateProfile({ candidate, vacancy, lead, onClose, T, t }) {
+// fmtDate: defensively normalizes whatever date shape comes in (Date object,
+// full ISO timestamp from a raw DB column, or already-sliced "YYYY-MM-DD")
+// to a plain date string for display.
+const fmtDate = d => {
+  if (!d) return null;
+  if (d instanceof Date) return d.toISOString().slice(0, 10);
+  return String(d).slice(0, 10);
+};
+
+function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = false, onSave }) {
   const CMAP = candStatusMap(t);
   const cs = CMAP[normCandStatus(candidate.status)] || CMAP.added;
   const cv = lead?.cv || {};
   const docs = lead?.docs || {};
+
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [cForm, setCForm] = useState({ status: candidate.status, note: candidate.note || "" });
+  const [lForm, setLForm] = useState({
+    passport: cv.passport || "", dob: cv.dob || "",
+    country: lead?.country || "", phone: lead?.phone || "",
+    source: lead?.source || "", gender: lead?.gender || "",
+    position: lead?.position || "", sector: lead?.sector || "",
+  });
+  const cf = (k, v) => setCForm(p => ({ ...p, [k]: v }));
+  const lf = (k, v) => setLForm(p => ({ ...p, [k]: v }));
+
+  const startEdit = () => {
+    setCForm({ status: candidate.status, note: candidate.note || "" });
+    setLForm({
+      passport: cv.passport || "", dob: cv.dob || "",
+      country: lead?.country || "", phone: lead?.phone || "",
+      source: lead?.source || "", gender: lead?.gender || "",
+      position: lead?.position || "", sector: lead?.sector || "",
+    });
+    setEditing(true);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave?.(cForm, lForm);
+      setEditing(false);
+    } catch (e) { alert(e.message); }
+    finally { setSaving(false); }
+  };
 
   const Section = ({ title, children }) => (
     <div style={{ marginBottom: 20 }}>
@@ -73,6 +114,26 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t }) {
     <div style={{ gridColumn: span ? "1/-1" : undefined }}>
       <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>{label}</div>
       <div style={{ fontSize: 11, color: T.text, padding: "7px 10px", background: T.card2, borderRadius: 6, border: `1px solid ${T.border}`, minHeight: 32 }}>{value || "–"}</div>
+    </div>
+  );
+  // EField: same as Field but renders an input/select when editing
+  const EField = ({ label, value, onChange, span = false, type = "text", options }) => (
+    <div style={{ gridColumn: span ? "1/-1" : undefined }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>{label}</div>
+      {editing ? (
+        options ? (
+          <select value={value || ""} onChange={e => onChange(e.target.value)}
+            style={{ width: "100%", fontSize: 11, color: T.text, padding: "7px 10px", background: T.card, borderRadius: 6, border: `1px solid ${T.accent}66`, minHeight: 32, boxSizing: "border-box" }}>
+            <option value="">–</option>
+            {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        ) : (
+          <input type={type} value={value || ""} onChange={e => onChange(e.target.value)}
+            style={{ width: "100%", fontSize: 11, color: T.text, padding: "7px 10px", background: T.card, borderRadius: 6, border: `1px solid ${T.accent}66`, minHeight: 32, boxSizing: "border-box" }} />
+        )
+      ) : (
+        <div style={{ fontSize: 11, color: T.text, padding: "7px 10px", background: T.card2, borderRadius: 6, border: `1px solid ${T.border}`, minHeight: 32 }}>{value || "–"}</div>
+      )}
     </div>
   );
 
@@ -93,72 +154,83 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t }) {
                 {lead?.country && <span style={{ fontSize: 11, opacity: 0.85 }}>🌍 {lead.country}</span>}
               </div>
             </div>
-            <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, color: "#fff", width: 36, height: 36, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {editable && !editing && (
+                <button onClick={startEdit} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, color: "#fff", padding: "0 14px", height: 36, cursor: "pointer", fontSize: 11, fontWeight: 700 }}>✏️ {t("cprof_edit")}</button>
+              )}
+              {editable && editing && (
+                <>
+                  <button onClick={() => setEditing(false)} disabled={saving} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, color: "#fff", padding: "0 14px", height: 36, cursor: "pointer", fontSize: 11, fontWeight: 700 }}>{t("cprof_cancel")}</button>
+                  <button onClick={save} disabled={saving} style={{ background: "#fff", border: "none", borderRadius: 8, color: T.accent, padding: "0 14px", height: 36, cursor: "pointer", fontSize: 11, fontWeight: 800 }}>{saving ? "…" : `💾 ${t("cprof_save")}`}</button>
+                </>
+              )}
+              <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, color: "#fff", width: 36, height: 36, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+            </div>
           </div>
         </div>
 
         <div style={{ padding: 24 }}>
           {/* Basic data */}
-          <Section title="Asosiy ma'lumotlar">
+          <Section title={t("cprof_basic_info")}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-              <Field label="Arizaning №" value={lead?.id || "–"} />
-              <Field label="Pasport №" value={cv.passport} />
-              <Field label="Tug'ilgan sana" value={cv.dob} />
-              <Field label="Fuqarolik" value={lead?.country} />
-              <Field label="Telefon" value={lead?.phone} />
-              <Field label="Konsalting / Manba" value={lead?.source} />
-              <Field label="Jinsi" value={lead?.gender === "male" ? "Erkak" : lead?.gender === "female" ? "Ayol" : lead?.gender} />
-              <Field label="Lavozim / Soha" value={lead?.position || lead?.sector} />
-              <Field label="Holat (Pipeline)" value={lead?.status} />
+              <Field label={t("cprof_app_no")} value={lead?.id || "–"} />
+              <EField label={t("cprof_passport_no")} value={lForm.passport} onChange={v => lf("passport", v)} />
+              <EField label={t("cprof_dob")} value={lForm.dob} onChange={v => lf("dob", v)} type="date" />
+              <EField label={t("cprof_citizenship")} value={lForm.country} onChange={v => lf("country", v)} />
+              <EField label={t("cprof_phone")} value={lForm.phone} onChange={v => lf("phone", v)} />
+              <EField label={t("cprof_consulting_source")} value={lForm.source} onChange={v => lf("source", v)} />
+              <EField label={t("cprof_gender")} value={lForm.gender} onChange={v => lf("gender", v)}
+                options={[{ value: "male", label: t("cprof_gender_male") }, { value: "female", label: t("cprof_gender_female") }]} />
+              <EField label={t("cprof_position_sector")} value={lForm.position || lForm.sector} onChange={v => lf("position", v)} />
+              <Field label={t("cprof_pipeline_status")} value={lead?.status} />
             </div>
           </Section>
 
           {/* Vacancy & logistics */}
-          <Section title="Vakansiya va Logistika">
+          <Section title={t("cprof_vacancy_logistics")}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              <Field label="Vakansiya" value={vacancy?.title} />
-              <Field label="Kompaniya / Mehmonxona" value={vacancy?.company} />
-              <Field label="Mamlakat" value={vacancy?.country} />
-              <Field label="Shahar / Kurort" value={vacancy?.city} />
-              <Field label="Maosh" value={vacancy?.salary ? `€${vacancy.salary}/oy` : undefined} />
-              <Field label="Ish turi" value={vacancy?.jobType} />
-              <Field label="Boshlash sanasi" value={vacancy?.periodStart} />
-              <Field label="Tugash sanasi" value={vacancy?.periodEnd} />
+              <Field label={t("cprof_vacancy")} value={vacancy?.title} />
+              <Field label={t("cprof_company_hotel")} value={vacancy?.company} />
+              <Field label={t("cprof_country")} value={vacancy?.country} />
+              <Field label={t("cprof_city_resort")} value={vacancy?.city} />
+              <Field label={t("cprof_salary")} value={vacancy?.salary ? `€${vacancy.salary}/${t("emp_per_month").replace("/", "")}` : undefined} />
+              <Field label={t("cprof_job_type")} value={vacancy?.jobType} />
+              <Field label={t("cprof_period_start")} value={vacancy?.periodStart} />
+              <Field label={t("cprof_period_end")} value={vacancy?.periodEnd} />
             </div>
           </Section>
 
           {/* Pipeline status */}
-          <Section title="Pipeline holati">
+          <Section title={t("cprof_pipeline_status_section")}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-              <Field label="Vakansiya holati" value={cs.label} />
-              <Field label="Qo'shilgan sana" value={candidate.addedAt?.slice(0, 10)} />
-              <Field label="Qo'shgan xodim" value={candidate.addedByName} />
+              <EField label={t("cprof_vacancy_status")} value={cForm.status} onChange={v => cf("status", v)}
+                options={CAND_STATUS_KEYS.map(k => ({ value: k, label: (CMAP[k] || { label: k }).label }))} />
+              <Field label={t("cprof_added_date")} value={candidate.addedAt?.slice(0, 10)} />
+              <Field label={t("cprof_added_employee")} value={candidate.addedByName} />
             </div>
-            {candidate.note && (
-              <div style={{ marginTop: 10 }}>
-                <Field label="Izoh" value={candidate.note} span />
-              </div>
-            )}
+            <div style={{ marginTop: 10 }}>
+              <EField label={t("cprof_note")} value={cForm.note} onChange={v => cf("note", v)} span />
+            </div>
           </Section>
 
           {/* Education & Languages */}
           {(cv.edu || cv.languages?.length) && (
-            <Section title="Ta'lim va Tillar">
+            <Section title={t("cprof_edu_lang")}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <Field label="Ta'lim" value={cv.edu} />
-                <Field label="Tillar" value={Array.isArray(cv.languages) ? cv.languages.join(", ") : cv.languages} />
+                <Field label={t("cprof_education")} value={cv.edu} />
+                <Field label={t("cprof_languages")} value={Array.isArray(cv.languages) ? cv.languages.join(", ") : cv.languages} />
               </div>
             </Section>
           )}
 
           {/* Payments */}
-          <Section title="To'lov holati">
+          <Section title={t("cprof_payment_status")}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
               {[
-                { label: "XBA To'lov", v: lead?.xba, date: lead?.xbaDate, c: "#f97316" },
-                { label: "1-Qism", v: lead?.q1, date: lead?.q1Date, c: "#ec4899" },
-                { label: "2-Qism", v: lead?.q2, date: lead?.q2Date, c: "#8b5cf6" },
-                { label: "3-Qism", v: lead?.q3, date: lead?.q3Date, c: "#3b82f6" },
+                { label: "XBA To'lov", v: lead?.xba, date: fmtDate(lead?.xbaDate), c: "#f97316" },
+                { label: "1-Qism", v: lead?.q1, date: fmtDate(lead?.q1Date), c: "#ec4899" },
+                { label: "2-Qism", v: lead?.q2, date: fmtDate(lead?.q2Date), c: "#8b5cf6" },
+                { label: "3-Qism", v: lead?.q3, date: fmtDate(lead?.q3Date), c: "#3b82f6" },
               ].map(p => (
                 <div key={p.label} style={{ padding: "10px 12px", borderRadius: 8, background: p.v ? `${p.c}15` : T.card2, border: `1px solid ${p.v ? p.c + "44" : T.border}`, textAlign: "center" }}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 4 }}>{p.label}</div>
@@ -171,13 +243,13 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t }) {
 
           {/* Documents */}
           {Object.keys(docs).length > 0 && (
-            <Section title="Hujjatlar">
+            <Section title={t("cprof_documents")}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {Object.entries(docs).map(([k, v]) => (
                   v ? (
                     <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: `${T.green}12`, border: `1px solid ${T.green}33`, borderRadius: 8 }}>
                       <span style={{ fontSize: 10, color: T.text, fontWeight: 600 }}>📄 {k}</span>
-                      <span style={{ fontSize: 10, color: T.green, fontWeight: 700 }}>✓ Yuklangan</span>
+                      <span style={{ fontSize: 10, color: T.green, fontWeight: 700 }}>✓ {t("cprof_doc_uploaded")}</span>
                     </div>
                   ) : null
                 ))}
@@ -187,9 +259,9 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t }) {
 
           {/* Notes */}
           {(lead?.comment || lead?.note) && (
-            <Section title="Izohlar">
-              {lead.comment && <Field label="Izoh" value={lead.comment} span />}
-              {lead.note && <div style={{ marginTop: 8 }}><Field label="Qaydlar" value={lead.note} span /></div>}
+            <Section title={t("cprof_notes_section")}>
+              {lead.comment && <Field label={t("cprof_comment")} value={lead.comment} span />}
+              {lead.note && <div style={{ marginTop: 8 }}><Field label={t("cprof_notes")} value={lead.note} span /></div>}
             </Section>
           )}
         </div>
@@ -626,4 +698,4 @@ function EmployerPortal({ user, leads, team, addNotif }) {
   );
 }
 
-export { EmployerPortal };
+export { EmployerPortal, CandidateProfile, candStatusMap, normCandStatus, CAND_STATUS_KEYS, fmtDate };

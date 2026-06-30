@@ -252,6 +252,36 @@ app.get("/api/leads/:id", auth, async (req, res) => {
   }
 });
 
+// Partial update for a small set of CV-ish fields, used by the candidate
+// profile modal (Vacancies → Candidates, employer-facing CandidateProfile).
+// Uses COALESCE per-field so omitted keys never overwrite existing data —
+// unlike the full POST /api/leads upsert, which requires the whole lead.
+app.put("/api/leads/:id/profile-fields", auth, async (req, res) => {
+  const { country, phone, source, gender, position, passport, dob } = req.body;
+  const cvPatch = {};
+  if (passport !== undefined) cvPatch.passport = passport;
+  if (dob !== undefined) cvPatch.dob = dob;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE leads SET
+        country = COALESCE($2, country),
+        phone = COALESCE($3, phone),
+        source = COALESCE($4, source),
+        gender = COALESCE($5, gender),
+        position = COALESCE($6, position),
+        cv = COALESCE(cv, '{}'::jsonb) || $7::jsonb,
+        updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [req.params.id, country || null, phone || null, source || null, gender || null, position || null, JSON.stringify(cvPatch)],
+    );
+    if (!rows[0]) return res.status(404).json({ error: "Lead topilmadi" });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/api/leads", auth, async (req, res) => {
   const l = req.body;
   const id = l.id || await nextLeadId();
@@ -1360,10 +1390,15 @@ app.post("/api/candidates", auth, async (req, res) => {
 app.put("/api/candidates/:id", auth, async (req, res) => {
   const { name, phone, status, note } = req.body;
   try {
+    // COALESCE so a partial update (e.g. just { status }) never wipes name/phone/note —
+    // every other caller of this endpoint only sends the field it actually changed.
     const { rows } = await pool.query(
-      `UPDATE candidates SET name=$1, phone=$2, status=$3, note=$4, updated_at=NOW()
+      `UPDATE candidates SET
+        name=COALESCE($1,name), phone=COALESCE($2,phone),
+        status=COALESCE($3,status), note=COALESCE($4,note),
+        updated_at=NOW()
        WHERE id=$5 RETURNING *`,
-      [name, phone||null, status, note||null, req.params.id],
+      [name || null, phone || null, status || null, note || null, req.params.id],
     );
     if (!rows[0]) return res.status(404).json({ error: "Not found" });
     const cand = rows[0];
