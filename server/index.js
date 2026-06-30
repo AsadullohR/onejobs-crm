@@ -1266,9 +1266,15 @@ app.get("/api/employer/workers", auth, async (req, res) => {
   if (req.user.role !== "employer") return res.status(403).json({ error: "Forbidden" });
   try {
     const { rows } = await pool.query(
-      `SELECT c.*, v.title as vacancy_title, v.country as vacancy_country,
+      `SELECT c.*,
+              v.title as vacancy_title, v.country as vacancy_country, v.company as vacancy_company,
+              v.salary as vacancy_salary, v.job_type as vacancy_job_type,
               l.name as lead_name, l.phone as lead_phone, l.status as lead_status,
-              l.dest as lead_dest, l.country as lead_country
+              l.dest as lead_dest, l.country as lead_country, l.id as lead_full_id,
+              l.source as lead_source, l.gender as lead_gender, l.position as lead_position, l.sector as lead_sector,
+              l.cv as lead_cv, l.docs as lead_docs, l.comment as lead_comment, l.note as lead_note,
+              l.xba as lead_xba, l.q1 as lead_q1, l.q2 as lead_q2, l.q3 as lead_q3,
+              l.xba_date as lead_xba_date, l.q1_date as lead_q1_date, l.q2_date as lead_q2_date, l.q3_date as lead_q3_date
        FROM candidates c
        JOIN vacancies v ON v.id = c.vacancy_id
        LEFT JOIN leads l ON l.id = c.lead_id
@@ -1278,11 +1284,19 @@ app.get("/api/employer/workers", auth, async (req, res) => {
     );
     res.json(rows.map(r => ({
       id: String(r.id), vacancyId: r.vacancy_id, vacancyTitle: r.vacancy_title,
-      vacancyCountry: r.vacancy_country, leadId: r.lead_id,
+      vacancyCountry: r.vacancy_country, vacancyCompany: r.vacancy_company,
+      vacancySalary: r.vacancy_salary, vacancyJobType: r.vacancy_job_type,
+      leadId: r.lead_id,
       name: r.lead_name || r.name, phone: r.lead_phone || r.phone,
       status: r.status, leadStatus: r.lead_status || "–",
       leadCountry: r.lead_country || r.vacancy_country || "–",
       leadDest: r.lead_dest || "–", note: r.note,
+      leadSource: r.lead_source, leadGender: r.lead_gender,
+      leadPosition: r.lead_position, leadSector: r.lead_sector,
+      leadCv: r.lead_cv || {}, leadDocs: r.lead_docs || {},
+      leadComment: r.lead_comment, leadNote: r.lead_note,
+      leadXba: r.lead_xba, leadQ1: r.lead_q1, leadQ2: r.lead_q2, leadQ3: r.lead_q3,
+      leadXbaDate: r.lead_xba_date, leadQ1Date: r.lead_q1_date, leadQ2Date: r.lead_q2_date, leadQ3Date: r.lead_q3_date,
       appliedAt: r.applied_at, updatedAt: r.updated_at,
     })));
   } catch (err) { res.status(500).json({ error: err.message }); }

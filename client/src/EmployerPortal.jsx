@@ -28,6 +28,18 @@ function candStatusMap(t) {
   };
 }
 
+// Old/legacy DB status values (pre-dating the current pipeline enum) collapsed
+// onto their closest current key, so filters and badges bucket them correctly
+// instead of silently falling outside every filter option.
+const LEGACY_STATUS_ALIAS = {
+  applied: "added", submitted: "added",
+  screening: "interview",
+  offer: "approved_final",
+  hired: "approved_client",
+  rejected: "rejected_final",
+};
+const normCandStatus = s => LEGACY_STATUS_ALIAS[s] || s;
+
 // Lead pipeline stage colors
 const STAGE_COLORS = {
   "Yangi":                  "#2563eb",
@@ -47,7 +59,7 @@ const STAGE_COLORS = {
 // ─── CANDIDATE FULL PROFILE ───────────────────────────────────────────────────
 function CandidateProfile({ candidate, vacancy, lead, onClose, T, t }) {
   const CMAP = candStatusMap(t);
-  const cs = CMAP[candidate.status] || CMAP.added;
+  const cs = CMAP[normCandStatus(candidate.status)] || CMAP.added;
   const cv = lead?.cv || {};
   const docs = lead?.docs || {};
 
@@ -273,7 +285,7 @@ function VacanciesTab({ vacancies, loading, leads, t, T }) {
             <div style={{ color: T.muted, textAlign: "center", padding: 30, fontSize: 12 }}>{t("emp_no_candidates")}</div>
           )}
           {!candLoading && candidates.map(c => {
-            const cs = CMAP[c.status] || CMAP.submitted;
+            const cs = CMAP[normCandStatus(c.status)] || CMAP.added;
             const lead = leads?.find(l => l.id === c.leadId);
             return (
               <div key={c.id} style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8,
@@ -294,7 +306,7 @@ function VacanciesTab({ vacancies, loading, leads, t, T }) {
                   )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
-                  <select value={c.status} onChange={e => { e.stopPropagation(); updateStatus(c.id, e.target.value); }}
+                  <select value={normCandStatus(c.status)} onChange={e => { e.stopPropagation(); updateStatus(c.id, e.target.value); }}
                     onClick={e => e.stopPropagation()}
                     style={{ fontSize: 10, fontWeight: 700, color: cs.c, background: `${cs.c}18`,
                       border: `1px solid ${cs.c}44`, borderRadius: 6, padding: "4px 8px", cursor: "pointer", outline: "none" }}>
@@ -330,6 +342,7 @@ function WorkersTab({ t, T }) {
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
+  const [selWorker, setSelWorker] = useState(null);
   const CMAP = candStatusMap(t);
 
   useEffect(() => {
@@ -342,7 +355,7 @@ function WorkersTab({ t, T }) {
   if (loading) return <div style={{ color: T.muted, textAlign: "center", padding: 40, fontSize: 12 }}>{t("loading")}</div>;
 
   const CAND_STATUS_KEYS_ALL = ["all","added","interview","approved_final","rejected_final","reserve","rejected_recruiter","approved_client","docs_prep","filed_migration","permit_received","scheduled_visa","visa_docs_sent","submitted_embassy","visa_received"];
-  const filtered = filter === "all" ? workers : workers.filter(w => w.status === filter);
+  const filtered = filter === "all" ? workers : workers.filter(w => normCandStatus(w.status) === filter);
 
   if (workers.length === 0) return (
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "40px 20px", textAlign: "center" }}>
@@ -357,7 +370,7 @@ function WorkersTab({ t, T }) {
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         {CAND_STATUS_KEYS_ALL.map(k => {
           const label = k === "all" ? t("all") : (CMAP[k]?.label || k);
-          const count = k === "all" ? workers.length : workers.filter(w => w.status === k).length;
+          const count = k === "all" ? workers.length : workers.filter(w => normCandStatus(w.status) === k).length;
           return (
             <button key={k} onClick={() => setFilter(k)}
               style={{ padding: "5px 12px", borderRadius: 20, fontSize: 10, fontWeight: 600, cursor: "pointer",
@@ -382,10 +395,13 @@ function WorkersTab({ t, T }) {
           </thead>
           <tbody>
             {filtered.map(w => {
-              const cs = CMAP[w.status] || CMAP.submitted;
+              const cs = CMAP[normCandStatus(w.status)] || CMAP.added;
               const stageColor = STAGE_COLORS[w.leadStatus] || T.muted;
               return (
-                <tr key={w.id} style={{ borderBottom: `1px solid ${T.border}22` }}>
+                <tr key={w.id} onClick={() => setSelWorker(w)}
+                  style={{ borderBottom: `1px solid ${T.border}22`, cursor: "pointer" }}
+                  onMouseEnter={e => e.currentTarget.style.background = T.card2}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                   <td style={{ padding: "10px 12px" }}>
                     <div style={{ fontWeight: 700, color: T.text }}>{w.name || "–"}</div>
                     {w.phone && <div style={{ fontSize: 9, color: T.muted }}>{w.phone}</div>}
@@ -420,6 +436,28 @@ function WorkersTab({ t, T }) {
           <div style={{ textAlign: "center", padding: "30px", color: T.muted, fontSize: 12 }}>{t("emp_no_workers")}</div>
         )}
       </div>
+
+      {selWorker && (
+        <CandidateProfile
+          candidate={{ ...selWorker, leadName: selWorker.name, addedAt: selWorker.appliedAt }}
+          vacancy={{
+            title: selWorker.vacancyTitle, company: selWorker.vacancyCompany,
+            country: selWorker.vacancyCountry, salary: selWorker.vacancySalary, jobType: selWorker.vacancyJobType,
+          }}
+          lead={{
+            id: selWorker.leadId, name: selWorker.name, phone: selWorker.phone,
+            country: selWorker.leadCountry, status: selWorker.leadStatus,
+            source: selWorker.leadSource, gender: selWorker.leadGender,
+            position: selWorker.leadPosition, sector: selWorker.leadSector,
+            cv: selWorker.leadCv, docs: selWorker.leadDocs,
+            comment: selWorker.leadComment, note: selWorker.leadNote,
+            xba: selWorker.leadXba, q1: selWorker.leadQ1, q2: selWorker.leadQ2, q3: selWorker.leadQ3,
+            xbaDate: selWorker.leadXbaDate, q1Date: selWorker.leadQ1Date, q2Date: selWorker.leadQ2Date, q3Date: selWorker.leadQ3Date,
+          }}
+          onClose={() => setSelWorker(null)}
+          T={T} t={t}
+        />
+      )}
     </div>
   );
 }
