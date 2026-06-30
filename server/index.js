@@ -897,12 +897,36 @@ app.get("/api/stats/employees", auth, async (req, res) => {
         u.id,
         u.name,
         u.color,
-        COUNT(*) FILTER (WHERE sl.status = 'Qilindi') AS qilindi,
+        -- Calls made: counted from "so'ngi aloqa" (last_contact) date landing in range,
+        -- not from a status transition — reps often call without changing status.
+        (SELECT COUNT(*) FROM leads l
+          WHERE l.owner_sales = u.id
+            AND NULLIF(l.last_contact,'') IS NOT NULL
+            AND NULLIF(l.last_contact,'')::date BETWEEN $1::date AND $2::date
+        ) AS qilindi,
         COUNT(*) FILTER (WHERE sl.status = 'Boglanildi') AS boglanildi,
         COUNT(*) FILTER (WHERE sl.status IN ('Onlayn Suhbat Uchun','Onlayn Suhbat')) AS onlayn_suhbat,
-        COUNT(*) FILTER (WHERE sl.status = 'Suhbat') AS suhbat,
-        COUNT(*) FILTER (WHERE sl.status = 'Shartnoma qildi') AS shartnoma,
-        COUNT(*) FILTER (WHERE sl.status = 'XBA To''lov qildi') AS xba_tolov,
+        -- Interview: status must currently be Suhbat AND the interview date itself falls in range
+        (SELECT COUNT(*) FROM leads l
+          WHERE l.owner_sales = u.id
+            AND l.status = 'Suhbat'
+            AND NULLIF(l.interview_date,'') IS NOT NULL
+            AND NULLIF(l.interview_date,'')::date BETWEEN $1::date AND $2::date
+        ) AS suhbat,
+        -- Contract: status must currently be Shartnoma qildi AND contract date falls in range
+        (SELECT COUNT(*) FROM leads l
+          WHERE l.owner_sales = u.id
+            AND l.status = 'Shartnoma qildi'
+            AND NULLIF(l.contract_date,'') IS NOT NULL
+            AND NULLIF(l.contract_date,'')::date BETWEEN $1::date AND $2::date
+        ) AS shartnoma,
+        -- XBA payment: xba flag set AND the payment date falls in range
+        (SELECT COUNT(*) FROM leads l
+          WHERE l.owner_sales = u.id
+            AND l.xba = true
+            AND l.xba_date IS NOT NULL
+            AND l.xba_date BETWEEN $1::date AND $2::date
+        ) AS xba_tolov,
         COUNT(*) FILTER (WHERE sl.status = 'Jo''nab ketdi') AS jonab_ketdi,
         COUNT(*) AS total_actions
       FROM users u
