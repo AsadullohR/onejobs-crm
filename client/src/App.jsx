@@ -136,9 +136,14 @@ const mapLead = useCallback(l => ({
   reklamaName:l.reklama_name||"",
   quality:l.quality||"", qualityNote:l.quality_note||"",
 }), []);
+const savingLeadIdsRef = useRef(new Set());
 const saveLead = useCallback(async f => {
     // New leads have a tmp-* id; existing leads have their real NO-* id
     const isNew = !f.id || f.id.startsWith("tmp-");
+    // Guard against double-submit (slow network + repeated clicks) creating duplicate rows
+    const guardKey = f.id || "new";
+    if (savingLeadIdsRef.current.has(guardKey)) return;
+    savingLeadIdsRef.current.add(guardKey);
     try {
       const savedRow = await leadsAPI.save({
         // Don't send temp id — let server generate the real NO-{timestamp} id
@@ -193,11 +198,13 @@ const saveLead = useCallback(async f => {
       // Use the server-returned row so we have the real ID and DB timestamps
       const saved = mapLead(savedRow);
 
-      setLeads(p =>
-        isNew
-          ? [...p, saved]
-          : p.map(l => l.id === saved.id ? saved : l)
-      );
+      setLeads(p => {
+        if (isNew) {
+          // Defensive dedup: never append a lead id already present
+          return p.some(l => l.id === saved.id) ? p.map(l => l.id === saved.id ? saved : l) : [...p, saved];
+        }
+        return p.map(l => l.id === saved.id ? saved : l);
+      });
 
       if(isNew) {
         const ownerNames = [f.ownerSales, f.ownerConsult, f.ownerDocs]
@@ -241,6 +248,8 @@ const saveLead = useCallback(async f => {
         console.error(err);
         alert("Lead saqlanmadi: " + (err.message || "Noma'lum xatolik"));
       }
+    } finally {
+      savingLeadIdsRef.current.delete(guardKey);
     }
 }, [leads, team, mapLead, addNotif]);
 const deleteLead = useCallback(async (id) => {
@@ -433,9 +442,9 @@ const deleteLead = useCallback(async (id) => {
     const poll = setInterval(async ()=>{
   try {
     const since = lastPollRef.current;
-    const r = await leadsAPI.getAll({ since, limit: 50 });
-    const fresh = (r.leads||r||[]).map(mapLead);
-    const newOnes = fresh.filter(l => new Date(l.createdAt) >= new Date(since));
+    const r = await leadsAPI.getNew(since);
+    // Server already filters by created_at > since — trust it, no client-side re-filter
+    const newOnes = (r.leads||r||[]).map(mapLead);
     if(newOnes.length){
       setLeads(p=>{
         const ids=new Set(p.map(x=>x.id));
@@ -443,8 +452,8 @@ const deleteLead = useCallback(async (id) => {
         return brandNew.length ? [...brandNew,...p] : p;
       });
       addNotif(`📥 ${newOnes.length} ta yangi lead!`);
-      lastPollRef.current=new Date().toISOString();
     }
+    lastPollRef.current=new Date().toISOString();
   } catch(e){}
 }, 30000);
 

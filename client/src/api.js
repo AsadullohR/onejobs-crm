@@ -56,6 +56,7 @@ export const leadsAPI = {
     return req("GET", `/api/leads${q ? "?" + q : ""}`);
   },
   get: (id) => req("GET", `/api/leads/${id}`),
+  getNew: (since) => req("GET", `/api/leads/new?since=${encodeURIComponent(since)}`),
   save: (lead) => req("POST", "/api/leads", lead),
   delete: (id) => req("DELETE", `/api/leads/${id}`),
   bulkImport: (leads) => req("POST", "/api/leads/bulk", { leads }),

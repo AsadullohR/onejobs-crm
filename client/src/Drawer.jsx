@@ -34,6 +34,7 @@ const [form,setForm]=useState({
   },
 });
   const [tab,setTab]=useState("info");
+  const [saving,setSaving]=useState(false);
   const [note,setNote]=useState("");
   const [tTitle,setTTitle]=useState(""); const [tDue,setTDue]=useState(""); const [tAsgn,setTAsgn]=useState(user.id);
   const [showCV,setShowCV]=useState(false);
@@ -485,7 +486,7 @@ const [form,setForm]=useState({
       {/* Footer */}
       <div style={{padding:"10px 16px",borderTop:`1px solid ${T.border}`,display:"flex",gap:7,background:T.card,flexShrink:0}}>
         <button onClick={onClose} style={{flex:1,padding:"9px",borderRadius:7,background:T.card2,color:T.text,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:12,fontWeight:600}}>Bekor</button>
-        <button onClick={()=>onSave(form)} style={{flex:2,padding:"9px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:"pointer",fontSize:12}}>💾 Saqlash</button>
+        <button disabled={saving} onClick={async()=>{ if(saving) return; setSaving(true); try{ await onSave(form); } finally { setSaving(false); } }} style={{flex:2,padding:"9px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:saving?"default":"pointer",fontSize:12,opacity:saving?0.6:1}}>{saving?"⏳ Saqlanmoqda...":"💾 Saqlash"}</button>
       </div>
     </div>
   </div>;
