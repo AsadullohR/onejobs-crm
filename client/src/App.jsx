@@ -455,7 +455,7 @@ const deleteLead = useCallback(async (id) => {
         const brandNew=newOnes.filter(l=>!ids.has(l.id));
         return brandNew.length ? [...brandNew,...p] : p;
       });
-      addNotif(`📥 ${newOnes.length} ta yangi lead!`);
+      setNotifs(p=>[{id:uid(),msg:`📥 ${newOnes.length} ta yangi lead!`,type:"info",at:new Date().toISOString(),read:false},...p].slice(0,100));
     }
     lastPollRef.current=new Date().toISOString();
   } catch(e){}
