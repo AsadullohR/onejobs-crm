@@ -423,7 +423,11 @@ const deleteLead = useCallback(async (id) => {
         setApiError(err.message);   
         setTasks(INIT_TASKS);   
         setTxns(INIT_TXN);
-      } finally { setAppLoading(false); setRefreshing(false); }
+      } finally {
+        setAppLoading(false);
+        setRefreshing(false);
+        lastPollRef.current = new Date().toISOString();
+      }
     };
 
     loadAll();
