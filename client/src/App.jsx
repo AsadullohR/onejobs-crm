@@ -57,6 +57,7 @@ export default function App() {
   const [extExps,setExtExps]=useState([]);
   const [appLoading,setAppLoading]=useState(false);
   const lastPollRef=useRef(new Date().toISOString());
+  const knownLeadIdsRef=useRef(new Set());
   const [loading,setLoading]=useState(false);
   const [apiError,setApiError]=useState(null);
   const [config,setConfigRaw]=useState(INIT_CFG);
@@ -197,6 +198,7 @@ const saveLead = useCallback(async f => {
 
       // Use the server-returned row so we have the real ID and DB timestamps
       const saved = mapLead(savedRow);
+      knownLeadIdsRef.current.add(saved.id);
 
       setLeads(p => {
         if (isNew) {
@@ -368,7 +370,9 @@ const deleteLead = useCallback(async (id) => {
           vacanciesAPI.getAll().catch(()=>[]),
           candidatesAPI.getAll().catch(()=>[]),
         ]);
-        setLeads((leadsRes.leads||leadsRes||[]).map(mapLead));
+        const fetchedLeads=(leadsRes.leads||leadsRes||[]).map(mapLead);
+        setLeads(fetchedLeads);
+        fetchedLeads.forEach(l=>knownLeadIdsRef.current.add(l.id));
         if(vacanciesRes?.length) setVacancies(vacanciesRes);
         if(candidatesRes?.length) setCandidates(candidatesRes);
         setTasks((tasksRes||[]).map(t=>({
@@ -447,17 +451,14 @@ const deleteLead = useCallback(async (id) => {
   try {
     const since = lastPollRef.current;
     const r = await leadsAPI.getNew(since);
-    // Server already filters by created_at > since — trust it, no client-side re-filter
-    const newOnes = (r.leads||r||[]).map(mapLead);
-    if(newOnes.length){
-      setLeads(p=>{
-        const ids=new Set(p.map(x=>x.id));
-        const brandNew=newOnes.filter(l=>!ids.has(l.id));
-        return brandNew.length ? [...brandNew,...p] : p;
-      });
-      setNotifs(p=>[{id:uid(),msg:`📥 ${newOnes.length} ta yangi lead!`,type:"info",at:new Date().toISOString(),read:false},...p].slice(0,100));
+    const fetched = (r.leads||r||[]).map(mapLead);
+    lastPollRef.current = new Date().toISOString();
+    const brandNew = fetched.filter(l=>!knownLeadIdsRef.current.has(l.id));
+    if(brandNew.length){
+      brandNew.forEach(l=>knownLeadIdsRef.current.add(l.id));
+      setLeads(p=>[...brandNew,...p]);
+      setNotifs(p=>[{id:uid(),msg:`📥 ${brandNew.length} ta yangi lead!`,type:"info",at:new Date().toISOString(),read:false},...p].slice(0,100));
     }
-    lastPollRef.current=new Date().toISOString();
   } catch(e){}
 }, 30000);
 
