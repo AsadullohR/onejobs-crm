@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useT } from "./theme.js";
 import { useLang } from "./i18n.jsx";
 import { inp } from "./helpers.jsx";
-import { CandidateProfile, candStatusMap, normCandStatus, fmtDate } from "./EmployerPortal.jsx";
+import { CandidateProfile, candStatusMap, normCandStatus, CAND_STATUS_KEYS, fmtDate } from "./EmployerPortal.jsx";
 
 // ─── PARTNER PORTAL ───────────────────────────────────────────────────────────
 // Nomad Cloud-style dashboard for partner accounts: overview stats,
@@ -51,14 +51,14 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
                  + leadsOnly.filter(l => l.status === "Jo'nab ketdi").length;
   const successRate = totalPeople ? Math.round((approved / totalPeople) * 100) : 0;
 
-  // Status breakdown across candidates + candidate-less leads (by lead stage)
+  // Full ordered pipeline: every status shown as a tracker step, zero counts included.
   const statusCounts = useMemo(() => {
     const m = {};
     myCands.forEach(c => {
       const k = normCandStatus(c.status);
       m[k] = (m[k] || 0) + 1;
     });
-    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+    return CAND_STATUS_KEYS.map(k => [k, m[k] || 0]);
   }, [myCands]);
 
   // Vacancy assignment counts
@@ -127,9 +127,15 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
 
   return (
     <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto", width: "100%" }}>
-      <div style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 900, color: T.text }}>{t("pp_title")}</h1>
-        <div style={{ fontSize: 12, color: T.muted }}>{t("pp_subtitle")}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#2563eb,#1d4ed8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0, boxShadow: "0 4px 12px rgba(37,99,235,.35)" }}>✈️</div>
+        <div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <h1 style={{ fontSize: 20, fontWeight: 900, color: T.text }}>OneJobs</h1>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#3b82f6", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("pp_title")}</span>
+          </div>
+          <div style={{ fontSize: 12, color: T.muted }}>{t("pp_subtitle")}</div>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -155,13 +161,20 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
         {/* Candidates by status */}
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 18, marginBottom: 22, boxShadow: T.shadow }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 12 }}>{t("pp_by_status")}</div>
-          {statusCounts.length === 0 && <div style={{ fontSize: 12, color: T.muted }}>{t("pp_no_candidates")}</div>}
-          {statusCounts.map(([k, n]) => (
-            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
-              <StatusBadge k={k} />
-              <span style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{n}</span>
-            </div>
-          ))}
+          {statusCounts.map(([k, n], idx) => {
+            const s = CMAP[k];
+            const pct = myCands.length ? Math.round((n / myCands.length) * 100) : 0;
+            return (
+              <div key={k} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${T.border}`, opacity: n ? 1 : 0.45 }}>
+                <div style={{ width: 24, height: 24, borderRadius: "50%", background: n ? (s?.c || T.accent) : T.card2, color: n ? "#fff" : T.muted, border: n ? "none" : `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{idx + 1}</div>
+                <div style={{ width: 190, flexShrink: 0 }}><StatusBadge k={k} /></div>
+                <div style={{ flex: 1, height: 6, background: T.card2, borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ width: pct + "%", height: "100%", background: s?.c || T.accent, borderRadius: 3 }} />
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 800, color: n ? T.text : T.muted, width: 30, textAlign: "right" }}>{n}</span>
+              </div>
+            );
+          })}
         </div>
 
         {/* Vacancy assignments */}

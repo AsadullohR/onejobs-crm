@@ -78,6 +78,12 @@ function getPhaseIndex(status) {
   return -1;
 }
 
+// Flat ordered list of every pipeline status, for the full timeline view
+const ALL_STATUSES = PHASES.flatMap(ph =>
+  ph.statuses.map(s => ({ status: s, phase: ph }))
+);
+const statusIndex = status => ALL_STATUSES.findIndex(x => x.status === status);
+
 export function TrackPage({ leadId: initialId }) {
   const [id, setId] = useState(initialId || "");
   const [input, setInput] = useState(initialId || "");
@@ -140,10 +146,26 @@ export function TrackPage({ leadId: initialId }) {
       display: "flex", flexDirection: "column", alignItems: "center",
       padding: "24px 16px", fontFamily: "'Inter',system-ui,sans-serif",
     }}>
-      {/* Header */}
+      {/* Header with logo */}
       <div style={{ textAlign: "center", marginBottom: 28 }}>
-        <div style={{ fontSize: 36, marginBottom: 6 }}>🌍</div>
-        <h1 style={{ color: "#fff", fontSize: 22, fontWeight: 900, margin: 0 }}>OneJobs</h1>
+        <div style={{
+          width: 88, height: 88, margin: "0 auto 12px", borderRadius: 22,
+          background: "#fff", boxShadow: "0 12px 32px rgba(0,0,0,0.25)",
+          display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
+        }}>
+          <img
+            src="/logo.png" alt="OneJobs"
+            style={{ width: "100%", height: "100%", objectFit: "contain", padding: 8 }}
+            onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
+          />
+          <div style={{
+            display: "none", width: "100%", height: "100%",
+            background: "linear-gradient(135deg,#38b6ff,#0066d8)",
+            alignItems: "center", justifyContent: "center",
+            fontSize: 34, fontWeight: 900, color: "#fff",
+          }}>OJ</div>
+        </div>
+        <h1 style={{ color: "#fff", fontSize: 24, fontWeight: 900, margin: 0, letterSpacing: "0.02em" }}>OneJobs</h1>
         <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 13, margin: "4px 0 0" }}>
           Ariza holati tekshirish
         </p>
@@ -247,6 +269,56 @@ export function TrackPage({ leadId: initialId }) {
               </div>
             </div>
           )}
+
+          {/* Full status timeline — every step, grouped by phase */}
+          {!isLost && (() => {
+            const curIdx = statusIndex(data.status);
+            return (
+              <div style={{ marginBottom: 20, border: "1px solid #f3f4f6", borderRadius: 12, padding: "14px 16px", maxHeight: 340, overflowY: "auto" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  Barcha bosqichlar
+                </div>
+                {PHASES.map(ph => (
+                  <div key={ph.key} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: "#6366f1", marginBottom: 6 }}>
+                      {ph.emoji} {ph.label}
+                    </div>
+                    {ph.statuses.map(s => {
+                      const i = statusIndex(s);
+                      const done = curIdx >= 0 && i < curIdx;
+                      const current = i === curIdx;
+                      return (
+                        <div key={s} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0 5px 8px" }}>
+                          <div style={{
+                            width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 10, fontWeight: 800,
+                            background: current ? "#6366f1" : done ? "#dcfce7" : "#f3f4f6",
+                            color: current ? "#fff" : done ? "#16a34a" : "#d1d5db",
+                            border: current ? "2px solid #c7d2fe" : "none",
+                          }}>
+                            {done ? "✓" : current ? "●" : ""}
+                          </div>
+                          <span style={{
+                            fontSize: 12,
+                            fontWeight: current ? 800 : done ? 600 : 400,
+                            color: current ? "#4f46e5" : done ? "#374151" : "#9ca3af",
+                          }}>
+                            {s}
+                          </span>
+                          {current && (
+                            <span style={{ marginLeft: "auto", fontSize: 9, fontWeight: 700, color: "#6366f1", background: "#eef2ff", borderRadius: 8, padding: "2px 8px", whiteSpace: "nowrap" }}>
+                              HOZIRGI BOSQICH
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Next steps message */}
           <div style={{
