@@ -20,13 +20,14 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     {k:"turnir",    lk:"nav_turnir",    ic:"🏆",     group:"main"},
     {k:"settings",  lk:"nav_settings",  ic:I.gear,  group:"admin"},
     {k:"employer",  lk:"nav_employer",  ic:"🏢",     group:"main"},
+    {k:"partner",   lk:"nav_partner",   ic:"🤝",     group:"main"},
   ];
   const allowed={
     admin:   NAV.map(n=>n.k),
     manager: ["dashboard","pipeline","leads","tasks","finance","team","settings","visa","vacancies","turnir"],
     sales:   ["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],
     docs:    ["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],
-    partner: ["leads","pipeline","vacancies"],
+    partner: ["partner","leads","pipeline","vacancies"],
     employer:["employer"],
     finance_manager:["dashboard","finance","vacancies"],
   };

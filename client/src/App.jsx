@@ -28,6 +28,7 @@ import { Analytics } from "./Analytics.jsx";
 import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, configAPI, vacanciesAPI, candidatesAPI, getToken, clearToken } from "./api.js";
 import { Vacancies } from "./Vacancies.jsx";
 import { EmployerPortal } from "./EmployerPortal.jsx";
+import { PartnerPortal } from "./PartnerPortal.jsx";
 import { ImportModal } from "./ImportModal.jsx";
 import { MobileFinance, MobileTasks, MobileDashboard, MobileLeads } from "./MobileViews.jsx";
 import { TrackPage } from "./TrackPage.jsx";
@@ -467,7 +468,7 @@ const deleteLead = useCallback(async (id) => {
 
   const isMobile = useIsMobile();
 
-  if(!user)return <Login onLogin={u=>{setUser(u);setPage(u.role==="finance_manager"?"finance":u.role==="employer"?"employer":"pipeline");}} team={team} roles={roles}/>;
+  if(!user)return <Login onLogin={u=>{setUser(u);setPage(u.role==="finance_manager"?"finance":u.role==="employer"?"employer":u.role==="partner"?"partner":"pipeline");}} team={team} roles={roles}/>;
   const perm=roles[user.role]||{};
   // Partner: filter leads to only their own + those with their source/name
   const partnerName = user.role==="partner" ? user.name : null;
@@ -596,6 +597,7 @@ const deleteLead = useCallback(async (id) => {
           {page==="finance"    && !isMobile && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts} roles={roles} extExps={extExps} setExtExps={setExtExps}/>}
           {page==="finance"    && isMobile && <MobileFinance txns={txns} setTxns={setTxns} leads={leads} extExps={extExps} user={user} config={config} addNotif={addNotif}/>}
           {page==="employer"   && user.role==="employer" && <EmployerPortal user={user} leads={leads} team={team} addNotif={addNotif}/>}
+          {page==="partner"    && user.role==="partner" && <PartnerPortal user={user} leads={visibleLeads} candidates={candidates} vacancies={vacancies}/>}
           {page==="turnir"     && <TurnirPage user={user} team={team} />}
         </div>
       </div>
@@ -605,7 +607,7 @@ const deleteLead = useCallback(async (id) => {
           manager: ["dashboard","pipeline","leads","tasks","finance"],
           sales:   ["dashboard","pipeline","leads","tasks"],
           docs:    ["dashboard","pipeline","leads","tasks"],
-          partner: ["leads","pipeline","vacancies"],
+          partner: ["partner","leads","pipeline","vacancies"],
           employer:["employer"],
           finance_manager:["dashboard","finance","vacancies"],
         };

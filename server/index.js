@@ -1262,11 +1262,16 @@ app.delete("/api/vacancies/:id", auth, async (req, res) => {
 app.get("/api/candidates/all", auth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT c.vacancy_id, c.lead_id, v.title as vacancy_title
+      `SELECT c.id, c.vacancy_id, c.lead_id, c.name, c.phone, c.status, c.note, c.created_at,
+              v.title as vacancy_title
        FROM candidates c
        LEFT JOIN vacancies v ON v.id = c.vacancy_id`,
     );
-    res.json(rows.map(r => ({ vacancyId: r.vacancy_id, leadId: r.lead_id, vacancyTitle: r.vacancy_title })));
+    res.json(rows.map(r => ({
+      id: r.id, vacancyId: r.vacancy_id, leadId: r.lead_id, vacancyTitle: r.vacancy_title,
+      vacancy_id: r.vacancy_id, lead_id: r.lead_id,
+      name: r.name, phone: r.phone, status: r.status, note: r.note, created_at: r.created_at,
+    })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
