@@ -23,7 +23,7 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     {k:"partner",   lk:"nav_partner",   ic:"🤝",     group:"main"},
   ];
   const allowed={
-    admin:   NAV.map(n=>n.k),
+    admin:   NAV.map(n=>n.k).filter(k=>k!=="employer"&&k!=="partner"),
     manager: ["dashboard","pipeline","leads","tasks","finance","team","settings","visa","vacancies","turnir"],
     sales:   ["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],
     docs:    ["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],

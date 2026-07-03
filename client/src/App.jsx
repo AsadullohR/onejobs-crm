@@ -611,8 +611,8 @@ const deleteLead = useCallback(async (id) => {
           employer:["employer"],
           finance_manager:["dashboard","finance","vacancies"],
         };
-        const NAV_ICONS={dashboard:"📊",pipeline:"📋",leads:"👥",tasks:"✅",finance:"💰",vacancies:"💼",employer:"🏢"};
-        const NAV_LABELS={dashboard:"Bosh",pipeline:"Kanal",leads:"Mijozlar",tasks:"Vazifalar",finance:"Moliya",vacancies:"Vakansiya",employer:"Portal"};
+        const NAV_ICONS={dashboard:"📊",pipeline:"📋",leads:"👥",tasks:"✅",finance:"💰",vacancies:"💼",employer:"🏢",partner:"🤝"};
+        const NAV_LABELS={dashboard:"Bosh",pipeline:"Kanal",leads:"Mijozlar",tasks:"Vazifalar",finance:"Moliya",vacancies:"Vakansiya",employer:"Portal",partner:"Panel"};
         const items=(allowed[user.role]||[]).slice(0,5);
         return <div style={{position:"fixed",bottom:0,left:0,right:0,height:56,background:T.card,
           borderTop:`1px solid ${T.border}`,display:"flex",zIndex:300,boxShadow:"0 -2px 10px rgba(0,0,0,.15)"}}>
