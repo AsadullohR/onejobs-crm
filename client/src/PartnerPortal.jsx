@@ -4,6 +4,7 @@ import { useLang, vTitle, vDesc } from "./i18n.jsx";
 import { inp, lab, Modal } from "./helpers.jsx";
 import { partnerAPI } from "./api.js";
 import { CandidateProfile, candStatusMap, normCandStatus, CAND_STATUS_KEYS, fmtDate } from "./EmployerPortal.jsx";
+import { InstallPrompt } from "./InstallPrompt.jsx";
 
 // ─── PARTNER PORTAL ───────────────────────────────────────────────────────────
 // Nomad Cloud-style dashboard for partner accounts:
@@ -193,6 +194,7 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
           </div>
           <div style={{ fontSize: 12, color: T.muted }}>{user?.name} · {t("pp_subtitle")}</div>
         </div>
+        <InstallPrompt />
       </div>
 
       {/* Tabs */}

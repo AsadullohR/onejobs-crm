@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { InstallPrompt } from "./InstallPrompt.jsx";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
@@ -384,6 +385,9 @@ export function TrackPage({ leadId: initialId }) {
         </div>
       )}
 
+      <div style={{ marginTop: 20 }}>
+        <InstallPrompt />
+      </div>
       <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, marginTop: 24 }}>
         OneJobs CRM © 2026
       </div>
