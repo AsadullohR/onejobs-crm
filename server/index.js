@@ -186,6 +186,20 @@ app.get("/api/leads", auth, async (req, res) => {
     params.push(`%${search}%`);
   }
 
+  // Employer role: no access to the lead list at all — their portal uses
+  // /api/employer/workers which returns only their own hired workers.
+  if (req.user.role === "employer") {
+    return res.json({ leads: [], total: 0 });
+  }
+  // Partner role: server-side scope — only leads they referred or own.
+  // Client-side filtering alone leaks the full lead list via the network tab.
+  if (req.user.role === "partner") {
+    conditions.push(
+      `(l.source ILIKE $${params.length + 1} OR l.owner_sales = $${params.length + 2} OR l.owner_consult = $${params.length + 2} OR l.owner_docs = $${params.length + 2})`,
+    );
+    params.push(`%${req.user.name}%`, req.user.id);
+  }
+
   const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
 
   try {
