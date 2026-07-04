@@ -37,8 +37,14 @@ const pool = new Pool({
 });
 
 async function nextLeadId() {
-  const { rows } = await pool.query(`SELECT 'NO-' || nextval('leads_id_seq') AS id`);
-  return rows[0].id;
+  // The sequence can lag behind existing ids (imports, webhooks), so skip
+  // over any value that's already taken instead of failing with a dup-key.
+  for (let i = 0; i < 500; i++) {
+    const { rows } = await pool.query(`SELECT 'NO-' || nextval('leads_id_seq') AS id`);
+    const { rows: dup } = await pool.query(`SELECT 1 FROM leads WHERE id=$1`, [rows[0].id]);
+    if (!dup[0]) return rows[0].id;
+  }
+  throw new Error("Lead ID generatsiyasida xatolik — administrator bilan bog'laning");
 }
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
@@ -1974,6 +1980,9 @@ app.listen(PORT, async () => {
         IF max_num > 1000000 THEN max_num := 0; END IF;
         IF NOT EXISTS (SELECT 1 FROM pg_sequences WHERE sequencename = 'leads_id_seq') THEN
           EXECUTE 'CREATE SEQUENCE leads_id_seq START WITH ' || (max_num + 1);
+        ELSE
+          -- Fast-forward past any existing ids so new inserts never collide
+          PERFORM setval('leads_id_seq', GREATEST(max_num + 1, (SELECT last_value FROM leads_id_seq)));
         END IF;
       END$$;
     `);
