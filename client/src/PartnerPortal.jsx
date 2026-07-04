@@ -5,12 +5,19 @@ import { inp } from "./helpers.jsx";
 import { CandidateProfile, candStatusMap, normCandStatus, CAND_STATUS_KEYS, fmtDate } from "./EmployerPortal.jsx";
 
 // ─── PARTNER PORTAL ───────────────────────────────────────────────────────────
-// Nomad Cloud-style dashboard for partner accounts: overview stats,
-// candidates-by-status breakdown, and a searchable candidates table.
+// Nomad Cloud-style dashboard for partner accounts:
+//  • Overview  — stat cards, candidates-by-status table, ads-assigned table
+//  • Candidates — rich filterable table with avatars and pagination
+//  • Job ads   — card grid of vacancies shared with this partner
 // Read-only: partners see status of the candidates they referred.
 
 const APPROVED_SET = new Set(["approved_final", "approved_client", "visa_received", "permit_received"]);
 const PENDING_SET  = new Set(["added", "interview", "reserve"]);
+const PAGE_SIZE = 10;
+
+const initials = name => (name || "?").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+const AV_COLORS = ["#6366f1", "#0891b2", "#d97706", "#16a34a", "#9333ea", "#dc2626", "#0369a1", "#ea580c"];
+const avColor = name => AV_COLORS[(name || "").length % AV_COLORS.length];
 
 function PartnerPortal({ leads, candidates, vacancies, user }) {
   const T = useT();
@@ -19,6 +26,8 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
   const [tab, setTab] = useState("overview");
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [vacFilter, setVacFilter] = useState("all");
+  const [page, setPage] = useState(0);
   const [selCand, setSelCand] = useState(null);
 
   const leadById = useMemo(() => {
@@ -40,73 +49,90 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
       .map(c => ({ ...c, leadId: c.lead_id || c.leadId, vacancyId: c.vacancy_id || c.vacancyId })),
     [candidates, leadById]);
 
-  // Leads without any candidate still count as "referred" people.
   const candLeadIds = useMemo(() => new Set(myCands.map(c => c.leadId)), [myCands]);
   const leadsOnly = leads.filter(l => !candLeadIds.has(l.id));
 
   const totalPeople = myCands.length + leadsOnly.length;
   const approved = myCands.filter(c => APPROVED_SET.has(normCandStatus(c.status))).length;
   const pending  = myCands.filter(c => PENDING_SET.has(normCandStatus(c.status))).length + leadsOnly.length;
-  const sent     = myCands.filter(c => normCandStatus(c.status) === "sent" || leadById[c.leadId]?.status === "Jo'nab ketdi").length
+  const departed = myCands.filter(c => leadById[c.leadId]?.status === "Jo'nab ketdi").length
                  + leadsOnly.filter(l => l.status === "Jo'nab ketdi").length;
   const successRate = totalPeople ? Math.round((approved / totalPeople) * 100) : 0;
+  const activeVacs = (vacancies || []).filter(v => (v.status || "active") === "active").length;
 
-  // Full ordered pipeline: every status shown as a tracker step, zero counts included.
+  // Status breakdown — only statuses that occur, sorted by count (Nomad style)
   const statusCounts = useMemo(() => {
     const m = {};
-    myCands.forEach(c => {
-      const k = normCandStatus(c.status);
-      m[k] = (m[k] || 0) + 1;
-    });
-    return CAND_STATUS_KEYS.map(k => [k, m[k] || 0]);
+    myCands.forEach(c => { const k = normCandStatus(c.status); m[k] = (m[k] || 0) + 1; });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
   }, [myCands]);
 
-  // Vacancy assignment counts
-  const vacCounts = useMemo(() => {
+  // Per-vacancy candidate counts for the "ads assigned" table
+  const vacCandCounts = useMemo(() => {
     const m = {};
     myCands.forEach(c => { if (c.vacancyId) m[c.vacancyId] = (m[c.vacancyId] || 0) + 1; });
-    return Object.entries(m)
-      .map(([vid, n]) => ({ v: vacById[vid], n }))
-      .filter(x => x.v)
-      .sort((a, b) => b.n - a.n);
-  }, [myCands, vacById]);
+    return m;
+  }, [myCands]);
 
-  // Table rows: every candidate + every candidate-less lead
-  const rows = useMemo(() => {
+  // ── Candidates table rows ──
+  const allRows = useMemo(() => {
     const candRows = myCands.map(c => {
       const lead = leadById[c.leadId] || {};
+      const v = vacById[c.vacancyId];
       return {
-        key: `c-${c.id}`, cand: c, lead,
+        key: `c-${c.id}`, cand: c, lead, vacancy: v,
         name: lead.name || c.name || "", phone: lead.phone || c.phone || "",
-        country: lead.country || "", position: lead.position || lead.sector || "",
-        vacancy: vacById[c.vacancyId], leadStatus: lead.status || "",
+        country: lead.country || "", company: v?.company || "",
+        position: v?.title || lead.position || lead.sector || "",
+        pay: v?.salary || "", leadStatus: lead.status || "",
         candStatus: normCandStatus(c.status),
         date: fmtDate(c.created_at || lead.createdAt),
       };
     });
     const leadRows = leadsOnly.map(l => ({
-      key: `l-${l.id}`, cand: null, lead: l,
+      key: `l-${l.id}`, cand: null, lead: l, vacancy: null,
       name: l.name, phone: l.phone || "", country: l.country || "",
-      position: l.position || l.sector || "", vacancy: null,
+      company: "", position: l.position || l.sector || "", pay: "",
       leadStatus: l.status || "", candStatus: null,
       date: fmtDate(l.createdAt),
     }));
-    let all = [...candRows, ...leadRows];
+    return [...candRows, ...leadRows];
+  }, [myCands, leadsOnly, leadById, vacById]);
+
+  const filteredRows = useMemo(() => {
+    let all = allRows;
     if (q.trim()) {
       const s = q.trim().toLowerCase();
       all = all.filter(r => r.name.toLowerCase().includes(s) || r.phone.includes(s));
     }
-    if (statusFilter !== "all") {
-      all = all.filter(r => r.candStatus === statusFilter);
-    }
+    if (statusFilter !== "all") all = all.filter(r => r.candStatus === statusFilter);
+    if (vacFilter !== "all") all = all.filter(r => r.cand && String(r.cand.vacancyId) === vacFilter);
     return all;
-  }, [myCands, leadsOnly, leadById, vacById, q, statusFilter]);
+  }, [allRows, q, statusFilter, vacFilter]);
 
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const pageRows = filteredRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const usedStatuses = useMemo(() => [...new Set(myCands.map(c => normCandStatus(c.status)))], [myCands]);
 
-  // ── UI helpers ──
+  const setF = fn => v => { fn(v); setPage(0); };
+
+  // ── UI atoms ──
+  const StatusBadge = ({ k, fallback }) => {
+    const s = CMAP[k];
+    if (!s) return fallback
+      ? <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px", whiteSpace: "nowrap" }}>{fallback}</span>
+      : <span style={{ color: T.muted, fontSize: 11 }}>–</span>;
+    return <span style={{ fontSize: 10, fontWeight: 700, color: s.c, background: s.c + "18", border: `1px solid ${s.c}40`, borderRadius: 8, padding: "3px 8px", whiteSpace: "nowrap" }}>{s.label}</span>;
+  };
+
+  const ActiveBadge = ({ status }) => {
+    const active = (status || "active") === "active";
+    const c = active ? "#16a34a" : "#9ca3af";
+    return <span style={{ fontSize: 10, fontWeight: 700, color: c, background: c + "18", border: `1px solid ${c}40`, borderRadius: 10, padding: "3px 10px" }}>{active ? t("pp_active") : t("pp_inactive")}</span>;
+  };
+
   const Card = ({ label, value, sub, color, icon }) => (
-    <div style={{ flex: "1 1 160px", minWidth: 150, background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "16px 18px", boxShadow: T.shadow }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: "16px 18px", boxShadow: T.shadow }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: T.muted }}>{label}</span>
         <span style={{ fontSize: 16 }}>{icon}</span>
@@ -116,139 +142,212 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
     </div>
   );
 
-  const StatusBadge = ({ k }) => {
-    const s = CMAP[k];
-    if (!s) return <span style={{ color: T.muted, fontSize: 11 }}>–</span>;
-    return <span style={{ fontSize: 10, fontWeight: 700, color: s.c, background: s.c + "18", border: `1px solid ${s.c}40`, borderRadius: 8, padding: "3px 8px", whiteSpace: "nowrap" }}>{s.label}</span>;
-  };
+  const Panel = ({ title, children }) => (
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.shadow, marginBottom: 22, overflow: "hidden" }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: T.text, padding: "14px 18px", borderBottom: `1px solid ${T.border}`, background: T.card2 }}>{title}</div>
+      {children}
+    </div>
+  );
 
-  const th = { textAlign: "left", padding: "9px 10px", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" };
-  const td = { padding: "9px 10px", fontSize: 12, color: T.text, borderBottom: `1px solid ${T.border}` };
+  const th = { textAlign: "left", padding: "10px 14px", fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.04em", borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap", background: T.card2 };
+  const td = { padding: "10px 14px", fontSize: 12, color: T.text, borderBottom: `1px solid ${T.border}` };
 
   return (
     <div style={{ padding: 20, maxWidth: 1200, margin: "0 auto", width: "100%" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg,#2563eb,#1d4ed8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0, boxShadow: "0 4px 12px rgba(37,99,235,.35)" }}>✈️</div>
-        <div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 900, color: T.text }}>OneJobs</h1>
+      {/* Branded header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
+        <div style={{ width: 52, height: 52, borderRadius: 14, background: "#fff", border: `1px solid ${T.border}`, boxShadow: T.shadow, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+          <img src="/logo.png" alt="OneJobs" style={{ width: "100%", height: "100%", objectFit: "contain", padding: 4 }}
+            onError={e => { e.target.style.display = "none"; e.target.parentNode.style.background = "linear-gradient(135deg,#38b6ff,#0066d8)"; e.target.parentNode.innerHTML = '<span style="color:#fff;font-weight:900;font-size:20px">OJ</span>'; }} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+            <h1 style={{ fontSize: 21, fontWeight: 900, color: T.text, margin: 0 }}>OneJobs</h1>
             <span style={{ fontSize: 11, fontWeight: 700, color: "#3b82f6", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("pp_title")}</span>
           </div>
-          <div style={{ fontSize: 12, color: T.muted }}>{t("pp_subtitle")}</div>
+          <div style={{ fontSize: 12, color: T.muted }}>{user?.name} · {t("pp_subtitle")}</div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-        {[["overview", t("pp_tab_overview")], ["candidates", t("pp_tab_candidates")]].map(([k, lbl]) => (
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {[["overview", "📊 " + t("pp_tab_overview")], ["candidates", "👥 " + t("pp_tab_candidates")], ["jobs", "💼 " + t("pp_tab_jobs")]].map(([k, lbl]) => (
           <button key={k} onClick={() => setTab(k)}
-            style={{ padding: "8px 18px", borderRadius: 10, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? T.accent : T.card, color: tab === k ? "#fff" : T.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            style={{ padding: "9px 20px", borderRadius: 10, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? T.accent : T.card, color: tab === k ? "#fff" : T.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
             {lbl}
           </button>
         ))}
       </div>
 
+      {/* ── OVERVIEW ── */}
       {tab === "overview" && <>
-        {/* Stat cards */}
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 22 }}>
-          <Card label={t("pp_total")}     value={totalPeople} icon="👥" color="#6366f1" />
-          <Card label={t("pp_approved")}  value={approved}    icon="✅" color="#16a34a" />
-          <Card label={t("pp_pending")}   value={pending}     icon="⏳" color="#d97706" />
-          <Card label={t("pp_sent")}      value={sent}        icon="✈️" color="#0891b2" />
-          <Card label={t("pp_success")}   value={successRate + "%"} icon="📈" color="#9333ea" sub={t("pp_success_sub")} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, marginBottom: 22 }}>
+          <Card label={t("pp_total")}    value={totalPeople} icon="👥" color="#6366f1" />
+          <Card label={t("pp_approved")} value={approved}    icon="✅" color="#16a34a" />
+          <Card label={t("pp_pending")}  value={pending}     icon="⏳" color="#d97706" />
+          <Card label={t("pp_sent")}     value={departed}    icon="✈️" color="#0891b2" />
+          <Card label={t("pp_tab_jobs")} value={(vacancies || []).length} sub={`${activeVacs} ${t("pp_active").toLowerCase()}`} icon="💼" color="#7c3aed" />
+          <Card label={t("pp_success")}  value={successRate + "%"} sub={t("pp_success_sub")} icon="📈" color="#9333ea" />
         </div>
 
-        {/* Candidates by status */}
-        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 18, marginBottom: 22, boxShadow: T.shadow }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 12 }}>{t("pp_by_status")}</div>
-          {statusCounts.map(([k, n], idx) => {
-            const s = CMAP[k];
-            const pct = myCands.length ? Math.round((n / myCands.length) * 100) : 0;
-            return (
-              <div key={k} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", borderBottom: `1px solid ${T.border}`, opacity: n ? 1 : 0.45 }}>
-                <div style={{ width: 24, height: 24, borderRadius: "50%", background: n ? (s?.c || T.accent) : T.card2, color: n ? "#fff" : T.muted, border: n ? "none" : `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, flexShrink: 0 }}>{idx + 1}</div>
-                <div style={{ width: 190, flexShrink: 0 }}><StatusBadge k={k} /></div>
-                <div style={{ flex: 1, height: 6, background: T.card2, borderRadius: 3, overflow: "hidden" }}>
-                  <div style={{ width: pct + "%", height: "100%", background: s?.c || T.accent, borderRadius: 3 }} />
-                </div>
-                <span style={{ fontSize: 14, fontWeight: 800, color: n ? T.text : T.muted, width: 30, textAlign: "right" }}>{n}</span>
-              </div>
-            );
-          })}
-        </div>
+        <Panel title={t("pp_by_status")}>
+          {statusCounts.length === 0
+            ? <div style={{ fontSize: 12, color: T.muted, padding: 18 }}>{t("pp_no_candidates")}</div>
+            : <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr><th style={th}>{t("pp_col_status")}</th><th style={{ ...th, textAlign: "right" }}>#</th></tr></thead>
+                <tbody>
+                  {statusCounts.map(([k, n]) => (
+                    <tr key={k}>
+                      <td style={td}><StatusBadge k={k} /></td>
+                      <td style={{ ...td, textAlign: "right", fontWeight: 800, fontSize: 14 }}>{n}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>}
+        </Panel>
 
-        {/* Vacancy assignments */}
-        {vacCounts.length > 0 && (
-          <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 18, boxShadow: T.shadow }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 12 }}>{t("pp_by_vacancy")}</div>
-            {vacCounts.map(({ v, n }) => (
-              <div key={v.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${T.border}` }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{v.title}</div>
-                  <div style={{ fontSize: 10, color: T.muted }}>{[v.company, v.country].filter(Boolean).join(" · ")}</div>
-                </div>
-                <span style={{ fontSize: 13, fontWeight: 800, color: T.accent, background: T.accent + "15", borderRadius: 10, padding: "3px 12px" }}>{n}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        <Panel title={t("pp_ads_assigned")}>
+          {(vacancies || []).length === 0
+            ? <div style={{ fontSize: 12, color: T.muted, padding: 18 }}>{t("pp_no_vacancies")}</div>
+            : <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead><tr>
+                  <th style={th}>{t("pp_col_position")}</th>
+                  <th style={{ ...th, textAlign: "center" }}>{t("pp_tab_candidates")}</th>
+                  <th style={{ ...th, textAlign: "right" }}>{t("pp_col_status")}</th>
+                </tr></thead>
+                <tbody>
+                  {(vacancies || []).map(v => (
+                    <tr key={v.id}>
+                      <td style={td}>
+                        <div style={{ fontWeight: 700 }}>{v.title}</div>
+                        <div style={{ fontSize: 10, color: T.muted }}>{[v.company, v.country].filter(Boolean).join(" · ")}</div>
+                      </td>
+                      <td style={{ ...td, textAlign: "center" }}>
+                        <span style={{ display: "inline-block", minWidth: 26, fontSize: 12, fontWeight: 800, color: T.accent, background: T.accent + "15", borderRadius: 12, padding: "3px 10px" }}>{vacCandCounts[v.id] || 0}</span>
+                      </td>
+                      <td style={{ ...td, textAlign: "right" }}><ActiveBadge status={v.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>}
+        </Panel>
       </>}
 
+      {/* ── CANDIDATES ── */}
       {tab === "candidates" && <>
-        {/* Filters */}
         <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("pp_search")}
-            style={{ ...inp(T), maxWidth: 260 }} />
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ ...inp(T), maxWidth: 220 }}>
+          <input value={q} onChange={e => setF(setQ)(e.target.value)} placeholder={t("pp_search")} style={{ ...inp(T), maxWidth: 240 }} />
+          <select value={statusFilter} onChange={e => setF(setStatusFilter)(e.target.value)} style={{ ...inp(T), maxWidth: 200 }}>
             <option value="all">{t("pp_all_statuses")}</option>
             {usedStatuses.map(k => <option key={k} value={k}>{CMAP[k]?.label || k}</option>)}
           </select>
-          <div style={{ marginLeft: "auto", fontSize: 12, color: T.muted, alignSelf: "center" }}>
-            {rows.length} {t("pp_rows")}
-          </div>
+          <select value={vacFilter} onChange={e => setF(setVacFilter)(e.target.value)} style={{ ...inp(T), maxWidth: 220 }}>
+            <option value="all">{t("pp_all_vacancies")}</option>
+            {(vacancies || []).map(v => <option key={v.id} value={String(v.id)}>{v.title}</option>)}
+          </select>
+          <div style={{ marginLeft: "auto", fontSize: 12, color: T.muted, alignSelf: "center" }}>{filteredRows.length} {t("pp_rows")}</div>
         </div>
 
-        {/* Table */}
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "auto", boxShadow: T.shadow }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 780 }}>
-            <thead>
-              <tr>
-                <th style={th}>#</th>
-                <th style={th}>{t("pp_col_name")}</th>
-                <th style={th}>{t("pp_col_phone")}</th>
-                <th style={th}>{t("pp_col_country")}</th>
-                <th style={th}>{t("pp_col_position")}</th>
-                <th style={th}>{t("pp_col_vacancy")}</th>
-                <th style={th}>{t("pp_col_status")}</th>
-                <th style={th}>{t("pp_col_date")}</th>
-              </tr>
-            </thead>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+            <thead><tr>
+              <th style={th}>{t("pp_col_name")}</th>
+              <th style={th}>{t("pp_col_phone")}</th>
+              <th style={th}>{t("pp_col_country")}</th>
+              <th style={th}>{t("pp_col_company")}</th>
+              <th style={th}>{t("pp_col_position")}</th>
+              <th style={th}>{t("pp_col_pay")}</th>
+              <th style={th}>{t("pp_col_status")}</th>
+              <th style={th}>{t("pp_col_date")}</th>
+            </tr></thead>
             <tbody>
-              {rows.map((r, i) => (
-                <tr key={r.key}
-                  onClick={() => r.cand && setSelCand(r)}
+              {pageRows.map((r, i) => (
+                <tr key={r.key} onClick={() => r.cand && setSelCand(r)}
                   style={{ cursor: r.cand ? "pointer" : "default", background: i % 2 ? T.card2 : "transparent" }}>
-                  <td style={{ ...td, color: T.muted }}>{i + 1}</td>
-                  <td style={{ ...td, fontWeight: 700 }}>{r.name}</td>
+                  <td style={{ ...td, fontWeight: 700 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                      <span style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: avColor(r.name) + "22", color: avColor(r.name), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{initials(r.name)}</span>
+                      {r.name}
+                    </div>
+                  </td>
                   <td style={td}>{r.phone || "–"}</td>
                   <td style={td}>{r.country || "–"}</td>
+                  <td style={td}>{r.company || "–"}</td>
                   <td style={td}>{r.position || "–"}</td>
-                  <td style={td}>{r.vacancy?.title || "–"}</td>
-                  <td style={td}>
-                    {r.candStatus
-                      ? <StatusBadge k={r.candStatus} />
-                      : <span style={{ fontSize: 10, fontWeight: 700, color: T.muted, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: "3px 8px" }}>{r.leadStatus || "–"}</span>}
-                  </td>
+                  <td style={td}>{r.pay ? <span style={{ fontWeight: 700, color: "#16a34a" }}>{r.pay}</span> : "–"}</td>
+                  <td style={td}><StatusBadge k={r.candStatus} fallback={r.leadStatus} /></td>
                   <td style={{ ...td, color: T.muted }}>{r.date || "–"}</td>
                 </tr>
               ))}
-              {rows.length === 0 && (
+              {pageRows.length === 0 && (
                 <tr><td colSpan={8} style={{ ...td, textAlign: "center", color: T.muted, padding: 30 }}>{t("pp_no_candidates")}</td></tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {pageCount > 1 && (
+          <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 14 }}>
+            <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
+              style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.card, color: page === 0 ? T.muted : T.text, cursor: page === 0 ? "default" : "pointer", fontSize: 12 }}>«</button>
+            {Array.from({ length: pageCount }, (_, i) => (
+              <button key={i} onClick={() => setPage(i)}
+                style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${i === page ? T.accent : T.border}`, background: i === page ? T.accent : T.card, color: i === page ? "#fff" : T.text, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>{i + 1}</button>
+            ))}
+            <button disabled={page >= pageCount - 1} onClick={() => setPage(p => p + 1)}
+              style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.card, color: page >= pageCount - 1 ? T.muted : T.text, cursor: page >= pageCount - 1 ? "default" : "pointer", fontSize: 12 }}>»</button>
+          </div>
+        )}
       </>}
+
+      {/* ── JOB ADS ── */}
+      {tab === "jobs" && (
+        (vacancies || []).length === 0
+          ? <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: 50, background: T.card, border: `1px solid ${T.border}`, borderRadius: 14 }}>{t("pp_no_vacancies")}</div>
+          : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 14 }}>
+              {(vacancies || []).map(v => {
+                const filled = v.hiredCount || 0;
+                const total = Number(v.positions) || 0;
+                const pct = total ? Math.min(100, Math.round((filled / total) * 100)) : 0;
+                return (
+                  <div key={v.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.shadow, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 10, background: T.card2, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                        {v.logo
+                          ? <img src={v.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; e.target.parentNode.textContent = "💼"; }} />
+                          : <span style={{ fontSize: 18 }}>💼</span>}
+                      </div>
+                      <ActiveBadge status={v.status} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{v.title}</div>
+                      <div style={{ fontSize: 11, color: T.muted }}>{[v.company, v.country].filter(Boolean).join(" · ")}</div>
+                    </div>
+                    {v.salary && <span style={{ alignSelf: "flex-start", fontSize: 11, fontWeight: 800, color: "#16a34a", background: "#16a34a15", border: "1px solid #16a34a40", borderRadius: 8, padding: "3px 10px" }}>💶 {v.salary}</span>}
+                    {v.description && <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.description}</div>}
+                    {v.requirements && (
+                      <div style={{ background: T.card2, borderRadius: 8, padding: "8px 10px" }}>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>{t("pp_requirements")}</div>
+                        <div style={{ fontSize: 10, color: T.text, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.requirements}</div>
+                      </div>
+                    )}
+                    <div style={{ marginTop: "auto" }}>
+                      {total > 0 && <>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.muted, marginBottom: 4 }}>
+                          <span>👥 {t("pp_positions")}</span><span style={{ fontWeight: 700, color: T.text }}>{filled}/{total}</span>
+                        </div>
+                        <div style={{ height: 5, borderRadius: 3, background: T.card2, overflow: "hidden" }}>
+                          <div style={{ width: pct + "%", height: "100%", background: pct >= 100 ? "#16a34a" : T.accent, transition: "width .3s" }} />
+                        </div>
+                      </>}
+                      {v.postedDate && <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>📅 {fmtDate(v.postedDate)}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+      )}
 
       {selCand && (
         <CandidateProfile
