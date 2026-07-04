@@ -1425,12 +1425,38 @@ app.post("/api/partner/candidates", auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Restricted roles may only read candidates of vacancies they can see.
+async function canAccessVacancy(user, vacancyId) {
+  if (user.role === "employer") {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM vacancies v WHERE v.id=$1 AND LOWER(v.company) = LOWER(COALESCE(NULLIF((SELECT company FROM users WHERE id=$2),''), (SELECT name FROM users WHERE id=$2)))`,
+      [vacancyId, user.id],
+    );
+    return !!rows[0];
+  }
+  if (user.role === "partner") {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM vacancies WHERE id=$1 AND allowed_partners @> $2::jsonb`,
+      [vacancyId, JSON.stringify([user.id])],
+    );
+    return !!rows[0];
+  }
+  return true; // staff roles
+}
+
 app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
   try {
+    if (!(await canAccessVacancy(req.user, req.params.id)))
+      return res.status(403).json({ error: "Forbidden" });
     const { rows } = await pool.query(
-      `SELECT c.*, l.name as lead_name, l.phone as lead_phone
+      `SELECT c.*, l.name as lead_name, l.phone as lead_phone,
+              l.country as lead_country, l.position as lead_position, l.sector as lead_sector,
+              l.gender as lead_gender, l.status as lead_status, l.source as lead_source,
+              l.comment as lead_comment, l.cv as lead_cv, l.docs as lead_docs,
+              u.name as added_by_name
        FROM candidates c
        LEFT JOIN leads l ON l.id=c.lead_id
+       LEFT JOIN users u ON u.id = l.owner_sales
        WHERE c.vacancy_id=$1 ORDER BY c.created_at DESC`,
       [req.params.id],
     );
@@ -1438,7 +1464,10 @@ app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
       id: String(r.id), vacancyId: r.vacancy_id, leadId: r.lead_id,
       leadName: r.lead_name || r.name, leadPhone: r.lead_phone || r.phone,
       name: r.name, phone: r.phone, status: r.status, note: r.note,
-      appliedAt: r.applied_at,
+      appliedAt: r.applied_at, addedByName: r.added_by_name,
+      leadCountry: r.lead_country, leadPosition: r.lead_position, leadSector: r.lead_sector,
+      leadGender: r.lead_gender, leadStatus: r.lead_status, leadSource: r.lead_source,
+      leadComment: r.lead_comment, leadCv: r.lead_cv, leadDocs: r.lead_docs,
     })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1464,9 +1493,23 @@ app.post("/api/candidates", auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Statuses an employer is allowed to set — hiring decisions only,
+// never internal pipeline stages (docs, migration, visa).
+const EMPLOYER_ALLOWED_STATUSES = ["added", "interview", "approved_client", "rejected_final", "reserve"];
+
 app.put("/api/candidates/:id", auth, async (req, res) => {
-  const { name, phone, status, note } = req.body;
+  let { name, phone, status, note } = req.body;
   try {
+    if (req.user.role === "partner") return res.status(403).json({ error: "Forbidden" });
+    if (req.user.role === "employer") {
+      const { rows: own } = await pool.query(
+        `SELECT c.vacancy_id FROM candidates c WHERE c.id=$1`, [req.params.id]);
+      if (!own[0] || !(await canAccessVacancy(req.user, own[0].vacancy_id)))
+        return res.status(403).json({ error: "Forbidden" });
+      if (status && !EMPLOYER_ALLOWED_STATUSES.includes(status))
+        return res.status(403).json({ error: "Bu statusni faqat OneJobs jamoasi o'zgartira oladi" });
+      name = undefined; phone = undefined; // employers may only change status/note
+    }
     // COALESCE so a partial update (e.g. just { status }) never wipes name/phone/note —
     // every other caller of this endpoint only sends the field it actually changed.
     const { rows } = await pool.query(
@@ -1519,6 +1562,8 @@ app.put("/api/candidates/:id", auth, async (req, res) => {
 
 app.delete("/api/candidates/:id", auth, async (req, res) => {
   try {
+    if (["partner", "employer"].includes(req.user.role))
+      return res.status(403).json({ error: "Forbidden" });
     await pool.query("DELETE FROM candidates WHERE id=$1", [req.params.id]);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }

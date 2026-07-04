@@ -40,6 +40,18 @@ const LEGACY_STATUS_ALIAS = {
 };
 const normCandStatus = s => LEGACY_STATUS_ALIAS[s] || s;
 
+// Employers only make hiring decisions; internal pipeline stages are read-only.
+const EMPLOYER_STATUS_KEYS = ["added", "interview", "approved_client", "rejected_final", "reserve"];
+
+// Build a lead-shaped object from the enriched candidate row returned by
+// /api/vacancies/:id/candidates (employers no longer receive the lead list).
+const leadFromCand = c => ({
+  id: c.leadId, name: c.leadName || c.name, phone: c.leadPhone || c.phone,
+  country: c.leadCountry, position: c.leadPosition, sector: c.leadSector,
+  gender: c.leadGender, status: c.leadStatus, source: c.leadSource,
+  comment: c.leadComment, cv: c.leadCv || {}, docs: c.leadDocs || {},
+});
+
 // Lead pipeline stage colors
 const STAGE_COLORS = {
   "Yangi":                  "#2563eb",
@@ -358,7 +370,7 @@ function VacanciesTab({ vacancies, loading, leads, t, T }) {
           )}
           {!candLoading && candidates.map(c => {
             const cs = CMAP[normCandStatus(c.status)] || CMAP.added;
-            const lead = leads?.find(l => l.id === c.leadId);
+            const lead = leads?.find(l => l.id === c.leadId) || leadFromCand(c);
             return (
               <div key={c.id} style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8,
                 padding: "10px 12px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10,
@@ -382,7 +394,11 @@ function VacanciesTab({ vacancies, loading, leads, t, T }) {
                     onClick={e => e.stopPropagation()}
                     style={{ fontSize: 10, fontWeight: 700, color: cs.c, background: `${cs.c}18`,
                       border: `1px solid ${cs.c}44`, borderRadius: 6, padding: "4px 8px", cursor: "pointer", outline: "none" }}>
-                    {CAND_STATUS_KEYS.map(k => (
+                    {/* Current status stays visible even when it's an internal stage the employer can't set */}
+                    {!EMPLOYER_STATUS_KEYS.includes(normCandStatus(c.status)) && (
+                      <option value={normCandStatus(c.status)} disabled>{cs.label}</option>
+                    )}
+                    {EMPLOYER_STATUS_KEYS.map(k => (
                       <option key={k} value={k}>{(CMAP[k] || { label: k }).label}</option>
                     ))}
                   </select>
@@ -398,7 +414,7 @@ function VacanciesTab({ vacancies, loading, leads, t, T }) {
             <CandidateProfile
               candidate={selCand}
               vacancy={selVac}
-              lead={leads?.find(l => l.id === selCand.leadId)}
+              lead={leads?.find(l => l.id === selCand.leadId) || leadFromCand(selCand)}
               onClose={() => setSelCand(null)}
               T={T} t={t}
             />
@@ -637,13 +653,19 @@ function EmployerPortal({ user, leads, team, addNotif }) {
     <div style={{ minHeight: "100%" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 900, color: T.text, margin: "0 0 4px" }}>
-            {t("emp_welcome")}, {user.name}! 👋
-          </h1>
-          <p style={{ color: T.muted, margin: 0, fontSize: 11 }}>
-            {user.company ? `🏢 ${user.company} · ` : ""}{t("emp_subtitle")}
-          </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 12, background: "#fff", border: `1px solid ${T.border}`, boxShadow: T.shadow, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+            <img src="/logo.png" alt="OneJobs" style={{ width: "100%", height: "100%", objectFit: "contain", padding: 4 }}
+              onError={e => { e.target.style.display = "none"; e.target.parentNode.style.background = "linear-gradient(135deg,#38b6ff,#0066d8)"; e.target.parentNode.innerHTML = '<span style="color:#fff;font-weight:900;font-size:18px">OJ</span>'; }} />
+          </div>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 900, color: T.text, margin: "0 0 4px" }}>
+              {t("emp_welcome")}, {user.name}! 👋
+            </h1>
+            <p style={{ color: T.muted, margin: 0, fontSize: 11 }}>
+              {user.company ? `🏢 ${user.company} · ` : ""}{t("emp_subtitle")}
+            </p>
+          </div>
         </div>
         {/* Language switcher in header */}
         <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
