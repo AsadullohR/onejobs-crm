@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useT } from "./theme.js";
-import { useLang } from "./i18n.jsx";
+import { useLang, vTitle } from "./i18n.jsx";
 import { fmtMs, inp, lab, I } from "./helpers.jsx";
 import { vacanciesAPI, candidatesAPI, employerAPI } from "./api.js";
 
@@ -284,6 +284,7 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = 
 
 // ─── VACANCIES TAB ────────────────────────────────────────────────────────────
 function VacanciesTab({ vacancies, loading, leads, t, T }) {
+  const { lang } = useLang();
   const [selVac, setSelVac] = useState(null);
   const [candidates, setCandidates] = useState([]);
   const [candLoading, setCandLoading] = useState(false);
@@ -333,7 +334,7 @@ function VacanciesTab({ vacancies, loading, leads, t, T }) {
               style={{ background: isSelected ? `${T.accent}12` : T.card, border: `1px solid ${isSelected ? T.accent : T.border}`,
                 borderRadius: 10, padding: "12px 14px", marginBottom: 8, cursor: "pointer",
                 borderLeft: `3px solid ${isSelected ? T.accent : T.border}` }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 2 }}>{v.title || "–"}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 2 }}>{vTitle(v, lang) || "–"}</div>
               <div style={{ fontSize: 9, color: T.muted, marginBottom: 7 }}>
                 {v.country || ""}{v.jobType ? " · " + v.jobType : ""}{v.salary ? ` · €${v.salary}${t("emp_per_month")}` : ""}
               </div>
@@ -358,7 +359,7 @@ function VacanciesTab({ vacancies, loading, leads, t, T }) {
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 900, color: T.text }}>{selVac.title}</div>
+              <div style={{ fontSize: 14, fontWeight: 900, color: T.text }}>{vTitle(selVac, lang)}</div>
               <div style={{ fontSize: 10, color: T.muted }}>{t("emp_candidate_list")}</div>
             </div>
             <button onClick={() => setSelVac(null)} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, fontSize: 18 }}>✕</button>

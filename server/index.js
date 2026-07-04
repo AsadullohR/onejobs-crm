@@ -36,6 +36,45 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
+// ─── AUTO-TRANSLATION (uz → ru/en), translate-on-save ────────────────────────
+// Uses the unofficial @vitalets/google-translate-api. Failures are silent:
+// the UI falls back to the original Uzbek text, so a broken lib or a Google
+// rate-limit can never break vacancy saves.
+let _gt = null;
+async function trText(text, to) {
+  if (!text || !String(text).trim()) return null;
+  try {
+    if (!_gt) {
+      const m = await import("@vitalets/google-translate-api");
+      _gt = m.translate || (m.default && (m.default.translate || m.default));
+    }
+    const r = await _gt(String(text), { to });
+    return (r && r.text) || null;
+  } catch (e) {
+    console.warn(`translate(${to}) failed:`, e.message);
+    return null;
+  }
+}
+
+// Fire-and-forget: never blocks or fails the save request.
+function translateVacancyAsync(id, title, description) {
+  (async () => {
+    const [tru, ten, dru, den] = await Promise.all([
+      trText(title, "ru"), trText(title, "en"),
+      trText(description, "ru"), trText(description, "en"),
+    ]);
+    if (tru || ten || dru || den) {
+      await pool.query(
+        `UPDATE vacancies SET
+           title_ru=COALESCE($2,title_ru), title_en=COALESCE($3,title_en),
+           description_ru=COALESCE($4,description_ru), description_en=COALESCE($5,description_en)
+         WHERE id=$1`,
+        [id, tru, ten, dru, den],
+      ).catch(() => {});
+    }
+  })().catch(() => {});
+}
+
 async function nextLeadId() {
   // The sequence can lag behind existing ids (imports, webhooks), so skip
   // over any value that's already taken instead of failing with a dup-key.
@@ -1184,6 +1223,8 @@ const vacRow = (r) => ({
   description: r.description, requirements: r.requirements,
   otherDesc: r.other_desc, postedDate: r.posted_date?.toISOString?.()?.slice(0,10) || r.posted_date,
   status: r.status, createdAt: r.created_at,
+  titleRu: r.title_ru || null, titleEn: r.title_en || null,
+  descriptionRu: r.description_ru || null, descriptionEn: r.description_en || null,
   candidateCount: Number(r.candidate_count || 0),
   hiredCount: Number(r.hired_count || 0),
   approvedCount: Number(r.approved_count || 0),
@@ -1251,6 +1292,7 @@ app.post("/api/vacancies", auth, async (req, res) => {
        b.description||null, b.requirements||null, b.otherDesc||null,
        b.postedDate||new Date().toISOString().slice(0,10), b.status||"active", req.user.id],
     );
+    translateVacancyAsync(id, b.title, b.description);
     res.json(vacRow({ ...rows[0], candidate_count: 0, hired_count: 0 }));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -1279,6 +1321,7 @@ app.put("/api/vacancies/:id", auth, async (req, res) => {
        WHERE v.id=$1 GROUP BY v.id`,
       [req.params.id],
     );
+    translateVacancyAsync(req.params.id, b.title, b.description);
     res.json(vacRow(rows[0]));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2031,6 +2074,26 @@ app.listen(PORT, async () => {
         END IF;
       END$$;
     `);
+    await pool.query(`
+      ALTER TABLE vacancies
+        ADD COLUMN IF NOT EXISTS title_ru TEXT,
+        ADD COLUMN IF NOT EXISTS title_en TEXT,
+        ADD COLUMN IF NOT EXISTS description_ru TEXT,
+        ADD COLUMN IF NOT EXISTS description_en TEXT
+    `);
+    // One-time backfill: translate existing vacancies that have no ru/en title
+    // yet. Sequential with a pause between each to stay under Google's radar.
+    setTimeout(async () => {
+      try {
+        const { rows } = await pool.query(
+          `SELECT id, title, description FROM vacancies WHERE title_ru IS NULL AND title IS NOT NULL LIMIT 100`);
+        for (const v of rows) {
+          translateVacancyAsync(v.id, v.title, v.description);
+          await new Promise(r => setTimeout(r, 3000));
+        }
+        if (rows.length) console.log(`   Translation backfill queued for ${rows.length} vacancies`);
+      } catch (e) { console.warn("backfill skip:", e.message); }
+    }, 15000);
     pool.query(`ANALYZE leads, tasks, transactions, notifications`).catch(()=>{});
     console.log("   Migrations: quality + status_log + indexes OK");
   } catch (e) {

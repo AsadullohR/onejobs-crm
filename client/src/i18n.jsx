@@ -1,5 +1,12 @@
 import { createContext, useContext, useState, useCallback } from "react";
 
+// Language-aware vacancy text: prefer the stored auto-translation for the
+// active language, fall back to the original (Uzbek) text.
+export const vTitle = (v, lang) =>
+  (lang === "ru" ? v?.titleRu : lang === "en" ? v?.titleEn : null) || v?.title || "";
+export const vDesc = (v, lang) =>
+  (lang === "ru" ? v?.descriptionRu : lang === "en" ? v?.descriptionEn : null) || v?.description || "";
+
 // ─── TRANSLATIONS ─────────────────────────────────────────────────────────────
 const LANGS = {
   uz: {

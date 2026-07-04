@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useT } from "./theme.js";
-import { useLang } from "./i18n.jsx";
+import { useLang, vTitle, vDesc } from "./i18n.jsx";
 import { inp, lab, Modal } from "./helpers.jsx";
 import { partnerAPI } from "./api.js";
 import { CandidateProfile, candStatusMap, normCandStatus, CAND_STATUS_KEYS, fmtDate } from "./EmployerPortal.jsx";
@@ -22,7 +22,7 @@ const avColor = name => AV_COLORS[(name || "").length % AV_COLORS.length];
 
 function PartnerPortal({ leads, candidates, vacancies, user }) {
   const T = useT();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const CMAP = candStatusMap(t);
   const [tab, setTab] = useState("overview");
   const [q, setQ] = useState("");
@@ -109,7 +109,7 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
         key: `c-${c.id}`, cand: c, lead, vacancy: v,
         name: lead.name || c.name || "", phone: lead.phone || c.phone || "",
         country: lead.country || "", company: v?.company || "",
-        position: v?.title || lead.position || lead.sector || "",
+        position: (v && vTitle(v, lang)) || lead.position || lead.sector || "",
         pay: v?.salary || "", leadStatus: lead.status || "",
         candStatus: normCandStatus(c.status),
         date: fmtDate(c.created_at || lead.createdAt),
@@ -243,7 +243,7 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
                 </div>
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <h2 style={{ fontSize: 17, fontWeight: 900, color: T.text, margin: 0 }}>{v.title}</h2>
+                    <h2 style={{ fontSize: 17, fontWeight: 900, color: T.text, margin: 0 }}>{vTitle(v, lang)}</h2>
                     <ActiveBadge status={v.status} />
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
@@ -277,7 +277,7 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
               <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.shadow, padding: 18, marginBottom: 16 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 12 }}>{t("pp_job_info")}</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 10 }}>
-                  <InfoField icon="💼" label={t("pp_col_position")} value={v.title} />
+                  <InfoField icon="💼" label={t("pp_col_position")} value={vTitle(v, lang)} />
                   <InfoField icon="🏢" label={t("pp_col_company")} value={v.company} />
                   <InfoField icon="🌍" label={t("pp_col_country")} value={v.country} />
                   <InfoField icon="💶" label={t("pp_col_pay")} value={v.salary} />
@@ -295,7 +295,7 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
               </div>}
               {v.description && <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 14, padding: 18, marginBottom: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: "#1e40af", marginBottom: 8 }}>📝 {t("pp_job_desc")}</div>
-                <div style={{ fontSize: 12, color: "#1e3a8a", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{v.description}</div>
+                <div style={{ fontSize: 12, color: "#1e3a8a", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{vDesc(v, lang)}</div>
               </div>}
               {v.otherDesc && <div style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 14, padding: 18 }}>
                 <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 8 }}>ℹ️ {t("pp_other_desc")}</div>
@@ -381,7 +381,7 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
                   {(vacancies || []).map(v => (
                     <tr key={v.id} onClick={() => { setSelVac(v); setVacTab("info"); }} style={{ cursor: "pointer" }}>
                       <td style={td}>
-                        <div style={{ fontWeight: 700 }}>{v.title}</div>
+                        <div style={{ fontWeight: 700 }}>{vTitle(v, lang)}</div>
                         <div style={{ fontSize: 10, color: T.muted }}>{[v.company, v.country].filter(Boolean).join(" · ")}</div>
                       </td>
                       <td style={{ ...td, textAlign: "center" }}>
@@ -405,7 +405,7 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
           </select>
           <select value={vacFilter} onChange={e => setF(setVacFilter)(e.target.value)} style={{ ...inp(T), maxWidth: 220 }}>
             <option value="all">{t("pp_all_vacancies")}</option>
-            {(vacancies || []).map(v => <option key={v.id} value={String(v.id)}>{v.title}</option>)}
+            {(vacancies || []).map(v => <option key={v.id} value={String(v.id)}>{vTitle(v, lang)}</option>)}
           </select>
           <div style={{ marginLeft: "auto", fontSize: 12, color: T.muted, alignSelf: "center" }}>{filteredRows.length} {t("pp_rows")}</div>
         </div>
@@ -484,11 +484,11 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
                       <ActiveBadge status={v.status} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{v.title}</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{vTitle(v, lang)}</div>
                       <div style={{ fontSize: 11, color: T.muted }}>{[v.company, v.country].filter(Boolean).join(" · ")}</div>
                     </div>
                     {v.salary && <span style={{ alignSelf: "flex-start", fontSize: 11, fontWeight: 800, color: "#16a34a", background: "#16a34a15", border: "1px solid #16a34a40", borderRadius: 8, padding: "3px 10px" }}>💶 {v.salary}</span>}
-                    {v.description && <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{v.description}</div>}
+                    {v.description && <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{vDesc(v, lang)}</div>}
                     {v.requirements && (
                       <div style={{ background: T.card2, borderRadius: 8, padding: "8px 10px" }}>
                         <div style={{ fontSize: 9, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>{t("pp_requirements")}</div>
@@ -518,7 +518,7 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
           <div style={{ padding: 20 }}>
             <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 900, color: T.text }}>➕ {t("pp_add_candidate")}</h3>
             <div style={{ fontSize: 11, color: T.muted, marginBottom: 14 }}>
-              {vacById[addForm.vacancyId]?.title || ""}
+              {(vacById[addForm.vacancyId] && vTitle(vacById[addForm.vacancyId], lang)) || ""}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <div style={{ gridColumn: "1/-1" }}>
