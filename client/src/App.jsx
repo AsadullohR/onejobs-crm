@@ -51,7 +51,7 @@ export default function App() {
     });
   }, []);
   const [user,setUser]=useState(null); 
-  const [page,setPage]=useState("dashboard");
+  const [pageRaw,setPage]=useState("dashboard");
   const [leads,setLeads]=useState([]);
   const [tasks,setTasks]=useState([]);
   const [txns,setTxns]=useState([]);
@@ -341,6 +341,7 @@ const deleteLead = useCallback(async (id) => {
     if(me) {
       setUser({...me, token:tok, password:me.username});
       if(me.role==="employer") setPage("employer");
+      else if(me.role==="partner") setPage("partner");
       else if(me.role==="finance_manager") setPage("finance");
     } else clearToken();
   }).catch((err)=>{
@@ -470,6 +471,10 @@ const deleteLead = useCallback(async (id) => {
 
   if(!user)return <Login onLogin={u=>{setUser(u);setPage(u.role==="finance_manager"?"finance":u.role==="employer"?"employer":u.role==="partner"?"partner":"pipeline");}} team={team} roles={roles}/>;
   const perm=roles[user.role]||{};
+  // Hard page guard: restricted roles can ONLY ever render their own portal,
+  // no matter what `page` holds (session restore, stale state, crafted URL).
+  const FORCED_PAGE = { partner: "partner", employer: "employer" };
+  const page = FORCED_PAGE[user.role] || pageRaw;
   // Partner: filter leads to only their own + those with their source/name
   const partnerName = user.role==="partner" ? user.name : null;
   const visibleLeads = user.role==="partner"
