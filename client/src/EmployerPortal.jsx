@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useT } from "./theme.js";
 import { useLang, vTitle } from "./i18n.jsx";
 import { fmtMs, inp, lab, I } from "./helpers.jsx";
-import { vacanciesAPI, candidatesAPI, employerAPI } from "./api.js";
+import { vacanciesAPI, candidatesAPI, employerAPI, leadDocsAPI } from "./api.js";
 
 // ─── CANDIDATE STATUS MAP ─────────────────────────────────────────────────────
 const CAND_STATUS_KEYS = ["added","interview","approved_final","rejected_final","reserve","rejected_recruiter","approved_client","docs_prep","filed_migration","permit_received","scheduled_visa","visa_docs_sent","submitted_embassy","visa_received"];
@@ -78,7 +78,83 @@ const fmtDate = d => {
   return String(d).slice(0, 10);
 };
 
-function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = false, onSave }) {
+// ─── DOCUMENTS PANEL ─────────────────────────────────────────────────────────
+// Live document list from lead_documents: files uploaded by OneJobs staff or
+// by the employer, with uploader attribution and per-type upload slots.
+const DOC_TYPES_DEFAULT = ["Pasport", "Diplom", "Foto", "Med spravka", "Mehnat shartnomasi", "Viza"];
+
+function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload }) {
+  const [docs, setDocs] = useState([]);
+  const [busy, setBusy] = useState(null);
+
+  useEffect(() => {
+    if (!leadId) return;
+    leadDocsAPI.getByLead(leadId).then(r => setDocs(Array.isArray(r) ? r : [])).catch(() => {});
+  }, [leadId]);
+
+  const byType = {};
+  docs.forEach(d => { byType[d.docType] = d; });
+  const types = [...new Set([...DOC_TYPES_DEFAULT, ...docs.map(d => d.docType), ...Object.keys(legacyDocs || {}).filter(k => legacyDocs[k])])];
+
+  const uploaderName = id => team?.find(u => String(u.id) === String(id))?.name || "";
+
+  const upload = (dt, file) => {
+    if (!file || !leadId) return;
+    if (file.size > 4 * 1024 * 1024) { alert(t("cprof_doc_too_big")); return; }
+    const rd = new FileReader();
+    rd.onload = async () => {
+      setBusy(dt);
+      try {
+        const saved = await leadDocsAPI.upsert(leadId, dt, { status: "uploaded", fileData: rd.result, fileName: file.name });
+        setDocs(p => [...p.filter(x => x.docType !== dt), saved]);
+      } catch (e) { alert(e.message); }
+      finally { setBusy(null); }
+    };
+    rd.readAsDataURL(file);
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      {types.map(dt => {
+        const d = byType[dt];
+        const hasFile = !!d?.fileData;
+        const legacyOk = !d && legacyDocs?.[dt];
+        const done = hasFile || d?.status === "uploaded" || d?.status === "done" || legacyOk;
+        return (
+          <div key={dt} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "9px 12px", background: done ? `${T.green}10` : T.card2, border: `1px solid ${done ? T.green + "33" : T.border}`, borderRadius: 8 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 10, color: T.text, fontWeight: 700 }}>📄 {dt}</div>
+              {d && (
+                <div style={{ fontSize: 8, color: T.muted, marginTop: 2 }}>
+                  {d.fileName ? d.fileName + " · " : ""}{uploaderName(d.updatedBy)}{d.updatedAt ? " · " + String(d.updatedAt).slice(0, 10) : ""}
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 5, alignItems: "center", flexShrink: 0 }}>
+              {hasFile && (
+                <a href={d.fileData} download={d.fileName || dt}
+                  style={{ fontSize: 9, fontWeight: 700, color: T.accent, background: `${T.accent}15`, border: `1px solid ${T.accent}44`, borderRadius: 5, padding: "3px 8px", textDecoration: "none" }}>
+                  ⬇ {t("cprof_download")}
+                </a>
+              )}
+              {!hasFile && done && <span style={{ fontSize: 9, color: T.green, fontWeight: 700 }}>✓ {t("cprof_doc_uploaded")}</span>}
+              {canUpload && (
+                <label style={{ fontSize: 9, fontWeight: 700, color: done ? T.muted : "#fff", background: done ? T.card : T.accent, border: `1px solid ${done ? T.border : T.accent}`, borderRadius: 5, padding: "3px 8px", cursor: "pointer" }}>
+                  {busy === dt ? "…" : `⬆ ${t("cprof_upload")}`}
+                  <input type="file" style={{ display: "none" }} accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    onChange={e => { upload(dt, e.target.files?.[0]); e.target.value = ""; }} />
+                </label>
+              )}
+            </div>
+          </div>
+        );
+      })}
+      {types.length === 0 && <div style={{ gridColumn: "1/-1", fontSize: 11, color: T.muted, textAlign: "center", padding: 14 }}>{t("cprof_no_docs")}</div>}
+    </div>
+  );
+}
+
+function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = false, onSave, team = [], canUploadDocs = false }) {
   const CMAP = candStatusMap(t);
   const cs = CMAP[normCandStatus(candidate.status)] || CMAP.added;
   const cv = lead?.cv || {};
@@ -116,9 +192,21 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = 
     finally { setSaving(false); }
   };
 
+  const ICONS_BY_TITLE = {
+    [t("cprof_basic_info")]: "👤",
+    [t("cprof_vacancy_logistics")]: "💼",
+    [t("cprof_pipeline_status_section")]: "📊",
+    [t("cprof_edu_lang")]: "🎓",
+    [t("cprof_payment_status")]: "💳",
+    [t("cprof_documents")]: "📁",
+    [t("cprof_notes_section")]: "📝",
+  };
   const Section = ({ title, children }) => (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ fontSize: 11, fontWeight: 800, color: T.text, borderBottom: `2px solid ${T.accent}`, paddingBottom: 6, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.06em" }}>{title}</div>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, padding: 16, marginBottom: 14, boxShadow: T.shadow }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+        <span style={{ width: 30, height: 30, borderRadius: 8, background: `${T.accent}15`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{ICONS_BY_TITLE[title] || "📋"}</span>
+        <span style={{ fontSize: 12, fontWeight: 800, color: T.text }}>{title}</span>
+      </div>
       {children}
     </div>
   );
@@ -151,10 +239,14 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = 
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "center", background: "rgba(0,0,0,0.55)", overflowY: "auto", paddingTop: 20, paddingBottom: 20 }}>
-      <div style={{ background: T.card, borderRadius: 16, width: "100%", maxWidth: 780, margin: "0 14px", boxShadow: "0 24px 80px rgba(0,0,0,0.35)", overflow: "hidden" }}>
+      <div style={{ background: T.card2, borderRadius: 16, width: "100%", maxWidth: 860, margin: "0 14px", boxShadow: "0 24px 80px rgba(0,0,0,0.35)", overflow: "hidden" }}>
         {/* Header */}
         <div style={{ background: `linear-gradient(135deg, ${T.accent}, #7c3aed)`, padding: "20px 24px", color: "#fff" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+              <div style={{ width: 56, height: 56, borderRadius: "50%", background: "rgba(255,255,255,0.2)", border: "2px solid rgba(255,255,255,0.5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, flexShrink: 0 }}>
+                {(lead?.name || candidate.leadName || "?").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase()}
+              </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 600, opacity: 0.8, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                 {t("emp_candidate_list")} — {vacancy?.title || "–"}
@@ -165,6 +257,7 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = 
                 {lead?.phone && <span style={{ fontSize: 11, opacity: 0.85 }}>📞 {lead.phone}</span>}
                 {lead?.country && <span style={{ fontSize: 11, opacity: 0.85 }}>🌍 {lead.country}</span>}
               </div>
+            </div>
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               {editable && !editing && (
@@ -253,21 +346,10 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = 
             </div>
           </Section>
 
-          {/* Documents */}
-          {Object.keys(docs).length > 0 && (
-            <Section title={t("cprof_documents")}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {Object.entries(docs).map(([k, v]) => (
-                  v ? (
-                    <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: `${T.green}12`, border: `1px solid ${T.green}33`, borderRadius: 8 }}>
-                      <span style={{ fontSize: 10, color: T.text, fontWeight: 600 }}>📄 {k}</span>
-                      <span style={{ fontSize: 10, color: T.green, fontWeight: 700 }}>✓ {t("cprof_doc_uploaded")}</span>
-                    </div>
-                  ) : null
-                ))}
-              </div>
-            </Section>
-          )}
+          {/* Documents — live files uploaded by OneJobs staff or the employer */}
+          <Section title={t("cprof_documents")}>
+            <DocsPanel leadId={lead?.id} legacyDocs={docs} T={T} t={t} team={team} canUpload={canUploadDocs} />
+          </Section>
 
           {/* Notes */}
           {(lead?.comment || lead?.note) && (
@@ -283,7 +365,7 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = 
 }
 
 // ─── VACANCIES TAB ────────────────────────────────────────────────────────────
-function VacanciesTab({ vacancies, loading, leads, t, T }) {
+function VacanciesTab({ vacancies, loading, leads, t, T, team }) {
   const { lang } = useLang();
   const [selVac, setSelVac] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -417,7 +499,7 @@ function VacanciesTab({ vacancies, loading, leads, t, T }) {
               vacancy={selVac}
               lead={leads?.find(l => l.id === selCand.leadId) || leadFromCand(selCand)}
               onClose={() => setSelCand(null)}
-              T={T} t={t}
+              T={T} t={t} team={team} canUploadDocs={true}
             />
           )}
         </div>
@@ -427,7 +509,7 @@ function VacanciesTab({ vacancies, loading, leads, t, T }) {
 }
 
 // ─── WORKERS TAB ─────────────────────────────────────────────────────────────
-function WorkersTab({ t, T }) {
+function WorkersTab({ t, T, team }) {
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
@@ -544,7 +626,7 @@ function WorkersTab({ t, T }) {
             xbaDate: selWorker.leadXbaDate, q1Date: selWorker.leadQ1Date, q2Date: selWorker.leadQ2Date, q3Date: selWorker.leadQ3Date,
           }}
           onClose={() => setSelWorker(null)}
-          T={T} t={t}
+          T={T} t={t} team={team} canUploadDocs={true}
         />
       )}
     </div>
@@ -714,8 +796,8 @@ function EmployerPortal({ user, leads, team, addNotif }) {
       </div>
 
       {/* Tab content */}
-      {tab === "vacancies" && <VacanciesTab vacancies={vacancies} loading={loading} leads={leads} t={t} T={T} />}
-      {tab === "workers"   && <WorkersTab t={t} T={T} />}
+      {tab === "vacancies" && <VacanciesTab vacancies={vacancies} loading={loading} leads={leads} t={t} T={T} team={team} />}
+      {tab === "workers"   && <WorkersTab t={t} T={T} team={team} />}
       {tab === "request"   && <RequestTab t={t} T={T} addNotif={addNotif} />}
     </div>
   );

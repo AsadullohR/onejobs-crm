@@ -1719,39 +1719,6 @@ app.delete("/api/debts/:id", auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ─── LEAD DOCUMENTS CHECKLIST ─────────────────────────────────────────────────
-app.get("/api/leads/:id/documents", auth, async (req, res) => {
-  try {
-    await pool.query(`CREATE TABLE IF NOT EXISTS lead_documents (
-      id SERIAL PRIMARY KEY, lead_id TEXT NOT NULL, doc_type TEXT NOT NULL,
-      status TEXT DEFAULT 'pending', notes TEXT, updated_by INTEGER, updated_at TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(lead_id, doc_type)
-    )`);
-    const { rows } = await pool.query("SELECT * FROM lead_documents WHERE lead_id=$1 ORDER BY id", [req.params.id]);
-    res.json(rows.map(r => ({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes, fileData:r.file_data, fileName:r.file_name, updatedBy:r.updated_by, updatedAt:r.updated_at })));
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.put("/api/leads/:leadId/documents/:docType", auth, async (req, res) => {
-  const { status, notes } = req.body;
-  try {
-    await pool.query(`CREATE TABLE IF NOT EXISTS lead_documents (
-      id SERIAL PRIMARY KEY, lead_id TEXT NOT NULL, doc_type TEXT NOT NULL,
-      status TEXT DEFAULT 'pending', notes TEXT, updated_by INTEGER, updated_at TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(lead_id, doc_type)
-    )`);
-    const { rows } = await pool.query(
-      `INSERT INTO lead_documents (lead_id, doc_type, status, notes, updated_by, updated_at)
-       VALUES ($1,$2,$3,$4,$5,NOW())
-       ON CONFLICT (lead_id, doc_type) DO UPDATE SET status=EXCLUDED.status, notes=EXCLUDED.notes, updated_by=EXCLUDED.updated_by, updated_at=NOW()
-       RETURNING *`,
-      [req.params.leadId, req.params.docType, status||'pending', notes||null, req.user.id]
-    );
-    const r = rows[0];
-    res.json({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 // ─── MONTHLY REPORT (HTML, browser-printable) ─────────────────────────────────
 app.get("/api/reports/monthly", async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1] || req.query.token;
@@ -1913,15 +1880,38 @@ const ensureLeadDocsTable = () => pool.query(`CREATE TABLE IF NOT EXISTS lead_do
 
 app.get("/api/leads/:id/documents", auth, async (req, res) => {
   try {
+    if (req.user.role === "employer" && !(await employerOwnsLead(req.user, req.params.id)))
+      return res.status(403).json({ error: "Forbidden" });
+    if (req.user.role === "partner") {
+      const { rows: pl } = await pool.query(
+        `SELECT 1 FROM leads WHERE id=$1 AND (source ILIKE $2 OR owner_sales=$3 OR owner_consult=$3 OR owner_docs=$3)`,
+        [req.params.id, `%${req.user.name}%`, req.user.id]);
+      if (!pl[0]) return res.status(403).json({ error: "Forbidden" });
+    }
     await ensureLeadDocsTable();
     const { rows } = await pool.query("SELECT * FROM lead_documents WHERE lead_id=$1 ORDER BY id", [req.params.id]);
     res.json(rows.map(r => ({ id:r.id, leadId:r.lead_id, docType:r.doc_type, status:r.status, notes:r.notes, fileData:r.file_data, fileName:r.file_name, updatedBy:r.updated_by, updatedAt:r.updated_at })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Employer may only touch documents of leads that are candidates on their vacancies.
+async function employerOwnsLead(user, leadId) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM candidates c JOIN vacancies v ON v.id = c.vacancy_id
+     WHERE c.lead_id = $1
+       AND LOWER(v.company) = LOWER(COALESCE(NULLIF((SELECT company FROM users WHERE id=$2),''), (SELECT name FROM users WHERE id=$2)))
+     LIMIT 1`,
+    [leadId, user.id],
+  );
+  return !!rows[0];
+}
+
 app.put("/api/leads/:leadId/documents/:docType", auth, async (req, res) => {
   const { status, notes, fileData, fileName } = req.body;
   try {
+    if (req.user.role === "partner") return res.status(403).json({ error: "Forbidden" });
+    if (req.user.role === "employer" && !(await employerOwnsLead(req.user, req.params.leadId)))
+      return res.status(403).json({ error: "Forbidden" });
     await ensureLeadDocsTable();
     const hasFile = fileData != null;
     const { rows } = await pool.query(

@@ -1219,6 +1219,8 @@ function VacancyDetail({
           t={t}
           editable={canEdit}
           onSave={saveCandidateProfile}
+          team={team}
+          canUploadDocs={true}
         />
       )}
 
