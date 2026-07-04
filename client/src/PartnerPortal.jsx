@@ -29,6 +29,8 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
   const [vacFilter, setVacFilter] = useState("all");
   const [page, setPage] = useState(0);
   const [selCand, setSelCand] = useState(null);
+  const [selVac, setSelVac] = useState(null);
+  const [vacTab, setVacTab] = useState("info");
 
   const leadById = useMemo(() => {
     const m = {};
@@ -170,17 +172,147 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+      {!selVac && <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
         {[["overview", "📊 " + t("pp_tab_overview")], ["candidates", "👥 " + t("pp_tab_candidates")], ["jobs", "💼 " + t("pp_tab_jobs")]].map(([k, lbl]) => (
           <button key={k} onClick={() => setTab(k)}
             style={{ padding: "9px 20px", borderRadius: 10, border: `1px solid ${tab === k ? T.accent : T.border}`, background: tab === k ? T.accent : T.card, color: tab === k ? "#fff" : T.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
             {lbl}
           </button>
         ))}
-      </div>
+      </div>}
+
+      {/* ── VACANCY DETAIL ── */}
+      {selVac && (() => {
+        const v = selVac;
+        const vCands = myCands
+          .filter(c => String(c.vacancyId) === String(v.id))
+          .map(c => ({ c, lead: leadById[c.leadId] || {} }));
+        const filled = v.hiredCount || 0;
+        const total = Number(v.positions) || 0;
+        const pct = total ? Math.min(100, Math.round((filled / total) * 100)) : 0;
+        const InfoField = ({ icon, label, value }) => !value ? null : (
+          <div style={{ background: T.card2, borderRadius: 10, padding: "10px 12px" }}>
+            <div style={{ fontSize: 9, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>{icon} {label}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{value}</div>
+          </div>
+        );
+        return (
+          <div>
+            <button onClick={() => setSelVac(null)}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>
+              ← {t("pp_back")}
+            </button>
+
+            {/* Vacancy header */}
+            <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.shadow, padding: 18, marginBottom: 16 }}>
+              <div style={{ display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <div style={{ width: 56, height: 56, borderRadius: 12, background: T.card2, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                  {v.logo
+                    ? <img src={v.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; e.target.parentNode.textContent = "💼"; }} />
+                    : <span style={{ fontSize: 24 }}>💼</span>}
+                </div>
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <h2 style={{ fontSize: 17, fontWeight: 900, color: T.text, margin: 0 }}>{v.title}</h2>
+                    <ActiveBadge status={v.status} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                    {v.company && <span style={{ fontSize: 11, fontWeight: 700, color: T.accent, background: T.accent + "15", border: `1px solid ${T.accent}40`, borderRadius: 8, padding: "3px 10px" }}>🏢 {v.company}</span>}
+                    {v.country && <span style={{ fontSize: 11, fontWeight: 700, color: "#9333ea", background: "#9333ea15", border: "1px solid #9333ea40", borderRadius: 8, padding: "3px 10px" }}>📍 {v.country}</span>}
+                    {v.salary && <span style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", background: "#16a34a15", border: "1px solid #16a34a40", borderRadius: 8, padding: "3px 10px" }}>💶 {v.salary}</span>}
+                  </div>
+                  {total > 0 && <div style={{ marginTop: 12, maxWidth: 420 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: T.muted, marginBottom: 4 }}>
+                      <span>👥 {t("pp_positions")}</span><span style={{ fontWeight: 700, color: T.text }}>{filled}/{total}</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 3, background: T.card2, overflow: "hidden" }}>
+                      <div style={{ width: pct + "%", height: "100%", background: pct >= 100 ? "#16a34a" : T.accent }} />
+                    </div>
+                  </div>}
+                </div>
+              </div>
+            </div>
+
+            {/* Detail tabs */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              {[["info", "📄 " + t("pp_job_info")], ["cands", `👥 ${t("pp_tab_candidates")} (${vCands.length})`]].map(([k, lbl]) => (
+                <button key={k} onClick={() => setVacTab(k)}
+                  style={{ padding: "8px 18px", borderRadius: 10, border: `1px solid ${vacTab === k ? T.accent : T.border}`, background: vacTab === k ? T.accent : T.card, color: vacTab === k ? "#fff" : T.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+
+            {vacTab === "info" && <>
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.shadow, padding: 18, marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: T.text, marginBottom: 12 }}>{t("pp_job_info")}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 10 }}>
+                  <InfoField icon="💼" label={t("pp_col_position")} value={v.title} />
+                  <InfoField icon="🏢" label={t("pp_col_company")} value={v.company} />
+                  <InfoField icon="🌍" label={t("pp_col_country")} value={v.country} />
+                  <InfoField icon="💶" label={t("pp_col_pay")} value={v.salary} />
+                  <InfoField icon="📄" label={t("pp_contract_type")} value={v.contractType || v.jobType} />
+                  <InfoField icon="⏰" label={t("pp_working_hours")} value={v.workingHours} />
+                  <InfoField icon="🏠" label={t("pp_accommodation")} value={v.accommodation} />
+                  <InfoField icon="🍽" label={t("pp_food")} value={v.foodVouchers} />
+                  <InfoField icon="💰" label={t("pp_additional_pay")} value={v.additionalPay} />
+                  <InfoField icon="📅" label={t("pp_posted")} value={fmtDate(v.postedDate)} />
+                </div>
+              </div>
+              {v.requirements && <div style={{ background: "#fefce8", border: "1px solid #fde68a", borderRadius: 14, padding: 18, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#92400e", marginBottom: 8 }}>📋 {t("pp_requirements")}</div>
+                <div style={{ fontSize: 12, color: "#78350f", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{v.requirements}</div>
+              </div>}
+              {v.description && <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 14, padding: 18, marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#1e40af", marginBottom: 8 }}>📝 {t("pp_job_desc")}</div>
+                <div style={{ fontSize: 12, color: "#1e3a8a", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{v.description}</div>
+              </div>}
+              {v.otherDesc && <div style={{ background: T.card2, border: `1px solid ${T.border}`, borderRadius: 14, padding: 18 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: T.text, marginBottom: 8 }}>ℹ️ {t("pp_other_desc")}</div>
+                <div style={{ fontSize: 12, color: T.muted, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{v.otherDesc}</div>
+              </div>}
+            </>}
+
+            {vacTab === "cands" && (
+              <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "auto", boxShadow: T.shadow }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+                  <thead><tr>
+                    <th style={th}>{t("pp_col_name")}</th>
+                    <th style={th}>{t("pp_col_phone")}</th>
+                    <th style={th}>{t("pp_col_country")}</th>
+                    <th style={th}>{t("pp_col_status")}</th>
+                    <th style={th}>{t("pp_col_date")}</th>
+                  </tr></thead>
+                  <tbody>
+                    {vCands.map(({ c, lead }, i) => (
+                      <tr key={c.id}
+                        onClick={() => setSelCand({ cand: c, lead, vacancy: v })}
+                        style={{ cursor: "pointer", background: i % 2 ? T.card2 : "transparent" }}>
+                        <td style={{ ...td, fontWeight: 700 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                            <span style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: avColor(lead.name || c.name) + "22", color: avColor(lead.name || c.name), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800 }}>{initials(lead.name || c.name)}</span>
+                            {lead.name || c.name || "–"}
+                          </div>
+                        </td>
+                        <td style={td}>{lead.phone || c.phone || "–"}</td>
+                        <td style={td}>{lead.country || "–"}</td>
+                        <td style={td}><StatusBadge k={normCandStatus(c.status)} /></td>
+                        <td style={{ ...td, color: T.muted }}>{fmtDate(c.created_at || lead.createdAt) || "–"}</td>
+                      </tr>
+                    ))}
+                    {vCands.length === 0 && (
+                      <tr><td colSpan={5} style={{ ...td, textAlign: "center", color: T.muted, padding: 30 }}>{t("pp_no_candidates")}</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── OVERVIEW ── */}
-      {tab === "overview" && <>
+      {!selVac && tab === "overview" && <>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, marginBottom: 22 }}>
           <Card label={t("pp_total")}    value={totalPeople} icon="👥" color="#6366f1" />
           <Card label={t("pp_approved")} value={approved}    icon="✅" color="#16a34a" />
@@ -217,7 +349,7 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
                 </tr></thead>
                 <tbody>
                   {(vacancies || []).map(v => (
-                    <tr key={v.id}>
+                    <tr key={v.id} onClick={() => { setSelVac(v); setVacTab("info"); }} style={{ cursor: "pointer" }}>
                       <td style={td}>
                         <div style={{ fontWeight: 700 }}>{v.title}</div>
                         <div style={{ fontSize: 10, color: T.muted }}>{[v.company, v.country].filter(Boolean).join(" · ")}</div>
@@ -234,7 +366,7 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
       </>}
 
       {/* ── CANDIDATES ── */}
-      {tab === "candidates" && <>
+      {!selVac && tab === "candidates" && <>
         <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
           <input value={q} onChange={e => setF(setQ)(e.target.value)} placeholder={t("pp_search")} style={{ ...inp(T), maxWidth: 240 }} />
           <select value={statusFilter} onChange={e => setF(setStatusFilter)(e.target.value)} style={{ ...inp(T), maxWidth: 200 }}>
@@ -302,7 +434,7 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
       </>}
 
       {/* ── JOB ADS ── */}
-      {tab === "jobs" && (
+      {!selVac && tab === "jobs" && (
         (vacancies || []).length === 0
           ? <div style={{ textAlign: "center", color: T.muted, fontSize: 13, padding: 50, background: T.card, border: `1px solid ${T.border}`, borderRadius: 14 }}>{t("pp_no_vacancies")}</div>
           : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(290px,1fr))", gap: 14 }}>
@@ -311,7 +443,8 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
                 const total = Number(v.positions) || 0;
                 const pct = total ? Math.min(100, Math.round((filled / total) * 100)) : 0;
                 return (
-                  <div key={v.id} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.shadow, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div key={v.id} onClick={() => { setSelVac(v); setVacTab("info"); }}
+                    style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.shadow, padding: 16, display: "flex", flexDirection: "column", gap: 8, cursor: "pointer" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                       <div style={{ width: 44, height: 44, borderRadius: 10, background: T.card2, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
                         {v.logo
