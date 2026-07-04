@@ -120,6 +120,10 @@ export const candidatesAPI = {
   getAll: () => req("GET", "/api/candidates/all"),
 };
 
+export const partnerAPI = {
+  addCandidate: (data) => req("POST", "/api/partner/candidates", data),
+};
+
 export const employerAPI = {
   getWorkers: () => req("GET", "/api/employer/workers"),
   requestVacancy: (v) => req("POST", "/api/employer/vacancy-request", v),

@@ -1381,6 +1381,44 @@ app.post("/api/employer/vacancy-request", auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Partner: submit a candidate for a vacancy assigned to them.
+// Creates a lead (source = partner name, status Yangi) + candidate row
+// (status 'added') and notifies admins/managers for review.
+app.post("/api/partner/candidates", auth, async (req, res) => {
+  if (req.user.role !== "partner") return res.status(403).json({ error: "Forbidden" });
+  const { vacancyId, name, phone, country, dob, passport, gender, comment } = req.body;
+  if (!vacancyId || !name?.trim() || !phone?.trim())
+    return res.status(400).json({ error: "Vakansiya, ism va telefon majburiy" });
+  try {
+    const v = await pool.query(
+      `SELECT id, title FROM vacancies WHERE id=$1 AND allowed_partners @> $2::jsonb`,
+      [vacancyId, JSON.stringify([req.user.id])],
+    );
+    if (!v.rows[0]) return res.status(403).json({ error: "Bu vakansiya sizga biriktirilmagan" });
+
+    const id = await nextLeadId();
+    const cv = {};
+    if (passport?.trim()) cv.passport = passport.trim();
+    if (dob) cv.dob = dob;
+    const leadRows = await pool.query(
+      `INSERT INTO leads (id, name, phone, status, country, gender, comment, source, cv, docs, history, created_at)
+       VALUES ($1,$2,$3,'Yangi',$4,$5,$6,$7,$8,'{}','[]',NOW()) RETURNING *`,
+      [id, name.trim(), phone.trim(), country?.trim() || null, gender || null, comment?.trim() || null, req.user.name, JSON.stringify(cv)],
+    );
+    const candRows = await pool.query(
+      `INSERT INTO candidates (vacancy_id, lead_id, name, phone, status)
+       VALUES ($1,$2,$3,$4,'added') RETURNING *`,
+      [vacancyId, id, name.trim(), phone.trim()],
+    );
+    pool.query(`SELECT id FROM users WHERE role IN ('admin','manager') AND active IS NOT FALSE`)
+      .then(({ rows }) => Promise.all(rows.map(u => pool.query(
+        `INSERT INTO notifications (user_id, message, type) VALUES ($1,$2,'info')`,
+        [u.id, `🤝 ${req.user.name} yangi nomzod yubordi: ${name.trim()} → ${v.rows[0].title}`],
+      )))).catch(() => {});
+    res.json({ lead: leadRows.rows[0], candidate: candRows.rows[0] });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
   try {
     const { rows } = await pool.query(

@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { useT } from "./theme.js";
 import { useLang } from "./i18n.jsx";
-import { inp } from "./helpers.jsx";
+import { inp, lab, Modal } from "./helpers.jsx";
+import { partnerAPI } from "./api.js";
 import { CandidateProfile, candStatusMap, normCandStatus, CAND_STATUS_KEYS, fmtDate } from "./EmployerPortal.jsx";
 
 // ─── PARTNER PORTAL ───────────────────────────────────────────────────────────
@@ -31,6 +32,29 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
   const [selCand, setSelCand] = useState(null);
   const [selVac, setSelVac] = useState(null);
   const [vacTab, setVacTab] = useState("info");
+  const [addForm, setAddForm] = useState(null);   // null = closed, object = form values
+  const [submitting, setSubmitting] = useState(false);
+  const af = (k, v) => setAddForm(p => ({ ...p, [k]: v }));
+
+  const submitCandidate = async () => {
+    if (submitting || !addForm) return;
+    if (!addForm.name?.trim() || !addForm.phone?.trim()) { alert(t("pp_required_fields")); return; }
+    setSubmitting(true);
+    try {
+      await partnerAPI.addCandidate({
+        vacancyId: addForm.vacancyId,
+        name: addForm.name, phone: addForm.phone,
+        country: addForm.country || "", dob: addForm.dob || "",
+        passport: addForm.passport || "", gender: addForm.gender || "",
+        comment: addForm.comment || "",
+      });
+      setAddForm(null);
+      alert(t("pp_add_success"));
+      window._crmRefresh?.();   // silent reload so the new candidate appears
+    } catch (e) {
+      alert(e.message);
+    } finally { setSubmitting(false); }
+  };
 
   const leadById = useMemo(() => {
     const m = {};
@@ -198,10 +222,16 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
         );
         return (
           <div>
-            <button onClick={() => setSelVac(null)}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontSize: 12, fontWeight: 700, cursor: "pointer", marginBottom: 14 }}>
-              ← {t("pp_back")}
-            </button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 10, flexWrap: "wrap" }}>
+              <button onClick={() => setSelVac(null)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                ← {t("pp_back")}
+              </button>
+              <button onClick={() => setAddForm({ vacancyId: v.id, name: "", phone: "", country: "", dob: "", passport: "", gender: "", comment: "" })}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 9, border: "none", background: T.accent, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: T.shadow }}>
+                ➕ {t("pp_add_candidate")}
+              </button>
+            </div>
 
             {/* Vacancy header */}
             <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.shadow, padding: 18, marginBottom: 16 }}>
@@ -480,6 +510,62 @@ function PartnerPortal({ leads, candidates, vacancies, user }) {
                 );
               })}
             </div>
+      )}
+
+      {/* Add candidate modal */}
+      {addForm && (
+        <Modal onClose={() => !submitting && setAddForm(null)} width={460}>
+          <div style={{ padding: 20 }}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 900, color: T.text }}>➕ {t("pp_add_candidate")}</h3>
+            <div style={{ fontSize: 11, color: T.muted, marginBottom: 14 }}>
+              {vacById[addForm.vacancyId]?.title || ""}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={lab(T)}>{t("pp_col_name")} *</label>
+                <input value={addForm.name} onChange={e => af("name", e.target.value)} style={inp(T)} placeholder="Ism Familiya" />
+              </div>
+              <div>
+                <label style={lab(T)}>{t("pp_col_phone")} *</label>
+                <input value={addForm.phone} onChange={e => af("phone", e.target.value)} style={inp(T)} placeholder="+998 90 123 45 67" />
+              </div>
+              <div>
+                <label style={lab(T)}>{t("pp_col_country")}</label>
+                <input value={addForm.country} onChange={e => af("country", e.target.value)} style={inp(T)} />
+              </div>
+              <div>
+                <label style={lab(T)}>{t("pp_field_dob")}</label>
+                <input type="date" value={addForm.dob} onChange={e => af("dob", e.target.value)} style={inp(T)} />
+              </div>
+              <div>
+                <label style={lab(T)}>{t("pp_field_passport")}</label>
+                <input value={addForm.passport} onChange={e => af("passport", e.target.value)} style={inp(T)} placeholder="AA1234567" />
+              </div>
+              <div>
+                <label style={lab(T)}>{t("cprof_gender") || "Jins"}</label>
+                <select value={addForm.gender} onChange={e => af("gender", e.target.value)} style={inp(T)}>
+                  <option value="">–</option>
+                  <option value="Erkak">{t("cprof_gender_male")}</option>
+                  <option value="Ayol">{t("cprof_gender_female")}</option>
+                </select>
+              </div>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={lab(T)}>{t("pp_field_comment")}</label>
+                <textarea value={addForm.comment} onChange={e => af("comment", e.target.value)} rows={3} style={{ ...inp(T), resize: "vertical" }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
+              <button disabled={submitting} onClick={() => setAddForm(null)}
+                style={{ padding: "9px 18px", borderRadius: 9, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                {t("cprof_cancel")}
+              </button>
+              <button disabled={submitting} onClick={submitCandidate}
+                style={{ padding: "9px 22px", borderRadius: 9, border: "none", background: T.accent, color: "#fff", fontSize: 12, fontWeight: 800, cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.6 : 1 }}>
+                {submitting ? "⏳..." : t("pp_submit")}
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {selCand && (
