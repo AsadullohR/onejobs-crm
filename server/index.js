@@ -1566,11 +1566,26 @@ app.put("/api/candidates/:id", auth, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: "Not found" });
     const cand = rows[0];
 
-    if (status === 'hired' || status === 'approved') {
+    // 'approved'/'hired' are legacy values; current enum uses approved_client /
+    // approved_final. React to both so employer decisions always notify staff.
+    const isApproved = ["approved", "approved_client", "approved_final"].includes(status);
+    const isHired = ["hired"].includes(status);
+    const isRejected = status === "rejected_final" && req.user.role === "employer";
+    if (isApproved || isHired || isRejected) {
       const leadRes = await pool.query("SELECT * FROM leads WHERE id=$1", [cand.lead_id]).catch(()=>({rows:[]}));
       const lead = leadRes.rows[0];
 
-      if (status === 'approved' && lead) {
+      if (isRejected && lead) {
+        const consultId = lead.owner_consult || lead.owner_sales;
+        if (consultId) {
+          await pool.query(
+            `INSERT INTO notifications (message, type, user_id, created_at) VALUES ($1,'warning',$2,NOW())`,
+            [`❌ Ish beruvchi nomzodni rad etdi: ${lead.name}`, consultId]
+          ).catch(()=>{});
+        }
+      }
+
+      if (isApproved && lead) {
         const consultId = lead.owner_consult || lead.owner_sales;
         if (consultId) {
           await pool.query(
@@ -1585,7 +1600,7 @@ app.put("/api/candidates/:id", auth, async (req, res) => {
         ).catch(()=>{});
       }
 
-      if (status === 'hired' && lead) {
+      if (isHired && lead) {
         const partnerRes = await pool.query(
           `SELECT u.id FROM users u WHERE u.role='partner' AND u.id=(SELECT added_by FROM candidates WHERE id=$1)`,
           [cand.id]
