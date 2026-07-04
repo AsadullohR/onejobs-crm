@@ -127,7 +127,7 @@ function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setL
         </select>
         <select value={fOwn} onChange={e => { setFOwn(e.target.value); setPg(1); }} style={{ ...inpS, width: "auto" }}>
           <option value="">👤 Mas'ul</option>
-          {team.filter(t => t.role !== "partner").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          {team.filter(t => !["partner","employer"].includes(t.role)).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
         {vacancies.length > 0 && (
           <select value={fVacancy} onChange={e => { setFVacancy(e.target.value); setPg(1); }} style={{ ...inpS, width: "auto" }}>

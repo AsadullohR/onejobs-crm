@@ -422,7 +422,7 @@ export function MobileTasks({ tasks, setTasks, leads, user, team, roles, addNoti
                 <label style={labS}>Mas'ul xodim</label>
                 <select value={form.assignee} onChange={e => setForm(p => ({ ...p, assignee: e.target.value }))} style={{ ...inpS, height: 44 }}>
                   <option value="">— Tanlang —</option>
-                  {team.filter(u => u.active !== false).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  {team.filter(u => u.active !== false && !["partner","employer"].includes(u.role)).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
               </div>
               <div>

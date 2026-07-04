@@ -178,6 +178,13 @@ function TeamPage({user, team, setTeam, roles}) {
                 setTeam(p=>p.map(t=>t.id===m.id?updated:t));
               } catch(err){alert("Status saqlanmadi: "+err.message);}
             }} style={{padding:"3px 6px",borderRadius:4,background:m.active===false?`${T.green}22`:`${T.yellow}22`,color:m.active===false?T.green:T.yellow,border:`1px solid ${m.active===false?T.green:T.yellow}44`,cursor:"pointer",fontSize:9}}>{m.active===false?"Faol":"To'xtat"}</button>}
+            {m.id!==user.id&&<button onClick={async()=>{
+              if(!confirm(`${m.name} butunlay o'chirilsinmi? Bu amalni qaytarib bo'lmaydi.`))return;
+              try {
+                await usersAPI.delete(m.id);
+                setTeam(p=>p.filter(t=>t.id!==m.id));
+              } catch(err){alert("O'chirilmadi: "+err.message);}
+            }} style={{padding:"3px 6px",borderRadius:4,background:`${T.red}22`,color:T.red,border:`1px solid ${T.red}44`,cursor:"pointer",fontSize:9}}>🗑</button>}
           </div>}
         </div>
       ))}

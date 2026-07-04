@@ -26,7 +26,7 @@ function SalaryPage({team, txns, setTxns, user}) {
   const monthSal=selMonth?allSal.filter(t=>t.date?.startsWith(selMonth)):allSal;
   const thisMonthTotal=monthSal.reduce((s,t)=>s+t.amount,0);
   const allTimeTotal=allSal.reduce((s,t)=>s+t.amount,0);
-  const emps=team.filter(t=>t.role!=="partner");
+  const emps=team.filter(t=>!["partner","employer"].includes(t.role));
   const avgPerEmp=emps.length>0?Math.round(thisMonthTotal/emps.length):0;
 
   const exportCSV=()=>{

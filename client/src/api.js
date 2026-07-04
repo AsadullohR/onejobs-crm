@@ -84,6 +84,7 @@ export const usersAPI = {
   getAll: () => req("GET", "/api/users"),
   save: (user) => req("POST", "/api/users", user),
   update: (id, user) => req("PUT", `/api/users/${id}`, user),
+  delete: (id) => req("DELETE", `/api/users/${id}`),
 };
 
 export const configAPI = {

@@ -103,7 +103,7 @@ function Tasks({tasks, setTasks, leads, user, team, roles, addNotif, open}) {
   };
 
   const inpS=inp(T); const labS=lab(T);
-  const teamOpts=team.filter(t=>t.role!=="partner"&&t.active!==false).map(t=>({value:t.id,label:t.name,id:t.id,phone:t.phone}));
+  const teamOpts=team.filter(t=>!["partner","employer"].includes(t.role)&&t.active!==false).map(t=>({value:t.id,label:t.name,id:t.id,phone:t.phone}));
 
   return <div>
     {/* Header */}

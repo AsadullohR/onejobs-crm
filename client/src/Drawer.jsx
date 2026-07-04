@@ -51,7 +51,7 @@ const [form,setForm]=useState({
   const leadTasks=tasks.filter(t=>t.leadId===lead.id);
   const addNote=()=>{if(!note.trim())return;f("history",[...(form.history||[]),{text:note,by:user.id,at:new Date().toISOString()}]);setNote("");};
   const addTask=()=>{if(!tTitle.trim()||isNew)return;onAddTask({id:uid(),title:tTitle,assignee:Number(tAsgn),leadId:form.id,priority:"medium",status:"todo",due:tDue,createdBy:user.id,at:new Date().toISOString(),desc:""});setTTitle("");setTDue("");};
-  const teamOpts=team.filter(t=>t.active!==false&&t.role!=="partner").map(t=>({value:t.id,label:t.name,id:t.id,phone:t.phone}));
+  const teamOpts=team.filter(t=>t.active!==false&&!["partner","employer"].includes(t.role)).map(t=>({value:t.id,label:t.name,id:t.id,phone:t.phone}));
 
   const [vacCands, setVacCands] = useState([]);
   useEffect(() => {
@@ -456,7 +456,7 @@ const [form,setForm]=useState({
             <input value={tTitle} onChange={e=>setTTitle(e.target.value)} placeholder="Vazifa nomi..." style={{...inpS,marginBottom:6}}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:6}}>
               <input type="date" value={tDue} onChange={e=>setTDue(e.target.value)} style={inpS}/>
-              <select value={tAsgn} onChange={e=>setTAsgn(e.target.value)} style={inpS}>{team.filter(t=>t.role!=="partner"&&t.active!==false).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select>
+              <select value={tAsgn} onChange={e=>setTAsgn(e.target.value)} style={inpS}>{team.filter(t=>!["partner","employer"].includes(t.role)&&t.active!==false).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select>
               <button onClick={addTask} style={{padding:"8px 11px",borderRadius:6,background:T.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:11,fontWeight:700}}>+</button>
             </div>
           </div>

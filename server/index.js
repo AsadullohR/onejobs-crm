@@ -786,6 +786,20 @@ app.put("/api/users/:id", auth, adminOnly, async (req, res) => {
   }
 });
 
+// Delete a user permanently. Leads keep their owner ids (shown as unknown
+// until reassigned) — safer than cascading deletes on historical data.
+app.delete("/api/users/:id", auth, adminOnly, async (req, res) => {
+  if (String(req.user.id) === String(req.params.id))
+    return res.status(400).json({ error: "O'zingizni o'chira olmaysiz" });
+  try {
+    const { rows } = await pool.query("DELETE FROM users WHERE id=$1 RETURNING id", [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: "Topilmadi" });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
 app.get("/api/notifications", auth, async (req, res) => {
   try {

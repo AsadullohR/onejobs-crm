@@ -557,7 +557,7 @@ function KpiReport({ txns, team, leads }) {
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ ...inpS, width: "auto", fontSize: 11 }} />
         <select value={selMember} onChange={e => setSelMember(e.target.value)} style={{ ...inpS, width: "auto", fontSize: 11, marginLeft: 8 }}>
           <option value="all">Barcha xodimlar</option>
-          {team.filter(m => m.active !== false).map(m => <option key={m.id} value={String(m.id)}>{m.name}</option>)}
+          {team.filter(m => m.active !== false && !["partner","employer"].includes(m.role)).map(m => <option key={m.id} value={String(m.id)}>{m.name}</option>)}
         </select>
       </div>
 
