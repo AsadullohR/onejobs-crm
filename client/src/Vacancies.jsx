@@ -1221,6 +1221,8 @@ function VacancyDetail({
           onSave={saveCandidateProfile}
           team={team}
           canUploadDocs={true}
+          canDeleteDocs={true}
+          currentUserId={user?.id}
         />
       )}
 

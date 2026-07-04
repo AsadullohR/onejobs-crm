@@ -156,6 +156,7 @@ export const debtsAPI = {
 export const leadDocsAPI = {
   getByLead: (leadId) => req("GET", `/api/leads/${leadId}/documents`),
   upsert: (leadId, docType, data) => req("PUT", `/api/leads/${leadId}/documents/${docType}`, data),
+  delete: (leadId, docType) => req("DELETE", `/api/leads/${leadId}/documents/${encodeURIComponent(docType)}`),
 };
 
 export const reportsAPI = {

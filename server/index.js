@@ -1933,6 +1933,27 @@ app.put("/api/leads/:leadId/documents/:docType", auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Delete a document. Staff: any. Employer: only files they uploaded themselves
+// on leads that are candidates on their own vacancies. Partners: never.
+app.delete("/api/leads/:leadId/documents/:docType", auth, async (req, res) => {
+  try {
+    if (req.user.role === "partner") return res.status(403).json({ error: "Forbidden" });
+    if (req.user.role === "employer") {
+      if (!(await employerOwnsLead(req.user, req.params.leadId)))
+        return res.status(403).json({ error: "Forbidden" });
+      const { rows } = await pool.query(
+        `SELECT updated_by FROM lead_documents WHERE lead_id=$1 AND doc_type=$2`,
+        [req.params.leadId, req.params.docType]);
+      if (!rows[0]) return res.status(404).json({ error: "Topilmadi" });
+      if (String(rows[0].updated_by) !== String(req.user.id))
+        return res.status(403).json({ error: "Faqat o'zingiz yuklagan faylni o'chira olasiz" });
+    }
+    await pool.query(`DELETE FROM lead_documents WHERE lead_id=$1 AND doc_type=$2`,
+      [req.params.leadId, req.params.docType]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── MONTHLY HTML REPORT ──────────────────────────────────────────────────────
 app.get("/api/reports/monthly", async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1] || req.query.token;

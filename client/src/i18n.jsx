@@ -174,6 +174,7 @@ const LANGS = {
     cprof_download: "Yuklab olish",
     cprof_no_docs: "Hujjatlar yo'q",
     cprof_doc_too_big: "Fayl juda katta (maks. 4MB)",
+    cprof_doc_delete_confirm: "Bu hujjat o'chirilsinmi?",
     nav_partner: "Hamkor paneli",
     // Candidate profile modal
     cprof_basic_info: "Asosiy ma'lumotlar",
@@ -384,6 +385,7 @@ const LANGS = {
     cprof_download: "Скачать",
     cprof_no_docs: "Нет документов",
     cprof_doc_too_big: "Файл слишком большой (макс. 4МБ)",
+    cprof_doc_delete_confirm: "Удалить этот документ?",
     nav_partner: "Панель партнёра",
     cprof_basic_info: "Основные данные",
     cprof_app_no: "№ заявки",
@@ -591,6 +593,7 @@ const LANGS = {
     cprof_download: "Download",
     cprof_no_docs: "No documents",
     cprof_doc_too_big: "File too large (max 4MB)",
+    cprof_doc_delete_confirm: "Delete this document?",
     nav_partner: "Partner Dashboard",
     cprof_basic_info: "Basic Information",
     cprof_app_no: "Application No.",

@@ -83,7 +83,7 @@ const fmtDate = d => {
 // by the employer, with uploader attribution and per-type upload slots.
 const DOC_TYPES_DEFAULT = ["Pasport", "Diplom", "Foto", "Med spravka", "Mehnat shartnomasi", "Viza"];
 
-function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload }) {
+function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload, canDelete = false, userId }) {
   const [docs, setDocs] = useState([]);
   const [busy, setBusy] = useState(null);
 
@@ -111,6 +111,16 @@ function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload }) {
       finally { setBusy(null); }
     };
     rd.readAsDataURL(file);
+  };
+
+  const remove = async (dt) => {
+    if (!confirm(t("cprof_doc_delete_confirm"))) return;
+    setBusy(dt);
+    try {
+      await leadDocsAPI.delete(leadId, dt);
+      setDocs(p => p.filter(x => x.docType !== dt));
+    } catch (e) { alert(e.message); }
+    finally { setBusy(null); }
   };
 
   return (
@@ -145,6 +155,12 @@ function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload }) {
                     onChange={e => { upload(dt, e.target.files?.[0]); e.target.value = ""; }} />
                 </label>
               )}
+              {d && (canDelete || (canUpload && String(d.updatedBy) === String(userId))) && (
+                <button onClick={() => remove(dt)} disabled={busy === dt}
+                  style={{ fontSize: 9, fontWeight: 700, color: "#dc2626", background: "#dc262615", border: "1px solid #dc262644", borderRadius: 5, padding: "3px 7px", cursor: "pointer" }}>
+                  🗑
+                </button>
+              )}
             </div>
           </div>
         );
@@ -154,7 +170,7 @@ function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload }) {
   );
 }
 
-function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = false, onSave, team = [], canUploadDocs = false }) {
+function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = false, onSave, team = [], canUploadDocs = false, canDeleteDocs = false, currentUserId = null }) {
   const CMAP = candStatusMap(t);
   const cs = CMAP[normCandStatus(candidate.status)] || CMAP.added;
   const cv = lead?.cv || {};
@@ -348,7 +364,7 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = 
 
           {/* Documents — live files uploaded by OneJobs staff or the employer */}
           <Section title={t("cprof_documents")}>
-            <DocsPanel leadId={lead?.id} legacyDocs={docs} T={T} t={t} team={team} canUpload={canUploadDocs} />
+            <DocsPanel leadId={lead?.id} legacyDocs={docs} T={T} t={t} team={team} canUpload={canUploadDocs} canDelete={canDeleteDocs} userId={currentUserId} />
           </Section>
 
           {/* Notes */}
@@ -365,7 +381,7 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = 
 }
 
 // ─── VACANCIES TAB ────────────────────────────────────────────────────────────
-function VacanciesTab({ vacancies, loading, leads, t, T, team }) {
+function VacanciesTab({ vacancies, loading, leads, t, T, team, userId }) {
   const { lang } = useLang();
   const [selVac, setSelVac] = useState(null);
   const [candidates, setCandidates] = useState([]);
@@ -499,7 +515,7 @@ function VacanciesTab({ vacancies, loading, leads, t, T, team }) {
               vacancy={selVac}
               lead={leads?.find(l => l.id === selCand.leadId) || leadFromCand(selCand)}
               onClose={() => setSelCand(null)}
-              T={T} t={t} team={team} canUploadDocs={true}
+              T={T} t={t} team={team} canUploadDocs={true} currentUserId={userId}
             />
           )}
         </div>
@@ -509,7 +525,7 @@ function VacanciesTab({ vacancies, loading, leads, t, T, team }) {
 }
 
 // ─── WORKERS TAB ─────────────────────────────────────────────────────────────
-function WorkersTab({ t, T, team }) {
+function WorkersTab({ t, T, team, userId }) {
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
@@ -626,7 +642,7 @@ function WorkersTab({ t, T, team }) {
             xbaDate: selWorker.leadXbaDate, q1Date: selWorker.leadQ1Date, q2Date: selWorker.leadQ2Date, q3Date: selWorker.leadQ3Date,
           }}
           onClose={() => setSelWorker(null)}
-          T={T} t={t} team={team} canUploadDocs={true}
+          T={T} t={t} team={team} canUploadDocs={true} currentUserId={userId}
         />
       )}
     </div>
@@ -796,8 +812,8 @@ function EmployerPortal({ user, leads, team, addNotif }) {
       </div>
 
       {/* Tab content */}
-      {tab === "vacancies" && <VacanciesTab vacancies={vacancies} loading={loading} leads={leads} t={t} T={T} team={team} />}
-      {tab === "workers"   && <WorkersTab t={t} T={T} team={team} />}
+      {tab === "vacancies" && <VacanciesTab vacancies={vacancies} loading={loading} leads={leads} t={t} T={T} team={team} userId={user.id} />}
+      {tab === "workers"   && <WorkersTab t={t} T={T} team={team} userId={user.id} />}
       {tab === "request"   && <RequestTab t={t} T={T} addNotif={addNotif} />}
     </div>
   );
