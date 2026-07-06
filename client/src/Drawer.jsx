@@ -50,7 +50,16 @@ const [form,setForm]=useState({
   const isDone=DONE.includes(form.status);
   const leadTasks=tasks.filter(t=>t.leadId===lead.id);
   const addNote=()=>{if(!note.trim())return;f("history",[...(form.history||[]),{text:note,by:user.id,at:new Date().toISOString()}]);setNote("");};
-  const addTask=()=>{if(!tTitle.trim()||isNew)return;onAddTask({id:uid(),title:tTitle,assignee:Number(tAsgn),leadId:form.id,priority:"medium",status:"todo",due:tDue,createdBy:user.id,at:new Date().toISOString(),desc:""});setTTitle("");setTDue("");};
+  // New (unsaved) leads have no real ID yet — queue tasks locally and create
+  // them right after the lead is saved and gets its NO-xxx id.
+  const [pendingTasks,setPendingTasks]=useState([]);
+  const addTask=()=>{
+    if(!tTitle.trim())return;
+    const t={id:uid(),title:tTitle,assignee:Number(tAsgn),leadId:form.id,priority:"medium",status:"todo",due:tDue,createdBy:user.id,at:new Date().toISOString(),desc:""};
+    if(isNew){setPendingTasks(p=>[...p,t]);}
+    else{onAddTask(t);}
+    setTTitle("");setTDue("");
+  };
   const teamOpts=team.filter(t=>t.active!==false&&!["partner","employer"].includes(t.role)).map(t=>({value:t.id,label:t.name,id:t.id,phone:t.phone}));
 
   const [vacCands, setVacCands] = useState([]);
@@ -467,6 +476,15 @@ const [form,setForm]=useState({
               <button onClick={addTask} style={{padding:"8px 11px",borderRadius:6,background:T.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:11,fontWeight:700}}>+</button>
             </div>
           </div>
+          {pendingTasks.map(t=>(
+            <div key={t.id} style={{background:`${T.yellow}10`,borderRadius:7,padding:"9px 10px",marginBottom:5,border:`1px solid ${T.yellow}44`,borderLeft:`3px solid ${T.yellow}`}}>
+              <div style={{fontSize:11,fontWeight:600,color:T.text,marginBottom:2}}>{t.title}</div>
+              <div style={{display:"flex",gap:7,alignItems:"center",justifyContent:"space-between"}}>
+                <span style={{fontSize:9,color:T.yellow,fontWeight:700}}>⏳ Mijoz saqlanganda yaratiladi</span>
+                <button onClick={()=>setPendingTasks(p=>p.filter(x=>x.id!==t.id))} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:11}}>✕</button>
+              </div>
+            </div>
+          ))}
           {leadTasks.map(t=>{const od=isOD(t.due)&&t.status!=="done"; return(
             <div key={t.id} style={{background:T.card2,borderRadius:7,padding:"9px 10px",marginBottom:5,border:`1px solid ${T.border}`,borderLeft:`3px solid ${od?T.red:T.accent}`}}>
               <div style={{fontSize:11,fontWeight:600,color:T.text,marginBottom:2}}>{t.title}</div>
@@ -493,7 +511,14 @@ const [form,setForm]=useState({
       {/* Footer */}
       <div style={{padding:"10px 16px",borderTop:`1px solid ${T.border}`,display:"flex",gap:7,background:T.card,flexShrink:0}}>
         <button onClick={onClose} style={{flex:1,padding:"9px",borderRadius:7,background:T.card2,color:T.text,border:`1px solid ${T.border}`,cursor:"pointer",fontSize:12,fontWeight:600}}>Bekor</button>
-        <button disabled={saving} onClick={async()=>{ if(saving) return; setSaving(true); try{ await onSave(form); } finally { setSaving(false); } }} style={{flex:2,padding:"9px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:saving?"default":"pointer",fontSize:12,opacity:saving?0.6:1}}>{saving?"⏳ Saqlanmoqda...":"💾 Saqlash"}</button>
+        <button disabled={saving} onClick={async()=>{ if(saving) return; setSaving(true); try{
+          const saved = await onSave(form);
+          const realId = saved?.id;
+          if(pendingTasks.length && realId && !String(realId).startsWith("tmp-")){
+            pendingTasks.forEach(pt=>onAddTask({...pt,leadId:realId}));
+            setPendingTasks([]);
+          }
+        } finally { setSaving(false); } }} style={{flex:2,padding:"9px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:saving?"default":"pointer",fontSize:12,opacity:saving?0.6:1}}>{saving?"⏳ Saqlanmoqda...":"💾 Saqlash"}</button>
       </div>
     </div>
   </div>;

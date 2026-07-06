@@ -219,6 +219,7 @@ const saveLead = useCallback(async f => {
       }
 
       setDrawer(null);
+      return saved;
 
     } catch(err) {
       if (err.status === 409 || err.duplicates) {
