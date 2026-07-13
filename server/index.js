@@ -361,6 +361,12 @@ app.post("/api/leads", auth, async (req, res) => {
     // Fetch old status/xba before upsert for change detection
     const oldRow = await pool.query(`SELECT status, xba, owner_sales FROM leads WHERE id=$1`, [id]);
     const oldStatus = oldRow.rows[0]?.status || null;
+
+    // One-way gate: a lead that has moved past "Qilindi" can never be set
+    // back to it (enforced here so pipeline drag-and-drop can't bypass it).
+    if (l.status === "Qilindi" && oldStatus && !["Yangi", "Qilindi"].includes(oldStatus)) {
+      return res.status(400).json({ error: `"Qilindi" holatiga qaytarib bo'lmaydi — lead allaqachon "${oldStatus}" bosqichida` });
+    }
     const oldXba = oldRow.rows[0]?.xba || false;
     const oldOwner = oldRow.rows[0]?.owner_sales || null;
 
@@ -372,8 +378,9 @@ app.post("/api/leads", auth, async (req, res) => {
         kpi_sales, kpi_consult, kpi_docs, cv, docs, history,
         last_contact, contract_date, interview_date, dest, sof_foyda, quality, quality_note,
         xba_date, q1_date, q2_date, q3_date,
-        xba_receipt, q1_receipt, q2_receipt, q3_receipt)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)
+        xba_receipt, q1_receipt, q2_receipt, q3_receipt, branch)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
+        COALESCE($41, (SELECT branch FROM users WHERE id=$42)))
       ON CONFLICT (id) DO UPDATE SET
         name=$2, phone=$3, telegram=$4, status=$5, country=$6, sector=$7, position=$8, source=$9, gender=$10,
         comment=$11, note=$12, owner_sales=$13, owner_consult=$14, owner_docs=$15, q1=$16, q2=$17, q3=$18, xba=$19,
@@ -382,6 +389,7 @@ app.post("/api/leads", auth, async (req, res) => {
         quality=$31, quality_note=$32,
         xba_date=$33, q1_date=$34, q2_date=$35, q3_date=$36,
         xba_receipt=$37, q1_receipt=$38, q2_receipt=$39, q3_receipt=$40,
+        branch=COALESCE($41, leads.branch),
         updated_at=NOW()
       RETURNING *`,
       [
@@ -425,6 +433,8 @@ app.post("/api/leads", auth, async (req, res) => {
         l.q1Receipt || null,
         l.q2Receipt || null,
         l.q3Receipt || null,
+        l.branch || null,
+        req.user.id,
       ],
     );
     const saved = rows[0];
@@ -773,10 +783,10 @@ app.post("/api/users", auth, adminOnly, async (req, res) => {
   const hash = await bcrypt.hash(u.password || "password123", 10);
   try {
     const { rows } = await pool.query(
-      `INSERT INTO users (username,password,name,role,avatar,color,phone,email,salary,salary_type,salary_pct,company)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-       ON CONFLICT (username) DO UPDATE SET name=$3,role=$4,avatar=$5,color=$6,phone=$7,email=$8,salary=$9,salary_type=$10,salary_pct=$11,company=$12
-       RETURNING id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,company`,
+      `INSERT INTO users (username,password,name,role,avatar,color,phone,email,salary,salary_type,salary_pct,company,branch)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       ON CONFLICT (username) DO UPDATE SET name=$3,role=$4,avatar=$5,color=$6,phone=$7,email=$8,salary=$9,salary_type=$10,salary_pct=$11,company=$12,branch=$13
+       RETURNING id,username,name,role,avatar,color,phone,email,active,salary,salary_type,salary_pct,company,branch`,
       [
         u.username,
         hash,
@@ -790,6 +800,7 @@ app.post("/api/users", auth, adminOnly, async (req, res) => {
         u.salaryType || "fixed",
         u.salaryPct || 0,
         u.company || null,
+        u.branch || null,
       ],
     );
     res.json(rows[0]);
@@ -2100,6 +2111,8 @@ app.listen(PORT, async () => {
         END IF;
       END$$;
     `);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS branch TEXT`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS branch TEXT`);
     await pool.query(`
       ALTER TABLE vacancies
         ADD COLUMN IF NOT EXISTS title_ru TEXT,

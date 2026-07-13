@@ -153,7 +153,14 @@ const [form,setForm]=useState({
         {!isPartner&&<div>
           <label style={labS}>Holat</label>
           <select value={form.status} onChange={e=>f("status",e.target.value)} style={{...inpS,fontWeight:700,color:s.c}}>
-            {STAGES.map(st=><option key={st.key} value={st.key}>{st.label}</option>)}
+            {(()=>{
+              // One-way gate: once a lead has moved past "Qilindi", it can
+              // never be set back to "Qilindi".
+              const qIdx=STAGES.findIndex(st=>st.key==="Qilindi");
+              const origIdx=STAGES.findIndex(st=>st.key===lead.status);
+              const pastQilindi=origIdx>qIdx;
+              return STAGES.filter(st=>!(pastQilindi&&st.key==="Qilindi")).map(st=><option key={st.key} value={st.key}>{st.label}</option>);
+            })()}
           </select>
         </div>}
       </div>
@@ -209,7 +216,8 @@ const [form,setForm]=useState({
           {[["ownerSales","💼 Mas'ul Sotuvchi","sales"],["ownerConsult","🎓 Mas'ul Konsultant","docs"],["ownerDocs","📁 Mas'ul Hujjatchi","docs"]].map(([k,label])=>(
             <div key={k} style={{marginBottom:16}}>
               <label style={labS}>{label}</label>
-              {canOwner
+              {/* While the lead is still at "Qilindi", anyone may (re)assign owners */}
+              {(canOwner||form.status==="Qilindi")
                 ?<SearchSelect items={[{value:null,label:"– Belgilanmagan",id:"",phone:""},...teamOpts]} value={form[k]} onChange={v=>f(k,v)} placeholder="Tanlang"/>
                 :<div style={{...inpS,color:T.muted}}>{team.find(t=>t.id===form[k])?.name||"Belgilanmagan"}</div>
               }
