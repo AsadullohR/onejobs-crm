@@ -94,6 +94,13 @@ export const configAPI = {
 
 export const statsAPI = {
   get: () => req("GET", "/api/stats"),
+  funnel: (from, to) => {
+    const p = new URLSearchParams();
+    if (from) p.set("from", from);
+    if (to) p.set("to", to);
+    const q = p.toString();
+    return req("GET", `/api/stats/funnel${q ? "?" + q : ""}`);
+  },
   employees: (from, to) => {
     const p = new URLSearchParams();
     if (from) p.set("from", from);

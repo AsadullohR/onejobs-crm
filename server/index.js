@@ -999,6 +999,57 @@ app.get("/api/stats", auth, async (req, res) => {
   }
 });
 
+// ─── FUNNEL STATS (date-based, cumulative) ───────────────────────────────────
+// A lead counts in EVERY stage it entered during the selected period —
+// stage entry is detected from the lead's own date fields (muhim sanalar)
+// OR from status_log timestamps. So a lead contacted on the 4th and
+// contracted on the 6th appears in both stages for that month.
+const FUNNEL_STAGES = [
+  { key: "Yangi",                dateExpr: "l.created_at::date",                statuses: ["Yangi", "Qilindi"] },
+  { key: "Bog'lanildi",          dateExpr: "NULLIF(l.last_contact,'')::date",   statuses: ["Bog'landi", "Boglanildi"] },
+  { key: "Suhbat",               dateExpr: "NULLIF(l.interview_date,'')::date", statuses: ["Onlayn Suhbat Uchun", "Onlayn Suhbat", "Suhbat"] },
+  { key: "Shartnoma qildi",      dateExpr: "NULLIF(l.contract_date,'')::date",  statuses: ["Shartnoma qildi", "CV Topshirildi", "Interview ga qo'yildi", "Ishga qabul qilindi", "1 - Qism To'landi"] },
+  { key: "XBA to'lov",           dateExpr: "l.xba_date",                        statuses: ["XBA To'lov qildi"] },
+  { key: "Hujjatlar jo'natildi", dateExpr: null,                                statuses: ["Hujjatlar Tayyorlanmoqda", "Hujjatlar Jonatilishga Tayyor", "Hujjatlar Jonatildi", "Ish shartnomasi keldi", "Ish shartnomasi imzolandi", "Elchixonaga Hujjatlar Tayyor"] },
+  { key: "Taklifnoma keldi",     dateExpr: null,                                statuses: ["Taklifnoma keldi"] },
+  { key: "Viza topshirdi",       dateExpr: null,                                statuses: ["Vizaga Topshirildi"] },
+  { key: "Viza oldi",            dateExpr: null,                                statuses: ["Viza Oldi", "Jo'nab ketdi"] },
+];
+
+app.get("/api/stats/funnel", auth, async (req, res) => {
+  const from = req.query.from || null;
+  const to = req.query.to || null;
+  const allTime = !from && !to;
+  try {
+    const counts = await Promise.all(FUNNEL_STAGES.map(async (st) => {
+      const conds = [];
+      // 1) The lead's own date field falls in range
+      if (st.dateExpr) {
+        conds.push(`(${st.dateExpr} IS NOT NULL
+          AND ($1::date IS NULL OR ${st.dateExpr} >= $1::date)
+          AND ($2::date IS NULL OR ${st.dateExpr} <= $2::date))`);
+      }
+      // 2) A logged status change into this stage falls in range
+      conds.push(`EXISTS (
+        SELECT 1 FROM status_log sl WHERE sl.lead_id = l.id AND sl.status = ANY($3)
+          AND ($1::date IS NULL OR sl.logged_at::date >= $1::date)
+          AND ($2::date IS NULL OR sl.logged_at::date <= $2::date))`);
+      // 3) All-time only: legacy leads that sit in the stage but predate logging
+      if (allTime) conds.push(`l.status = ANY($3)`);
+      const { rows } = await pool.query(
+        `SELECT COUNT(DISTINCT l.id) AS n FROM leads l WHERE ${conds.join(" OR ")}`,
+        [from, to, st.statuses],
+      );
+      return { key: st.key, n: Number(rows[0].n) };
+    }));
+    const { rows: tot } = await pool.query(
+      `SELECT COUNT(*) AS n FROM leads l WHERE ($1::date IS NULL OR l.created_at::date >= $1::date) AND ($2::date IS NULL OR l.created_at::date <= $2::date)`,
+      [from, to],
+    );
+    res.json({ total: Number(tot[0].n), stages: counts });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── EMPLOYEE STATS ──────────────────────────────────────────────────────────
 app.get("/api/stats/employees", auth, async (req, res) => {
   try {

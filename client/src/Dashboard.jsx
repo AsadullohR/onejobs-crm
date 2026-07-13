@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
 import { fmtMs, fmtD, isOD, isSoon, I, Pill, Av, inp } from "./helpers.jsx";
 import { Analytics } from "./Analytics.jsx";
-import { reportsAPI } from "./api.js";
+import { reportsAPI, statsAPI } from "./api.js";
 
 // ─── SUPER DASHBOARD v2 (Business KPI) ────────────────────────────────────────
 function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
@@ -80,10 +80,29 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
     ["Viza topshirdi",       ["Vizaga Topshirildi"]],
     ["Viza oldi",            ["Viza Oldi", "Jo'nab ketdi"]],
   ];
-  const fData = funnelGroups.map(([g, stages]) => ({
+  // Local snapshot fallback (current status membership) — used until the
+  // server's date-based cumulative funnel arrives or if the request fails.
+  const fLocal = funnelGroups.map(([g, stages]) => ({
     g,
     n: filteredLeads.filter((l) => stages.includes(l.status)).length,
   }));
+
+  // Server funnel: date-based + status_log timestamps, cumulative — a lead
+  // counts in every stage it ENTERED during the period, so fast movers
+  // (contacted the 4th, contracted the 6th) appear in both stages.
+  const [serverFunnel, setServerFunnel] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    statsAPI.funnel(dateFrom || null, dateTo || null)
+      .then((r) => { if (alive && r?.stages) setServerFunnel(r); })
+      .catch(() => { if (alive) setServerFunnel(null); });
+    return () => { alive = false; };
+  }, [dateFrom, dateTo]);
+
+  const fData = serverFunnel
+    ? serverFunnel.stages.map((s) => ({ g: s.key, n: s.n }))
+    : fLocal;
+  const funnelTotal = serverFunnel ? Math.max(serverFunnel.total, 1) : total;
 
   // Source analytics with revenue
   const bySrc = Object.entries(
@@ -658,9 +677,10 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
             const MIN_W = 16; // % — keep tiny stages visible and clickable
             const widthOf = (n) => Math.max((n / maxN) * 100, MIN_W);
             return fData.map(({ g, n }, i) => {
-              const pct = total > 0 ? ((n / total) * 100).toFixed(0) : 0;
+              const pct = funnelTotal > 0 ? ((n / funnelTotal) * 100).toFixed(0) : 0;
               const prevN = i > 0 ? fData[i - 1].n : null;
               const drop = prevN != null ? prevN - n : null;
+              const convPct = prevN > 0 ? ((n / prevN) * 100).toFixed(0) : null;
               const wTop = widthOf(n);
               const wBot =
                 i < fData.length - 1
@@ -733,8 +753,13 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
                     }}
                   >
                     <span style={{ fontSize: 9, fontWeight: 700, color: T.sub }}>
-                      {pct}%
+                      {pct}% jami
                     </span>
+                    {convPct != null && (
+                      <span style={{ fontSize: 8, fontWeight: 800, color: Number(convPct) >= 50 ? T.green : FC[i] }}>
+                        → {convPct}% o'tdi
+                      </span>
+                    )}
                     {drop != null && drop > 0 && (
                       <span style={{ fontSize: 8, fontWeight: 700, color: T.red }}>
                         ↓ −{drop}
