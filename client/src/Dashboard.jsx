@@ -70,17 +70,15 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
     .reduce((s, l) => s + Number(l.sofFoyda || 0), 0);
   // Funnel analytics with conversion %
   const funnelGroups = [
-    ["Yangi",                          ["Yangi", "Qilindi"]],
-    ["Suhbat",                         ["Bog'landi", "Boglanildi", "Onlayn Suhbat Uchun", "Onlayn Suhbat", "Suhbat"]],
-    ["XBA To'lov",                     ["XBA To'lov qildi"]],
-    ["Shartnoma qildi",                ["Shartnoma qildi", "CV Topshirildi", "Interview ga qo'yildi", "Ishga qabul qilindi", "1 - Qism To'landi"]],
-    ["Hujjatlar jo'natilishga tayyor", ["Hujjatlar Tayyorlanmoqda", "Hujjatlar Jonatilishga Tayyor", "Hujjatlar Jonatildi", "Ish shartnomasi keldi", "Ish shartnomasi imzolandi"]],
-    ["Taklifnoma keldi",               ["Taklifnoma keldi"]],
-    ["Elchixonaga hujjatlar tayyor",   ["Elchixonaga Hujjatlar Tayyor"]],
-    ["Viza topshirdi",                 ["Vizaga Topshirildi"]],
-    ["Viza oldi",                      ["Viza Oldi"]],
-    ["Viza rad etildi",                ["Viza Rad Etildi"]],
-    ["Jo'nab ketti",                   ["Jo'nab ketdi"]],
+    ["Yangi",                ["Yangi", "Qilindi"]],
+    ["Bog'lanildi",          ["Bog'landi", "Boglanildi"]],
+    ["Suhbat",               ["Onlayn Suhbat Uchun", "Onlayn Suhbat", "Suhbat"]],
+    ["Shartnoma qildi",      ["Shartnoma qildi", "CV Topshirildi", "Interview ga qo'yildi", "Ishga qabul qilindi", "1 - Qism To'landi"]],
+    ["XBA to'lov",           ["XBA To'lov qildi"]],
+    ["Hujjatlar jo'natildi", ["Hujjatlar Tayyorlanmoqda", "Hujjatlar Jonatilishga Tayyor", "Hujjatlar Jonatildi", "Ish shartnomasi keldi", "Ish shartnomasi imzolandi", "Elchixonaga Hujjatlar Tayyor"]],
+    ["Taklifnoma keldi",     ["Taklifnoma keldi"]],
+    ["Viza topshirdi",       ["Vizaga Topshirildi"]],
+    ["Viza oldi",            ["Viza Oldi", "Jo'nab ketdi"]],
   ];
   const fData = funnelGroups.map(([g, stages]) => ({
     g,
@@ -243,11 +241,13 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
 
   const FC = [
     "#6366f1",
-    "#f59e0b",
-    "#22c55e",
-    "#ec4899",
     "#3b82f6",
+    "#f59e0b",
+    "#ec4899",
+    "#f97316",
+    "#0891b2",
     "#7c3aed",
+    "#22c55e",
     "#166534",
   ];
 
@@ -650,64 +650,101 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
               🔽 Funnel + Konversiya
             </h3>
           </div>
-          {fData.map(({ g, n }, i) => {
-            const pct = total > 0 ? ((n / total) * 100).toFixed(0) : 0;
-            const prevN = i > 0 ? fData[i - 1].n : total;
-            const stagePct = prevN > 0 ? ((n / prevN) * 100).toFixed(0) : 0;
-            return (
-              <div key={g} style={{ marginBottom: 7 }}>
+          {(() => {
+            // Trapezoid funnel: each stage's width is proportional to its
+            // count (relative to the largest stage), centered, with the
+            // bottom edge tapering toward the next stage's width.
+            const maxN = Math.max(...fData.map((d) => d.n), 1);
+            const MIN_W = 16; // % — keep tiny stages visible and clickable
+            const widthOf = (n) => Math.max((n / maxN) * 100, MIN_W);
+            return fData.map(({ g, n }, i) => {
+              const pct = total > 0 ? ((n / total) * 100).toFixed(0) : 0;
+              const prevN = i > 0 ? fData[i - 1].n : null;
+              const drop = prevN != null ? prevN - n : null;
+              const wTop = widthOf(n);
+              const wBot =
+                i < fData.length - 1
+                  ? (widthOf(n) + widthOf(fData[i + 1].n)) / 2
+                  : widthOf(n) * 0.7;
+              const tL = (100 - wTop) / 2;
+              const bL = (100 - wBot) / 2;
+              return (
                 <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: 2,
-                    alignItems: "center",
-                  }}
+                  key={g}
+                  title={`${g}: ${n} ta · ${pct}% jami${drop != null && drop > 0 ? ` · −${drop} tushib qoldi` : ""}`}
+                  style={{ position: "relative", height: 40, marginBottom: 2 }}
                 >
-                  <span style={{ fontSize: 10, color: T.sub }}>{g}</span>
+                  {/* trapezoid body */}
                   <div
-                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      clipPath: `polygon(${tL}% 0, ${100 - tL}% 0, ${100 - bL}% 100%, ${bL}% 100%)`,
+                      background: `linear-gradient(180deg, ${FC[i]}, ${FC[i]}bb)`,
+                      transition: "clip-path 0.3s",
+                    }}
+                  />
+                  {/* centered label (not clipped, always readable) */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 7,
+                      pointerEvents: "none",
+                    }}
                   >
-                    <span style={{ fontSize: 9, color: T.muted }}>
-                      {pct}% jami
-                    </span>
-                    {i > 0 && (
-                      <span
-                        style={{
-                          fontSize: 8,
-                          background: `${FC[i]}22`,
-                          color: FC[i],
-                          borderRadius: 3,
-                          padding: "0 4px",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {stagePct}%
-                      </span>
-                    )}
                     <span
-                      style={{ fontSize: 10, fontWeight: 700, color: T.text }}
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: "#fff",
+                        textShadow: "0 1px 3px rgba(0,0,0,0.55)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {g}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 900,
+                        color: "#fff",
+                        textShadow: "0 1px 3px rgba(0,0,0,0.55)",
+                      }}
                     >
                       {n}
                     </span>
                   </div>
-                </div>
-                <div
-                  style={{ background: T.border, borderRadius: 3, height: 5 }}
-                >
+                  {/* right-side stats: % of total + drop-off from previous */}
                   <div
                     style={{
-                      width: `${(n / total) * 100}%`,
-                      background: FC[i],
-                      borderRadius: 3,
-                      height: 5,
-                      transition: "width 0.3s",
+                      position: "absolute",
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "center",
+                      alignItems: "flex-end",
+                      pointerEvents: "none",
                     }}
-                  />
+                  >
+                    <span style={{ fontSize: 9, fontWeight: 700, color: T.sub }}>
+                      {pct}%
+                    </span>
+                    {drop != null && drop > 0 && (
+                      <span style={{ fontSize: 8, fontWeight: 700, color: T.red }}>
+                        ↓ −{drop}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
 
         {/* Team performance */}
