@@ -1017,6 +1017,8 @@ const FUNNEL_STAGES = [
 ];
 
 app.get("/api/stats/funnel", auth, async (req, res) => {
+  if (["partner", "employer"].includes(req.user.role))
+    return res.status(403).json({ error: "Forbidden" });
   const from = req.query.from || null;
   const to = req.query.to || null;
   const allTime = !from && !to;
