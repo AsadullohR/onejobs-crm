@@ -1,9 +1,9 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
 import { fmtMs, isOD, inp, I, Av,fmtD } from "./helpers.jsx";
 
-// â”€â”€â”€ ANALYTICS PAGE (Employee Productivity + Time Analysis) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── ANALYTICS PAGE (Employee Productivity + Time Analysis) ─────────────────
 function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
   const T=useT();
   const inpS=inp(T);
@@ -12,7 +12,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
   const [fPeriod,setFPeriod]=useState("month"); // week | month | quarter | all
   const [fStage,setFStage]=useState("all");
 
-  // â”€â”€ Date helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Date helpers ──────────────────────────────────────────────────────────
   const now = new Date();
   const periodStart = {
     week:   new Date(now - 7*86400000),
@@ -29,46 +29,46 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
   };
   const avg = arr => { const v=arr.filter(x=>x!=null); return v.length ? Math.round(v.reduce((s,x)=>s+x,0)/v.length) : null; };
 
-  // â”€â”€ STAGE GROUPS â€” pipeline stages mapped to workflow phases â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── STAGE GROUPS — pipeline stages mapped to workflow phases ─────────────
   // Each phase has: the statuses that belong to it, expected days, label
   const PHASE_MAP = [
-    {key:"boglanish",  label:"Bog'landi",         icon:"ðŸ“ž", exp:1,
+    {key:"boglanish",  label:"Bog'landi",         icon:"📞", exp:1,
      statuses:["Yangi","Qilindi","Bog'landi","Boglanildi"]},
-    {key:"suhbat",     label:"Suhbat",             icon:"ðŸ’¬", exp:5,
+    {key:"suhbat",     label:"Suhbat",             icon:"💬", exp:5,
      statuses:["Onlayn Suhbat Uchun","Onlayn Suhbat","Suhbat"]},
-    {key:"tolov",      label:"To'lov",             icon:"ðŸ’³", exp:3,
+    {key:"tolov",      label:"To'lov",             icon:"💳", exp:3,
      statuses:["Shartnoma qildi","XBA To'lov qildi"]},
-    {key:"ishqabul",   label:"Ishga qabul",        icon:"âœ…", exp:14,
+    {key:"ishqabul",   label:"Ishga qabul",        icon:"✅", exp:14,
      statuses:["CV Topshirildi","Interview ga qo'yildi","Ishga qabul qilindi","1 - Qism To'landi"]},
-    {key:"hujjatlar",  label:"Hujjatlar tayyorlanishi", icon:"ðŸ“", exp:14,
+    {key:"hujjatlar",  label:"Hujjatlar tayyorlanishi", icon:"📁", exp:14,
      statuses:["Hujjatlar Tayyorlanmoqda","Hujjatlar Jonatilishga Tayyor","Hujjatlar Jonatildi",
                "Ish shartnomasi keldi","Ish shartnomasi imzolandi"]},
-    {key:"taklifnoma", label:"Taklifnoma kelishi", icon:"ðŸ“¨", exp:90,
+    {key:"taklifnoma", label:"Taklifnoma kelishi", icon:"📨", exp:90,
      statuses:["Taklifnoma keldi","Elchixonaga Hujjatlar Tayyor"]},
-    {key:"viza_tayyorlik",label:"Vizaga tayyorlik", icon:"ðŸ—‚ï¸", exp:3,
+    {key:"viza_tayyorlik",label:"Vizaga tayyorlik", icon:"🗂️", exp:3,
      statuses:["Vizaga Topshirildi"]},
-    {key:"viza_chiqish",  label:"Viza chiqishi",   icon:"ðŸ›‚", exp:30,
+    {key:"viza_chiqish",  label:"Viza chiqishi",   icon:"🛂", exp:30,
      statuses:["Viza Oldi"]},
-    {key:"jonab",      label:"Jo'nab ketish",      icon:"âœˆï¸", exp:7,
+    {key:"jonab",      label:"Jo'nab ketish",      icon:"✈️", exp:7,
      statuses:["Jo'nab ketdi"]},
   ];
 
-  // Build a lookup: status â†’ phase index (ordering)
+  // Build a lookup: status → phase index (ordering)
   const STATUS_PHASE_IDX = {};
   PHASE_MAP.forEach((ph,i) => ph.statuses.forEach(s => { STATUS_PHASE_IDX[s] = i; }));
 
-  // â”€â”€ stageTimings: for each transition Aâ†’B, find leads that have PASSED through A
+  // ── stageTimings: for each transition A→B, find leads that have PASSED through A
   // and are now in B or later. Days = createdAt to "now" minus weighted offset.
   // Since we don't have per-status timestamps, we use a smart approach:
-  //   â€¢ leads currently IN phase X have been there since some time
-  //   â€¢ leads that PASSED phase X: we know the pipeline order
-  //   â€¢ Use createdAt + known ratio of total journey as proxy
+  //   • leads currently IN phase X have been there since some time
+  //   • leads that PASSED phase X: we know the pipeline order
+  //   • Use createdAt + known ratio of total journey as proxy
   //
   // Better approach: count leads currently in each phase vs total, 
-  // compute average "time stuck" using today - createdAt Ã— fraction
+  // compute average "time stuck" using today - createdAt × fraction
   //
   // Most practical for real data: show counts per phase + how many are stuck (overdue)
-  // For date-field-based calc: use the manual dates if set, otherwise show "â€“"
+  // For date-field-based calc: use the manual dates if set, otherwise show "–"
 
   const daysSince = d => d ? Math.round((new Date()-new Date(d))/86400000) : null;
 
@@ -84,37 +84,37 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
 
   // Date-field based timings (only for leads that actually have these fields filled)
   const EXPECTED = {
-    "Lead â†’ Bog'landi":       1,
-    "Bog'landi â†’ Suhbat":     5,
-    "Suhbat â†’ To'lov":        3,
-    "To'lov â†’ Ishga qabul":   14,
-    "Ishga qabul â†’ Hujjatlar": 14,
-    "Hujjatlar â†’ Taklifnoma": 90,
-    "Taklifnoma â†’ Viza tayyorlik": 3,
-    "Vizaga topshirish â†’ Viza chiqishi": 30,
-    "Viza chiqishi â†’ Jo'nab": 7,
+    "Lead → Bog'landi":       1,
+    "Bog'landi → Suhbat":     5,
+    "Suhbat → To'lov":        3,
+    "To'lov → Ishga qabul":   14,
+    "Ishga qabul → Hujjatlar": 14,
+    "Hujjatlar → Taklifnoma": 90,
+    "Taklifnoma → Viza tayyorlik": 3,
+    "Vizaga topshirish → Viza chiqishi": 30,
+    "Viza chiqishi → Jo'nab": 7,
   };
 
   // Manual date field based timings (for leads where dates are filled)
   const datedLeads = leads.filter(l => l.lastCall || l.onlaynSuhbat || l.officeSuhbat || l.shartnomaSana);
   const stageTimings = [
-    {label:"ðŸ“ž Lead â†’ Bog'landi",          key:"Lead â†’ Bog'landi",           exp:1,
+    {label:"📞 Lead → Bog'landi",          key:"Lead → Bog'landi",           exp:1,
      vals: datedLeads.map(l=>daysBetween(l.createdAt, l.lastCall))},
-    {label:"ðŸ’¬ Bog'landi â†’ Suhbat",         key:"Bog'landi â†’ Suhbat",          exp:5,
+    {label:"💬 Bog'landi → Suhbat",         key:"Bog'landi → Suhbat",          exp:5,
      vals: datedLeads.map(l=>daysBetween(l.lastCall, l.onlaynSuhbat||l.officeSuhbat))},
-    {label:"ðŸ¢ Suhbat â†’ To'lov",            key:"Suhbat â†’ To'lov",             exp:3,
+    {label:"🏢 Suhbat → To'lov",            key:"Suhbat → To'lov",             exp:3,
      vals: datedLeads.map(l=>daysBetween(l.onlaynSuhbat||l.officeSuhbat, l.shartnomaSana))},
-    {label:"ðŸ“„ To'lov â†’ Ishga qabul",       key:"To'lov â†’ Ishga qabul",        exp:14,
+    {label:"📄 To'lov → Ishga qabul",       key:"To'lov → Ishga qabul",        exp:14,
      vals: leads.filter(l=>l.shartnomaSana&&["CV Topshirildi","Interview ga qo'yildi","Ishga qabul qilindi","1 - Qism To'landi","Hujjatlar Tayyorlanmoqda","Jo'nab ketdi"].includes(l.status)).map(l=>daysBetween(l.shartnomaSana,new Date().toISOString().slice(0,10)))},
-    {label:"ðŸ“ Ishga qabul â†’ Hujjatlar",    key:"Ishga qabul â†’ Hujjatlar",     exp:14,
+    {label:"📁 Ishga qabul → Hujjatlar",    key:"Ishga qabul → Hujjatlar",     exp:14,
      vals: leads.filter(l=>["Hujjatlar Tayyorlanmoqda","Hujjatlar Jonatilishga Tayyor","Hujjatlar Jonatildi","Taklifnoma keldi","Vizaga Topshirildi","Viza Oldi","Jo'nab ketdi"].includes(l.status)&&inPeriod(l.createdAt)).map(l=>daysBetween(l.createdAt,new Date().toISOString().slice(0,10)))},
-    {label:"ðŸ“¨ Hujjatlar â†’ Taklifnoma",     key:"Hujjatlar â†’ Taklifnoma",       exp:90,
+    {label:"📨 Hujjatlar → Taklifnoma",     key:"Hujjatlar → Taklifnoma",       exp:90,
      vals: leads.filter(l=>["Taklifnoma keldi","Elchixonaga Hujjatlar Tayyor","Vizaga Topshirildi","Viza Oldi","Jo'nab ketdi"].includes(l.status)&&inPeriod(l.createdAt)).map(l=>daysBetween(l.createdAt,new Date().toISOString().slice(0,10)))},
-    {label:"ðŸ—‚ï¸ Taklifnoma â†’ Vizaga topshirish", key:"Taklifnoma â†’ Viza tayyorlik", exp:3,
+    {label:"🗂️ Taklifnoma → Vizaga topshirish", key:"Taklifnoma → Viza tayyorlik", exp:3,
      vals: leads.filter(l=>["Vizaga Topshirildi","Viza Oldi","Jo'nab ketdi"].includes(l.status)&&inPeriod(l.createdAt)).map(l=>daysSince(l.createdAt))},
-    {label:"ðŸ›‚ Vizaga topshirish â†’ Viza chiqishi", key:"Vizaga topshirish â†’ Viza chiqishi", exp:30,
+    {label:"🛂 Vizaga topshirish → Viza chiqishi", key:"Vizaga topshirish → Viza chiqishi", exp:30,
      vals: leads.filter(l=>["Viza Oldi","Jo'nab ketdi"].includes(l.status)&&inPeriod(l.createdAt)).map(l=>daysSince(l.createdAt))},
-    {label:"âœˆï¸ Viza â†’ Jo'nab ketish",       key:"Viza chiqishi â†’ Jo'nab",       exp:7,
+    {label:"✈️ Viza → Jo'nab ketish",       key:"Viza chiqishi → Jo'nab",       exp:7,
      vals: leads.filter(l=>DONE.includes(l.status)&&inPeriod(l.createdAt)).map(l=>daysSince(l.createdAt))},
   ].map(s => {
     const a = avg(s.vals.filter(v=>v!=null&&v>=0&&v<1000));
@@ -124,7 +124,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
     return {...s, avg:a, cnt, ok, pct};
   });
 
-  // â”€â”€ EMPLOYEE PRODUCTIVITY SCORE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── EMPLOYEE PRODUCTIVITY SCORE ────────────────────────────────────────────
   // Formula: Score = (Tasks Done / Total Assigned) * 50 
   //                + (Overdue Done / Total Done) adjusted penalty * 20
   //                + (Contracts / Leads) conversion * 30
@@ -202,7 +202,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
   ];
   const maxFunnel = funnelSteps[0][1]||1;
 
-  // â”€â”€ SALARY ANALYTICS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── SALARY ANALYTICS ──────────────────────────────────────────────────────
   const salTxns = txns.filter(t=>t.type==="expense"&&["Maosh","Avans","Bonus","KPI"].includes(t.cat)&&inPeriod(t.date));
   const totalSal = salTxns.reduce((s,x)=>s+x.amount,0);
   const totalRev = txns.filter(t=>t.type==="income"&&inPeriod(t.date)).reduce((s,x)=>s+x.amount,0);
@@ -216,7 +216,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
     }};
   }).sort((a,b)=>b.total-a.total);
 
-  // â”€â”€ Alerts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Alerts ─────────────────────────────────────────────────────────────────
   const alerts = [];
   stageTimings.filter(s=>s.avg!=null&&s.avg>s.exp).slice(0,3).forEach(s=>{ alerts.push({type:"time",msg:`${s.label}: ${s.avg} kun (mez: ${s.exp} kun)`,sev:s.avg>s.exp*1.5?"red":"yellow"}); });
   empStats.forEach(e=>{ if(e.overduePending>2) alerts.push({type:"emp",msg:`${e.t.name}: ${e.overduePending} ta muddati o'tgan vazifa`,sev:"yellow"}); });
@@ -229,8 +229,8 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
     {/* Header */}
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,flexWrap:"wrap",gap:10}}>
       <div>
-        <h1 style={{fontSize:18,fontWeight:900,color:T.text,margin:0}}>ðŸ“Š Tahlil Markazi</h1>
-        <p style={{color:T.muted,margin:"1px 0 0",fontSize:10}}>Xodimlar samaradorligi Â· Vaqt tahlili Â· Maosh</p>
+        <h1 style={{fontSize:18,fontWeight:900,color:T.text,margin:0}}>📊 Tahlil Markazi</h1>
+        <p style={{color:T.muted,margin:"1px 0 0",fontSize:10}}>Xodimlar samaradorligi · Vaqt tahlili · Maosh</p>
       </div>
       <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
         <select value={fPeriod} onChange={e=>setFPeriod(e.target.value)} style={{...inpS,width:"auto"}}>
@@ -250,7 +250,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
     {alerts.length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
       {alerts.slice(0,4).map((a,i)=>(
         <div key={i} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 11px",background:`${a.sev==="red"?T.red:T.yellow}12`,border:`1px solid ${a.sev==="red"?T.red:T.yellow}33`,borderRadius:7}}>
-          <span style={{fontSize:14}}>{a.sev==="red"?"ðŸ”´":"ðŸŸ¡"}</span>
+          <span style={{fontSize:14}}>{a.sev==="red"?"🔴":"🟡"}</span>
           <span style={{fontSize:10,color:T.text,fontWeight:600}}>{a.msg}</span>
         </div>
       ))}
@@ -258,12 +258,12 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
 
     {/* Tabs */}
     <div style={{display:"flex",gap:0,marginBottom:16,background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:3,width:"fit-content"}}>
-      {[["productivity","ðŸ‘” Xodimlar Samaradorligi"],["time","â±ï¸ Vaqt Tahlili"],...(roles[user?.role]?.canSalary?[["salary","ðŸ’° Maosh Tahlili"]]:[])] .map(([k,l])=>(
+      {[["productivity","👔 Xodimlar Samaradorligi"],["time","⏱️ Vaqt Tahlili"],...(roles[user?.role]?.canSalary?[["salary","💰 Maosh Tahlili"]]:[])] .map(([k,l])=>(
         <button key={k} onClick={()=>setTab(k)} style={{padding:"7px 16px",borderRadius:6,border:"none",background:tab===k?T.accent:"transparent",color:tab===k?"#fff":T.muted,cursor:"pointer",fontSize:11,fontWeight:tab===k?700:400}}>{l}</button>
       ))}
     </div>
 
-    {/* â•â•â•â•â•â• TAB 1: PRODUCTIVITY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+    {/* ══════ TAB 1: PRODUCTIVITY ══════════════════════════════════════════════ */}
     {tab==="productivity"&&<div>
       {/* Score cards */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10,marginBottom:16}}>
@@ -289,7 +289,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
 
             {/* Sub-scores */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:8}}>
-              {[["âš¡ Tezlik",e.speedScore,T.accent],["âœ… Sifat",e.accuracyScore,T.green],["ðŸŽ¯ Konversiya",e.convRate,T.yellow],["ðŸ“‹ Bajarildi",e.completionRate,T.cyan||"#06b6d4"]].map(([lb,val,c])=>(
+              {[["⚡ Tezlik",e.speedScore,T.accent],["✅ Sifat",e.accuracyScore,T.green],["🎯 Konversiya",e.convRate,T.yellow],["📋 Bajarildi",e.completionRate,T.cyan||"#06b6d4"]].map(([lb,val,c])=>(
                 <div key={lb} style={{background:T.card2,borderRadius:6,padding:"5px 7px"}}>
                   <div style={{fontSize:7,color:T.muted,marginBottom:2}}>{lb}</div>
                   <div style={{fontSize:12,fontWeight:800,color:c}}>{val}%</div>
@@ -306,7 +306,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
               </div>
               <div style={{textAlign:"center",background:T.card2,borderRadius:4,padding:"3px 0"}}>
                 <div style={{fontWeight:700,color:T.text}}>{e.myContracts}/{e.myLeads}</div>
-                <div style={{color:T.muted}}>Leadâ†’Shartnoma</div>
+                <div style={{color:T.muted}}>Lead→Shartnoma</div>
               </div>
               <div style={{textAlign:"center",background:`${T.red}15`,borderRadius:4,padding:"3px 0"}}>
                 <div style={{fontWeight:700,color:e.overduePending>0?T.red:T.green}}>{e.overduePending}</div>
@@ -325,7 +325,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
       {/* Comparison table */}
       <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,overflow:"auto",marginBottom:14}}>
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${T.border}`}}>
-          <div style={{fontSize:11,fontWeight:700,color:T.text}}>ðŸ“‹ Batafsil taqqoslash jadvali</div>
+          <div style={{fontSize:11,fontWeight:700,color:T.text}}>📋 Batafsil taqqoslash jadvali</div>
           <div style={{fontSize:9,color:T.muted}}>Formula: Samaradorlik = Tezlik(40%) + Sifat(35%) + Konversiya(25%)</div>
         </div>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
@@ -337,7 +337,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
           <tbody>
             {filteredEmp.map((e,i)=>(
               <tr key={e.t.id} style={{borderBottom:`1px solid ${T.border}22`,background:i===0?`${T.accent}06`:"transparent"}}>
-                <td style={{padding:"8px 10px"}}><div style={{display:"flex",alignItems:"center",gap:6}}><Av id={e.t.id} team={[e.t]} size={22}/><span style={{fontWeight:600,color:T.text}}>{e.t.name}</span>{i===0&&<span style={{fontSize:8,background:`${T.accent}22`,color:T.accent,borderRadius:3,padding:"0 4px"}}>ðŸ† Top</span>}</div></td>
+                <td style={{padding:"8px 10px"}}><div style={{display:"flex",alignItems:"center",gap:6}}><Av id={e.t.id} team={[e.t]} size={22}/><span style={{fontWeight:600,color:T.text}}>{e.t.name}</span>{i===0&&<span style={{fontSize:8,background:`${T.accent}22`,color:T.accent,borderRadius:3,padding:"0 4px"}}>🏆 Top</span>}</div></td>
                 <td style={{padding:"8px 10px",color:T.muted,fontSize:9}}>{e.t.role}</td>
                 <td style={{padding:"8px 10px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -347,7 +347,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
                   </div>
                 </td>
                 <td style={{padding:"8px 10px",color:e.overduePending>0?T.red:T.green,fontWeight:700}}>{e.overduePending}</td>
-                <td style={{padding:"8px 10px",color:T.text}}>{e.avgDays||"â€“"}</td>
+                <td style={{padding:"8px 10px",color:T.text}}>{e.avgDays||"–"}</td>
                 <td style={{padding:"8px 10px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:4}}>
                     <span style={{fontWeight:700,color:T.yellow}}>{e.convRate}%</span>
@@ -378,40 +378,40 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
 
       {/* Formula explanation */}
       <div style={{background:`${T.accent}08`,border:`1px solid ${T.accent}22`,borderRadius:10,padding:"12px 14px"}}>
-        <div style={{fontSize:11,fontWeight:700,color:T.accent,marginBottom:8}}>ðŸ“ Hisoblash formulasi</div>
+        <div style={{fontSize:11,fontWeight:700,color:T.accent,marginBottom:8}}>📐 Hisoblash formulasi</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,fontSize:9,color:T.sub}}>
           <div style={{background:T.card,borderRadius:7,padding:"8px 10px"}}>
-            <div style={{fontWeight:700,color:T.accent,marginBottom:3}}>âš¡ Tezlik Ball (40%)</div>
-            <div style={{fontFamily:"monospace",background:T.card2,padding:"4px 7px",borderRadius:4,marginBottom:4,fontSize:8}}>{'max(0, 100 âˆ’ (avgDays/14)Ã—100)'}</div>
+            <div style={{fontWeight:700,color:T.accent,marginBottom:3}}>⚡ Tezlik Ball (40%)</div>
+            <div style={{fontFamily:"monospace",background:T.card2,padding:"4px 7px",borderRadius:4,marginBottom:4,fontSize:8}}>{'max(0, 100 − (avgDays/14)×100)'}</div>
             <div style={{color:T.muted}}>Vazifani bajarish o'rtacha vaqti. 14 kundan kam = 100 ball. Har qo'shimcha kun uchun minus.</div>
           </div>
           <div style={{background:T.card,borderRadius:7,padding:"8px 10px"}}>
-            <div style={{fontWeight:700,color:T.green,marginBottom:3}}>âœ… Sifat Ball (35%)</div>
-            <div style={{fontFamily:"monospace",background:T.card2,padding:"4px 7px",borderRadius:4,marginBottom:4,fontSize:8}}>{'(done/total) Ã— (1 âˆ’ lateRateÃ—0.5) Ã— 100'}</div>
+            <div style={{fontWeight:700,color:T.green,marginBottom:3}}>✅ Sifat Ball (35%)</div>
+            <div style={{fontFamily:"monospace",background:T.card2,padding:"4px 7px",borderRadius:4,marginBottom:4,fontSize:8}}>{'(done/total) × (1 − lateRate×0.5) × 100'}</div>
             <div style={{color:T.muted}}>Bajarilgan/Jami nisbati. Kech bajarilganlar 50% jarima bilan hisoblanadi.</div>
           </div>
           <div style={{background:T.card,borderRadius:7,padding:"8px 10px"}}>
-            <div style={{fontWeight:700,color:T.yellow,marginBottom:3}}>ðŸŽ¯ Konversiya (25%)</div>
-            <div style={{fontFamily:"monospace",background:T.card2,padding:"4px 7px",borderRadius:4,marginBottom:4,fontSize:8}}>{'(shartnoma / lead) Ã— 100'}</div>
+            <div style={{fontWeight:700,color:T.yellow,marginBottom:3}}>🎯 Konversiya (25%)</div>
+            <div style={{fontFamily:"monospace",background:T.card2,padding:"4px 7px",borderRadius:4,marginBottom:4,fontSize:8}}>{'(shartnoma / lead) × 100'}</div>
             <div style={{color:T.muted}}>Unga biriktirilgan leadlardan shartnomaga o'tgan foizi.</div>
           </div>
         </div>
         <div style={{marginTop:8,padding:"6px 10px",background:T.card,borderRadius:6,fontSize:10,color:T.text}}>
-          <b style={{color:T.accent}}>Jami Ball</b> = TezlikÃ—40% + SifatÃ—35% + KonversiyaÃ—25% â†’ <b>0 dan 100 gacha</b>
-          <span style={{marginLeft:12,color:T.green}}>75â€“100: A'lo</span>
-          <span style={{marginLeft:8,color:T.yellow}}>50â€“74: Yaxshi</span>
-          <span style={{marginLeft:8,color:T.red}}>0â€“49: Kam</span>
+          <b style={{color:T.accent}}>Jami Ball</b> = Tezlik×40% + Sifat×35% + Konversiya×25% → <b>0 dan 100 gacha</b>
+          <span style={{marginLeft:12,color:T.green}}>75–100: A'lo</span>
+          <span style={{marginLeft:8,color:T.yellow}}>50–74: Yaxshi</span>
+          <span style={{marginLeft:8,color:T.red}}>0–49: Kam</span>
         </div>
       </div>
     </div>}
 
-    {/* â•â•â•â•â•â• TAB 2: TIME ANALYSIS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+    {/* ══════ TAB 2: TIME ANALYSIS ════════════════════════════════════════════ */}
     {tab==="time"&&<div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
         {/* Stage timings + Phase pipeline */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:14,display:"flex",flexDirection:"column",gap:0}}>
           <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:4,display:"flex",justifyContent:"space-between"}}>
-            <span>ðŸ“Š Bosqichlar bo'yicha vaqt tahlili</span>
+            <span>📊 Bosqichlar bo'yicha vaqt tahlili</span>
             <span style={{fontSize:9,color:T.muted}}>{leadsInPeriod.length} ta lead</span>
           </div>
           <div style={{fontSize:9,color:T.muted,marginBottom:12}}>Standart vaqt me'zonlari (OneJobs jarayoni)</div>
@@ -428,9 +428,9 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
                     <div style={{fontSize:7,color:T.muted}}>ta mijoz</div>
                   </div>
                   <div style={{fontSize:7,color:T.sub,lineHeight:1.3,maxWidth:80}}>{ph.label}</div>
-                  <div style={{fontSize:7,color:T.muted}}>â‰¤{ph.exp>30?ph.exp+" k":ph.exp+" k"}</div>
+                  <div style={{fontSize:7,color:T.muted}}>≤{ph.exp>30?ph.exp+" k":ph.exp+" k"}</div>
                   {ph.overExpected>0&&<div style={{fontSize:7,color:T.red,fontWeight:700}}>{ph.overExpected} kechikmoqda</div>}
-                  {i<phaseStats.length-1&&<div style={{fontSize:10,color:T.muted,marginTop:2}}>â†’</div>}
+                  {i<phaseStats.length-1&&<div style={{fontSize:10,color:T.muted,marginTop:2}}>→</div>}
                 </div>
               ))}
             </div>
@@ -447,9 +447,9 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
                     <span style={{fontSize:7,color:T.muted}}>({s.cnt} ta)</span>
                     {s.avg!=null
                       ? <span style={{fontSize:11,fontWeight:800,color:s.avg<=s.exp?T.green:s.avg<=s.exp*1.5?T.yellow:T.red,minWidth:50,textAlign:"right"}}>{s.avg} kun</span>
-                      : <span style={{fontSize:8,color:T.muted}}>â€“</span>}
+                      : <span style={{fontSize:8,color:T.muted}}>–</span>}
                     <span style={{fontSize:7,color:T.muted,minWidth:48,textAlign:"right"}}>mez: {s.exp>30?`${s.exp}k`:s.exp+"k"}</span>
-                    {s.avg!=null&&<span style={{fontSize:9}}>{s.avg<=s.exp?"âœ…":s.avg<=s.exp*1.5?"ðŸŸ¡":"ðŸ”´"}</span>}
+                    {s.avg!=null&&<span style={{fontSize:9}}>{s.avg<=s.exp?"✅":s.avg<=s.exp*1.5?"🟡":"🔴"}</span>}
                   </div>
                 </div>
                 {s.avg!=null&&<div style={{background:T.border,borderRadius:3,height:5,overflow:"hidden"}}>
@@ -458,14 +458,14 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
               </div>
             ))}
             {stageTimings.every(s=>s.avg==null)&&<div style={{textAlign:"center",padding:"12px 0",color:T.muted,fontSize:10}}>
-              ðŸ’¡ Mijoz kartasidagi <b>"ðŸ“… Muhim sanalar"</b> bo'limini to'ldiring â€” sanalar kiritilgan sari bu jadval avtomatik to'ladi
+              💡 Mijoz kartasidagi <b>"📅 Muhim sanalar"</b> bo'limini to'ldiring — sanalar kiritilgan sari bu jadval avtomatik to'ladi
             </div>}
           </div>
         </div>
 
         {/* Funnel */}
         <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:14}}>
-          <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:12}}>ðŸ”½ Funnel + Konversiya</div>
+          <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:12}}>🔽 Funnel + Konversiya</div>
           {funnelSteps.map(([label,cnt,c],i)=>{
             const prev = i>0?funnelSteps[i-1][1]:cnt;
             const pctTotal = maxFunnel>0?Math.round((cnt/maxFunnel)*100):0;
@@ -488,12 +488,12 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
       {/* Per-employee time breakdown */}
       <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,overflow:"auto",marginBottom:14}}>
         <div style={{padding:"12px 14px",borderBottom:`1px solid ${T.border}`}}>
-          <div style={{fontSize:11,fontWeight:700,color:T.text}}>ðŸ‘” Xodim bo'yicha vaqt tahlili</div>
+          <div style={{fontSize:11,fontWeight:700,color:T.text}}>👔 Xodim bo'yicha vaqt tahlili</div>
           <div style={{fontSize:9,color:T.muted}}>Lead biriktirilgan kundan shartnomaga o'rtacha kun</div>
         </div>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead><tr style={{background:T.card2}}>
-            {["Xodim","Roli","Lead (jami)","Jo'nab ketdi","Leadâ†’Shartnoma (o'rt. kun)","Natija"].map(h=>(
+            {["Xodim","Roli","Lead (jami)","Jo'nab ketdi","Lead→Shartnoma (o'rt. kun)","Natija"].map(h=>(
               <th key={h} style={{padding:"7px 10px",textAlign:"left",fontSize:8,fontWeight:600,color:T.muted,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
             ))}
           </tr></thead>
@@ -515,22 +515,22 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
                 <td style={{padding:"7px 10px"}}>
                   {e.toContract
                     ? <span style={{fontSize:9,fontWeight:700,color:e.toContract<=14?T.green:e.toContract<=21?T.yellow:T.red}}>
-                        {e.toContract<=14?"âœ… A'lo":e.toContract<=21?"ðŸŸ¡ Yaxshi":"ðŸ”´ Kechikmoqda"}
+                        {e.toContract<=14?"✅ A'lo":e.toContract<=21?"🟡 Yaxshi":"🔴 Kechikmoqda"}
                       </span>
-                    : "â€“"}
+                    : "–"}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
         {empTimeRows.length===0&&<div style={{textAlign:"center",padding:"24px 0",color:T.muted,fontSize:11}}>
-          Hisoblash uchun mijoz kartasida sanalarni to'ldiring (ðŸ“… Muhim sanalar)
+          Hisoblash uchun mijoz kartasida sanalarni to'ldiring (📅 Muhim sanalar)
         </div>}
       </div>
 
       {/* Standard time reference */}
       <div style={{background:`${T.yellow}10`,border:`1px solid ${T.yellow}33`,borderRadius:9,padding:"10px 14px"}}>
-        <div style={{fontSize:10,fontWeight:700,color:T.yellow,marginBottom:6}}>â±ï¸ Standart vaqt mezonlari â€” OneJobs jarayoni</div>
+        <div style={{fontSize:10,fontWeight:700,color:T.yellow,marginBottom:6}}>⏱️ Standart vaqt mezonlari — OneJobs jarayoni</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
           {phaseStats.map(ph=>(
             <div key={ph.key} style={{background:T.card,borderRadius:6,padding:"7px 9px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -545,19 +545,19 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
             </div>
           ))}
         </div>
-        <div style={{fontSize:8,color:T.muted,marginTop:6}}>ðŸ’¡ Vaqt mezonlari hozirgi holatdagi (status) leadlar asosida hisoblanadi. Aniqroq tahlil uchun mijoz kartasidagi "ðŸ“… Muhim sanalar" to'ldiring.</div>
+        <div style={{fontSize:8,color:T.muted,marginTop:6}}>💡 Vaqt mezonlari hozirgi holatdagi (status) leadlar asosida hisoblanadi. Aniqroq tahlil uchun mijoz kartasidagi "📅 Muhim sanalar" to'ldiring.</div>
       </div>
     </div>}
 
-    {/* â•â•â•â•â•â• TAB 3: SALARY â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+    {/* ══════ TAB 3: SALARY ════════════════════════════════════════════════════ */}
     {tab==="salary"&&<div>
       {/* Summary KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:14}}>
         {[
-          ["ðŸ’° Jami Maosh",totalSal,T.red],
-          ["ðŸ’š Jami Daromad",totalRev,T.green],
-          ["ðŸ“Š Maosh/Daromad",totalRev>0?Math.round((totalSal/totalRev)*100)+"%":"â€“",T.yellow],
-          ["ðŸ‘¥ Xodimlar",salByEmp.filter(e=>e.total>0).length+" ta",T.accent],
+          ["💰 Jami Maosh",totalSal,T.red],
+          ["💚 Jami Daromad",totalRev,T.green],
+          ["📊 Maosh/Daromad",totalRev>0?Math.round((totalSal/totalRev)*100)+"%":"–",T.yellow],
+          ["👥 Xodimlar",salByEmp.filter(e=>e.total>0).length+" ta",T.accent],
         ].map(([lb,val,c])=>(
           <div key={lb} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:10,padding:"11px 13px",borderTop:`3px solid ${c}`}}>
             <div style={{fontSize:8,color:T.muted,marginBottom:3,fontWeight:600}}>{lb}</div>
@@ -574,7 +574,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
               <Av id={t.id} team={[t]} size={32}/>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:11,fontWeight:700,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.name}</div>
-                <div style={{fontSize:9,color:T.muted}}>{t.role} Â· {list.length} ta to'lov</div>
+                <div style={{fontSize:9,color:T.muted}}>{t.role} · {list.length} ta to'lov</div>
               </div>
               <div style={{fontSize:16,fontWeight:900,color:T.red}}>{fmtMs(total)}</div>
             </div>
@@ -591,7 +591,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
             })}
             {list.slice(0,3).map(x=>(
               <div key={x.id} style={{display:"flex",justifyContent:"space-between",fontSize:8,color:T.muted,padding:"2px 0",borderTop:`1px solid ${T.border}22`}}>
-                <span>{x.cat} Â· {x.date}</span>
+                <span>{x.cat} · {x.date}</span>
                 <span style={{color:T.red,fontWeight:600}}>{fmtMs(x.amount)}</span>
               </div>
             ))}
