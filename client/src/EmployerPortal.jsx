@@ -83,14 +83,15 @@ const fmtDate = d => {
 // by the employer, with uploader attribution and per-type upload slots.
 // Candidate-side docs use the same slug keys as the staff Drawer's Hujjatlar
 // tab; employer-side docs use label keys — both views read the same records.
+// Second element is the i18n key so labels follow the language switcher.
 const CLIENT_DOC_TYPES = [
-  ["passport", "Pasport"], ["cv_file", "CV (fayl)"], ["photo", "Rasm (3x4)"],
-  ["id_card", "ID karta"], ["diploma", "Diplom"],
+  ["passport", "doc_passport"], ["cv_file", "doc_cv"], ["photo", "doc_photo"],
+  ["id_card", "doc_id"], ["diploma", "doc_diploma"],
 ];
 const EMPLOYER_DOC_TYPES = [
-  ["Mehnat shartnomasi", "Mehnat shartnomasi"], ["Taklifnoma", "Taklifnoma"],
-  ["Ish ruxsatnomasi", "Ish ruxsatnomasi"], ["Med spravka", "Med spravka"], ["Viza", "Viza"],
-  ["emp_extra1", "Qo'shimcha 1"], ["emp_extra2", "Qo'shimcha 2"], ["emp_extra3", "Qo'shimcha 3"],
+  ["Mehnat shartnomasi", "doc_contract"], ["Taklifnoma", "doc_invitation"],
+  ["Ish ruxsatnomasi", "doc_permit"], ["Med spravka", "doc_med"], ["Viza", "doc_visa"],
+  ["emp_extra1", "doc_extra1"], ["emp_extra2", "doc_extra2"], ["emp_extra3", "doc_extra3"],
 ];
 
 function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload, canDelete = false, userId }) {
@@ -136,7 +137,8 @@ function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload, canDelete = fals
     finally { setBusy(null); }
   };
 
-  const renderRow = ([dt, label]) => {
+  const renderRow = ([dt, labelKey]) => {
+        const label = t(labelKey) || labelKey;
         const d = byType[dt];
         const hasFile = !!d?.fileData;
         const legacyOk = !d && legacyDocs?.[dt];
