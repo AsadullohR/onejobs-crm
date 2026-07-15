@@ -90,6 +90,7 @@ const CLIENT_DOC_TYPES = [
 const EMPLOYER_DOC_TYPES = [
   ["Mehnat shartnomasi", "Mehnat shartnomasi"], ["Taklifnoma", "Taklifnoma"],
   ["Ish ruxsatnomasi", "Ish ruxsatnomasi"], ["Med spravka", "Med spravka"], ["Viza", "Viza"],
+  ["emp_extra1", "Qo'shimcha 1"], ["emp_extra2", "Qo'shimcha 2"], ["emp_extra3", "Qo'shimcha 3"],
 ];
 
 function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload, canDelete = false, userId }) {

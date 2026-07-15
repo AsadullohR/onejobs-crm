@@ -323,7 +323,7 @@ const [form,setForm]=useState({
           // provides, and what the employer uploads from their portal
           // (same doc_type keys as the employer portal's Documents panel).
           const CLIENT_DOCS=[["passport","Pasport"],["cv_file","CV (fayl)"],["photo","Rasm (3x4)"],["id_card","ID karta"],["diploma","Diplom"],["doc1","Qo'shimcha 1"],["doc2","Qo'shimcha 2"],["doc3","Qo'shimcha 3"]];
-          const EMPLOYER_DOCS=[["Mehnat shartnomasi","Mehnat shartnomasi"],["Taklifnoma","Taklifnoma"],["Ish ruxsatnomasi","Ish ruxsatnomasi"],["Med spravka","Med spravka"],["Viza","Viza"]];
+          const EMPLOYER_DOCS=[["Mehnat shartnomasi","Mehnat shartnomasi"],["Taklifnoma","Taklifnoma"],["Ish ruxsatnomasi","Ish ruxsatnomasi"],["Med spravka","Med spravka"],["Viza","Viza"],["emp_extra1","Qo'shimcha 1"],["emp_extra2","Qo'shimcha 2"],["emp_extra3","Qo'shimcha 3"]];
           const renderDocCard=([k,lb])=>{
               const docEntry = leadDocs[k]||{};
               const hasFile = !!docEntry.fileData;
