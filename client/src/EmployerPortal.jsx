@@ -81,7 +81,16 @@ const fmtDate = d => {
 // ─── DOCUMENTS PANEL ─────────────────────────────────────────────────────────
 // Live document list from lead_documents: files uploaded by OneJobs staff or
 // by the employer, with uploader attribution and per-type upload slots.
-const DOC_TYPES_DEFAULT = ["Pasport", "Diplom", "Foto", "Med spravka", "Mehnat shartnomasi", "Viza"];
+// Candidate-side docs use the same slug keys as the staff Drawer's Hujjatlar
+// tab; employer-side docs use label keys — both views read the same records.
+const CLIENT_DOC_TYPES = [
+  ["passport", "Pasport"], ["cv_file", "CV (fayl)"], ["photo", "Rasm (3x4)"],
+  ["id_card", "ID karta"], ["diploma", "Diplom"],
+];
+const EMPLOYER_DOC_TYPES = [
+  ["Mehnat shartnomasi", "Mehnat shartnomasi"], ["Taklifnoma", "Taklifnoma"],
+  ["Ish ruxsatnomasi", "Ish ruxsatnomasi"], ["Med spravka", "Med spravka"], ["Viza", "Viza"],
+];
 
 function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload, canDelete = false, userId }) {
   const [docs, setDocs] = useState([]);
@@ -94,7 +103,10 @@ function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload, canDelete = fals
 
   const byType = {};
   docs.forEach(d => { byType[d.docType] = d; });
-  const types = [...new Set([...DOC_TYPES_DEFAULT, ...docs.map(d => d.docType), ...Object.keys(legacyDocs || {}).filter(k => legacyDocs[k])])];
+  const knownKeys = new Set([...CLIENT_DOC_TYPES, ...EMPLOYER_DOC_TYPES].map(([k]) => k));
+  const extraTypes = [...new Set([...docs.map(d => d.docType), ...Object.keys(legacyDocs || {}).filter(k => legacyDocs[k])])]
+    .filter(k => !knownKeys.has(k))
+    .map(k => [k, k]);
 
   const uploaderName = id => team?.find(u => String(u.id) === String(id))?.name || "";
 
@@ -123,9 +135,7 @@ function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload, canDelete = fals
     finally { setBusy(null); }
   };
 
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-      {types.map(dt => {
+  const renderRow = ([dt, label]) => {
         const d = byType[dt];
         const hasFile = !!d?.fileData;
         const legacyOk = !d && legacyDocs?.[dt];
@@ -133,7 +143,7 @@ function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload, canDelete = fals
         return (
           <div key={dt} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "9px 12px", background: done ? `${T.green}10` : T.card2, border: `1px solid ${done ? T.green + "33" : T.border}`, borderRadius: 8 }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 10, color: T.text, fontWeight: 700 }}>📄 {dt}</div>
+              <div style={{ fontSize: 10, color: T.text, fontWeight: 700 }}>📄 {label}</div>
               {d && (
                 <div style={{ fontSize: 8, color: T.muted, marginTop: 2 }}>
                   {d.fileName ? d.fileName + " · " : ""}{uploaderName(d.updatedBy)}{d.updatedAt ? " · " + String(d.updatedAt).slice(0, 10) : ""}
@@ -164,8 +174,20 @@ function DocsPanel({ leadId, legacyDocs, T, t, team, canUpload, canDelete = fals
             </div>
           </div>
         );
-      })}
-      {types.length === 0 && <div style={{ gridColumn: "1/-1", fontSize: 11, color: T.muted, textAlign: "center", padding: 14 }}>{t("cprof_no_docs")}</div>}
+  };
+
+  const groupHead = (txt) => (
+    <div style={{ gridColumn: "1/-1", fontSize: 10, fontWeight: 800, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 4 }}>{txt}</div>
+  );
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      {groupHead(`👤 ${t("cprof_docs_client")}`)}
+      {CLIENT_DOC_TYPES.map(renderRow)}
+      {groupHead(`🏢 ${t("cprof_docs_employer")}`)}
+      {EMPLOYER_DOC_TYPES.map(renderRow)}
+      {extraTypes.length > 0 && groupHead(`📎 ${t("cprof_docs_other")}`)}
+      {extraTypes.map(renderRow)}
     </div>
   );
 }

@@ -318,10 +318,13 @@ const [form,setForm]=useState({
         </div>}
 
         {/* PARTNER DOCS */}
-        {tab==="docs"&&<div>
-          <div style={{fontSize:11,color:T.muted,marginBottom:12}}>Hujjatlar yuklash (Hamkor uchun ham mavjud)</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            {[["passport","Pasport"],["cv_file","CV (fayl)"],["photo","Rasm (3x4)"],["id_card","ID karta"],["diploma","Diplom"],["doc1","Qo'shimcha 1"],["doc2","Qo'shimcha 2"],["doc3","Qo'shimcha 3"]].map(([k,lb])=>{
+        {tab==="docs"&&(()=>{
+          // Two document groups sharing the same storage: what the candidate
+          // provides, and what the employer uploads from their portal
+          // (same doc_type keys as the employer portal's Documents panel).
+          const CLIENT_DOCS=[["passport","Pasport"],["cv_file","CV (fayl)"],["photo","Rasm (3x4)"],["id_card","ID karta"],["diploma","Diplom"],["doc1","Qo'shimcha 1"],["doc2","Qo'shimcha 2"],["doc3","Qo'shimcha 3"]];
+          const EMPLOYER_DOCS=[["Mehnat shartnomasi","Mehnat shartnomasi"],["Taklifnoma","Taklifnoma"],["Ish ruxsatnomasi","Ish ruxsatnomasi"],["Med spravka","Med spravka"],["Viza","Viza"]];
+          const renderDocCard=([k,lb])=>{
               const docEntry = leadDocs[k]||{};
               const hasFile = !!docEntry.fileData;
               const openFile = () => {
@@ -338,9 +341,11 @@ const [form,setForm]=useState({
                 a.download = docEntry.fileName || k;
                 a.click();
               };
+              const uploader=docEntry.updatedBy?team.find(u=>String(u.id)===String(docEntry.updatedBy)):null;
               return (
                 <div key={k} style={{background:T.card,border:`1px solid ${hasFile?T.accent+"66":T.border}`,borderRadius:8,padding:"10px 12px"}}>
-                  <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:6}}>{lb}</div>
+                  <div style={{fontSize:11,fontWeight:700,color:T.text,marginBottom:2}}>{lb}</div>
+                  {uploader&&<div style={{fontSize:8,color:T.muted,marginBottom:4}}>{uploader.role==="employer"?"🏢":"👤"} {uploader.name}{docEntry.updatedAt?` · ${String(docEntry.updatedAt).slice(0,10)}`:""}</div>}
                   {hasFile ? (
                     <div>
                       <div style={{fontSize:9,color:T.muted,marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{docEntry.fileName||k}</div>
@@ -377,9 +382,16 @@ const [form,setForm]=useState({
                   )}
                 </div>
               );
-            })}
-          </div>
-        </div>}
+            };
+          return <div>
+            <div style={{fontSize:11,color:T.muted,marginBottom:10}}>Hujjatlar yuklash (Hamkor uchun ham mavjud)</div>
+            <div style={{fontSize:11,fontWeight:800,color:T.text,marginBottom:8}}>👤 Nomzod hujjatlari</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>{CLIENT_DOCS.map(renderDocCard)}</div>
+            <div style={{fontSize:11,fontWeight:800,color:T.text,marginBottom:8}}>🏢 Ish beruvchi hujjatlari</div>
+            <div style={{fontSize:9,color:T.muted,marginBottom:8}}>Ish beruvchi o'z portalidan yuklagan hujjatlar shu yerda ko'rinadi — siz ham yuklashingiz mumkin</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>{EMPLOYER_DOCS.map(renderDocCard)}</div>
+          </div>;
+        })()}
 
         {/* CV */}
         {tab==="cv"&&<div>
