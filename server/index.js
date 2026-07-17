@@ -1005,7 +1005,10 @@ app.get("/api/stats", auth, async (req, res) => {
 // from the lead's date/flag fields, status_log history, and current status.
 // Counts are therefore monotonically non-increasing down the funnel.
 const REACH_STAGES = [
-  { key: "Suhbat qurildi",       date: "NULLIF(l.last_contact,'')",   statuses: ["Bog'landi", "Boglanildi", "Onlayn Suhbat Uchun", "Onlayn Suhbat"] },
+  // "Qilindi" is NOT a conversation — only an actual Bog'lanildi (or an
+  // online-interview status) counts. last_contact is deliberately excluded:
+  // it gets stamped on mere attempts too.
+  { key: "Suhbat qurildi",       statuses: ["Bog'landi", "Boglanildi", "Onlayn Suhbat Uchun", "Onlayn Suhbat"] },
   { key: "Ofisga keldi",         date: "NULLIF(l.interview_date,'')", statuses: ["Suhbat"] },
   { key: "Shartnoma qildi",      date: "NULLIF(l.contract_date,'')",  statuses: ["Shartnoma qildi", "CV Topshirildi", "Interview ga qo'yildi"] },
   { key: "XBA to'lov",           date: "l.xba_date::text", bool: "l.xba", statuses: ["XBA To'lov qildi"] },
