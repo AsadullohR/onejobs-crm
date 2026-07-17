@@ -441,11 +441,13 @@ app.post("/api/leads", auth, async (req, res) => {
     const newStatus = saved.status;
     const newOwner = saved.owner_sales || l.ownerSales || null;
 
-    // Log status change
-    if (newStatus && newStatus !== oldStatus && newOwner) {
+    // Log EVERY status change — even on leads with no responsible person yet
+    // (Tarix timeline and the funnel depend on complete history). Fall back
+    // to the user who made the change when no owner is set.
+    if (newStatus && newStatus !== oldStatus) {
       pool.query(
         `INSERT INTO status_log (lead_id, owner_id, status, logged_at) VALUES ($1,$2,$3,NOW())`,
-        [saved.id, newOwner, newStatus]
+        [saved.id, newOwner || req.user.id, newStatus]
       ).catch(() => {});
     }
 
