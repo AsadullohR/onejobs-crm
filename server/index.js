@@ -1122,14 +1122,12 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
       // Bonus: visa approvals per docs owner (100k each)
       q(`SELECT l.owner_docs id, COUNT(DISTINCT sl.lead_id) n FROM status_log sl JOIN leads l ON l.id=sl.lead_id
          WHERE sl.status='Viza Oldi' AND sl.logged_at::date BETWEEN $1::date AND $2::date AND l.owner_docs IS NOT NULL GROUP BY l.owner_docs`),
-      // Bonus (Manager / Sales-Ops formula): XBA (50k) + 1-qism (100k) —
-      // only users whose ROLE is manager, matched as the lead's sales owner
-      q(`SELECT l.owner_sales id,
-           COUNT(*) FILTER (WHERE l.xba_date BETWEEN $1::date AND $2::date) xba,
-           COUNT(*) FILTER (WHERE l.q1_date BETWEEN $1::date AND $2::date) q1
-         FROM leads l JOIN users u ON u.id = l.owner_sales AND u.role = 'manager'
-         WHERE (l.xba_date BETWEEN $1::date AND $2::date OR l.q1_date BETWEEN $1::date AND $2::date)
-         GROUP BY l.owner_sales`),
+      // Manager formula inputs: manager earns from EVERY call-center XBA
+      // (they work the deals together) + every 1-qism payment made.
+      q(`SELECT
+           (SELECT COUNT(*) FROM leads l JOIN users u ON u.id = l.owner_sales AND u.role = 'sales'
+             WHERE l.xba_date BETWEEN $1::date AND $2::date) call_xba,
+           (SELECT COUNT(*) FROM leads WHERE q1_date BETWEEN $1::date AND $2::date) q1_total`),
       // Bonus (Call Center formula): contract + XBA paid × ~100k — users
       // whose ROLE is sales (Sotuv/Call), matched as the lead's sales owner
       q(`SELECT l.owner_sales id, COUNT(*) n FROM leads l
@@ -1152,7 +1150,8 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
       xbaCount: Number(xbaCnt[0].n),
       cancelled: Number(cancel[0].cancelled), contracts: Number(cancel[0].contracts),
       bonusDocs: bonusDocs.map(r => ({ id: r.id, n: Number(r.n) })),
-      bonusSales: bonusSales.map(r => ({ id: r.id, xba: Number(r.xba), q1: Number(r.q1) })),
+      mgrCallXba: Number(bonusSales[0].call_xba),
+      mgrQ1Total: Number(bonusSales[0].q1_total),
       bonusCall: bonusCall.map(r => ({ id: r.id, n: Number(r.n) })),
     });
   } catch (err) { res.status(500).json({ error: err.message }); }

@@ -2,7 +2,14 @@ import { useState, useEffect } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
 import { fmtMs, isOD, inp, I, Av,fmtD } from "./helpers.jsx";
-import { statsAPI } from "./api.js";
+import { statsAPI, configAPI } from "./api.js";
+
+// Default bonus scheme — every amount editable in the KPI tab (stored in config).
+const DEFAULT_BONUS_CFG = {
+  mgrFixed: 1000000, mgrXba: 50000, mgrQ1: 100000, mgrXbaPlan: 500000, mgrQ1Plan: 500000, mgrStatus: 500000, mgrTime: 500000,
+  docFixed: 1000000, docPerVisa: 100000, docOnTime: 500000, docTime: 500000, docStatus: 400000,
+  callFixed: 1000000, callPerSale: 100000, callPlan: 500000, callTime: 500000,
+};
 
 // ─── ANALYTICS PAGE (Employee Productivity + Time Analysis) ─────────────────
 function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
@@ -265,7 +272,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
     </div>
 
     {/* ══════ KPI NAZORAT ══════════════════════════════════════════════════════ */}
-    {tab==="kpi"&&<KpiTab team={team} T={T} periodStart={periodStart}/>}
+    {tab==="kpi"&&<KpiTab team={team} T={T} periodStart={periodStart} canEditCfg={user?.role==="admin"}/>}
 
     {/* ══════ TAB 1: PRODUCTIVITY ══════════════════════════════════════════════ */}
     {tab==="productivity"&&<div>
@@ -644,9 +651,27 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
 // Role-based KPI tables (Hujjatchi / Call Center / Sales) with target vs
 // actual, computed server-side from status_log + payment dates, plus the
 // auto-computable bonus components per employee.
-function KpiTab({ team, T, periodStart }) {
+function KpiTab({ team, T, periodStart, canEditCfg }) {
   const [d, setD] = useState(null);
   const [err, setErr] = useState("");
+  const [cfg, setCfg] = useState(DEFAULT_BONUS_CFG);
+  const [editCfg, setEditCfg] = useState(false);
+  const [savingCfg, setSavingCfg] = useState(false);
+
+  useEffect(() => {
+    configAPI.getAll().then(c => {
+      let parsed = c?.bonusCfg;
+      if (typeof parsed === "string") { try { parsed = JSON.parse(parsed); } catch { parsed = null; } }
+      if (parsed && typeof parsed === "object") setCfg(p => ({ ...p, ...parsed }));
+    }).catch(() => {});
+  }, []);
+
+  const saveCfg = async () => {
+    setSavingCfg(true);
+    try { await configAPI.set("bonusCfg", cfg); setEditCfg(false); }
+    catch (e) { alert(e.message); }
+    finally { setSavingCfg(false); }
+  };
   const from = periodStart.toISOString().slice(0, 10);
   const to = new Date().toISOString().slice(0, 10);
 
@@ -732,42 +757,69 @@ function KpiTab({ team, T, periodStart }) {
           </Card>
         </div>
 
-        {/* Bonus calculator (auto components only) */}
+        {/* Bonus calculator with editable scheme */}
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
-          <div style={{ padding: "12px 16px", fontSize: 12, fontWeight: 800, color: T.text, background: T.card2, borderBottom: `1px solid ${T.border}` }}>💰 BONUS HISOBI (avtomatik qism)</div>
+          <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", background: T.card2, borderBottom: `1px solid ${T.border}` }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: T.text }}>💰 BONUS HISOBI</span>
+            {canEditCfg && (editCfg
+              ? <div style={{ display: "flex", gap: 6 }}>
+                  <button disabled={savingCfg} onClick={() => setEditCfg(false)} style={{ fontSize: 10, padding: "4px 10px", borderRadius: 6, border: `1px solid ${T.border}`, background: T.card, color: T.muted, cursor: "pointer" }}>Bekor</button>
+                  <button disabled={savingCfg} onClick={saveCfg} style={{ fontSize: 10, fontWeight: 700, padding: "4px 12px", borderRadius: 6, border: "none", background: T.accent, color: "#fff", cursor: "pointer" }}>{savingCfg ? "…" : "💾 Saqlash"}</button>
+                </div>
+              : <button onClick={() => setEditCfg(true)} style={{ fontSize: 10, padding: "4px 10px", borderRadius: 6, border: `1px solid ${T.border}`, background: T.card, color: T.muted, cursor: "pointer" }}>⚙️ Summalar</button>)}
+          </div>
           <div style={{ padding: 14 }}>
-            <div style={{ fontSize: 9, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>
-              Oklad, davomat (500 000), senariy (500 000) va muddatida tugatilgan fayllar (500 000) — qo'lda tasdiqlanadi.
-              Quyida faqat avtomatik hisoblanadigan qismlar:
-            </div>
+            {(() => {
+              const C = (k) => editCfg
+                ? <input type="number" value={cfg[k]} onChange={e => setCfg(p => ({ ...p, [k]: Number(e.target.value) || 0 }))}
+                    style={{ width: 90, fontSize: 10, padding: "2px 5px", borderRadius: 4, border: `1px solid ${T.accent}66`, background: T.card, color: T.text }} />
+                : <b>{fmtSum(cfg[k])}</b>;
+              const manualRow = (label, k) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: T.muted, padding: "3px 0 3px 10px" }}>
+                  <span>📝 {label}</span><span>{C(k)}</span>
+                </div>
+              );
+              const personRow = (key, name, detail, sum) => (
+                <div key={key} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
+                  <span style={{ color: T.text }}>{name} <span style={{ color: T.muted, fontSize: 9 }}>{detail}</span></span>
+                  <b style={{ color: T.green }}>{fmtSum(sum)}</b>
+                </div>
+              );
+              const managers = team.filter(u => u.role === "manager" && u.active !== false);
+              const callers = team.filter(u => u.role === "sales" && u.active !== false);
+              const docsPpl = team.filter(u => ["docs", "hujjatchi"].includes(u.role) && u.active !== false);
+              const callN = Object.fromEntries(d.bonusCall.map(b => [String(b.id), b.n]));
+              const docsN = Object.fromEntries(d.bonusDocs.map(b => [String(b.id), b.n]));
+              return <>
+                <div style={{ fontSize: 9, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>
+                  Avtomatik: to'lov sanalaridan. 📝 belgili qismlar oy oxirida qo'lda tasdiqlanadi. Barcha summalar ⚙️ orqali o'zgartiriladi.
+                </div>
 
-            <div style={{ fontSize: 10, fontWeight: 800, color: T.text, marginBottom: 6 }}>📁 Hujjatchi — viza tasdig'i × 100 000</div>
-            {d.bonusDocs.length === 0 && <div style={{ fontSize: 10, color: T.muted, marginBottom: 10 }}>Bu davrda viza tasdiqlari yo'q</div>}
-            {d.bonusDocs.map(b => (
-              <div key={"d" + b.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
-                <span style={{ color: T.text }}>{nameOf(b.id)} <span style={{ color: T.muted, fontSize: 9 }}>({b.n} ta viza)</span></span>
-                <b style={{ color: T.green }}>{fmtSum(b.n * 100000)}</b>
-              </div>
-            ))}
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.text, marginBottom: 4 }}>💼 MENEJER — oklad {C("mgrFixed")} + Call XBA × {C("mgrXba")} + 1-qism × {C("mgrQ1")}</div>
+                {managers.map(m => personRow("m" + m.id, m.name,
+                  `(oklad + ${d.mgrCallXba} XBA · ${d.mgrQ1Total} ta 1-qism)`,
+                  cfg.mgrFixed + d.mgrCallXba * cfg.mgrXba + d.mgrQ1Total * cfg.mgrQ1))}
+                {manualRow("XBA plan bajarildi", "mgrXbaPlan")}
+                {manualRow("1-qism plan bajarildi", "mgrQ1Plan")}
+                {manualRow("Statuslar/ma'lumotlar joyida", "mgrStatus")}
+                {manualRow("Davomat (o'z vaqtida kelish)", "mgrTime")}
 
-            <div style={{ fontSize: 10, fontWeight: 800, color: T.text, margin: "14px 0 6px" }}>💼 Menejer (Sales/Ops) — XBA × 50 000 + 1-qism × 100 000</div>
-            {d.bonusSales.length === 0 && <div style={{ fontSize: 10, color: T.muted, marginBottom: 10 }}>Bu davrda to'lovlar yo'q</div>}
-            {d.bonusSales.map(b => (
-              <div key={"s" + b.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
-                <span style={{ color: T.text }}>{nameOf(b.id)} <span style={{ color: T.muted, fontSize: 9 }}>({b.xba} XBA · {b.q1} ta 1-qism)</span></span>
-                <b style={{ color: T.green }}>{fmtSum(b.xba * 50000 + b.q1 * 100000)}</b>
-              </div>
-            ))}
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.text, margin: "14px 0 4px" }}>📁 HUJJATCHI — oklad {C("docFixed")} + viza × {C("docPerVisa")}</div>
+                {docsPpl.map(m => personRow("d" + m.id, m.name,
+                  `(oklad + ${docsN[String(m.id)] || 0} ta viza)`,
+                  cfg.docFixed + (docsN[String(m.id)] || 0) * cfg.docPerVisa))}
+                {manualRow("Hujjatlar muddatida jo'natildi", "docOnTime")}
+                {manualRow("Davomat (o'z vaqtida kelish)", "docTime")}
+                {manualRow("Statuslar to'g'ri qo'yilgan", "docStatus")}
 
-            <div style={{ fontSize: 10, fontWeight: 800, color: T.text, margin: "14px 0 6px" }}>📞 Sotuv/Call — shartnoma+XBA × 100 000</div>
-            {d.bonusCall.length === 0 && <div style={{ fontSize: 10, color: T.muted }}>Bu davrda yo'q</div>}
-            {d.bonusCall.map(b => (
-              <div key={"c" + b.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
-                <span style={{ color: T.text }}>{nameOf(b.id)} <span style={{ color: T.muted, fontSize: 9 }}>({b.n} ta)</span></span>
-                <b style={{ color: T.green }}>{fmtSum(b.n * 100000)}</b>
-              </div>
-            ))}
-            <div style={{ fontSize: 8, color: T.muted, marginTop: 10 }}>Call Center stavkasi 80–120 ming oralig'ida — hisobda o'rtacha 100 000 ishlatildi.</div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: T.text, margin: "14px 0 4px" }}>📞 SOTUV/CALL — oklad {C("callFixed")} + shartnoma+XBA × {C("callPerSale")}</div>
+                {callers.map(m => personRow("c" + m.id, m.name,
+                  `(oklad + ${callN[String(m.id)] || 0} ta XBA)`,
+                  cfg.callFixed + (callN[String(m.id)] || 0) * cfg.callPerSale))}
+                {manualRow("Plan bajarildi", "callPlan")}
+                {manualRow("Davomat (o'z vaqtida kelish)", "callTime")}
+              </>;
+            })()}
           </div>
         </div>
       </div>
