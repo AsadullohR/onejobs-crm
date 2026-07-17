@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
 import { fmtMs, isOD, inp, I, Av,fmtD } from "./helpers.jsx";
+import { statsAPI } from "./api.js";
 
 // ─── ANALYTICS PAGE (Employee Productivity + Time Analysis) ─────────────────
 function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
@@ -258,10 +259,13 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
 
     {/* Tabs */}
     <div style={{display:"flex",gap:0,marginBottom:16,background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:3,width:"fit-content"}}>
-      {[["productivity","👔 Xodimlar Samaradorligi"],["time","⏱️ Vaqt Tahlili"],...(roles[user?.role]?.canSalary?[["salary","💰 Maosh Tahlili"]]:[])] .map(([k,l])=>(
+      {[["productivity","👔 Xodimlar Samaradorligi"],["time","⏱️ Vaqt Tahlili"],["kpi","🎯 KPI Nazorat"],...(roles[user?.role]?.canSalary?[["salary","💰 Maosh Tahlili"]]:[])] .map(([k,l])=>(
         <button key={k} onClick={()=>setTab(k)} style={{padding:"7px 16px",borderRadius:6,border:"none",background:tab===k?T.accent:"transparent",color:tab===k?"#fff":T.muted,cursor:"pointer",fontSize:11,fontWeight:tab===k?700:400}}>{l}</button>
       ))}
     </div>
+
+    {/* ══════ KPI NAZORAT ══════════════════════════════════════════════════════ */}
+    {tab==="kpi"&&<KpiTab team={team} T={T} periodStart={periodStart}/>}
 
     {/* ══════ TAB 1: PRODUCTIVITY ══════════════════════════════════════════════ */}
     {tab==="productivity"&&<div>
@@ -634,6 +638,141 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
       })()}
     </div>}
   </div>;
+}
+
+// ─── KPI NAZORAT TAB ─────────────────────────────────────────────────────────
+// Role-based KPI tables (Hujjatchi / Call Center / Sales) with target vs
+// actual, computed server-side from status_log + payment dates, plus the
+// auto-computable bonus components per employee.
+function KpiTab({ team, T, periodStart }) {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState("");
+  const from = periodStart.toISOString().slice(0, 10);
+  const to = new Date().toISOString().slice(0, 10);
+
+  useEffect(() => {
+    let alive = true;
+    statsAPI.kpi(from, to)
+      .then(r => { if (alive) { setD(r); setErr(""); } })
+      .catch(e => { if (alive) setErr(e.message); });
+    return () => { alive = false; };
+  }, [from, to]);
+
+  if (err) return <div style={{ color: T.red, fontSize: 12, padding: 20 }}>KPI yuklanmadi: {err} — serverni yangilang</div>;
+  if (!d) return <div style={{ color: T.muted, fontSize: 12, padding: 20 }}>Yuklanmoqda…</div>;
+
+  const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null);
+  const visaTotal = d.visaOk + d.visaBad;
+  const visaPct = pct(d.visaOk, visaTotal);
+  const respPct = pct(d.respFast, d.respN);
+  const convLS = pct(d.leadsReachedSuhbat, d.leadsCreated);
+  const convSS = pct(d.shartnomaEntered, d.suhbatEntered);
+  const cancelPct = pct(d.cancelled, d.contracts);
+  const consultDaily = d.days > 0 ? (d.consultEntered / d.days).toFixed(1) : "–";
+
+  // status: true=✅ green, false=❌ red, null=no data yet
+  const Row = ({ kpi, target, actual, ok, manual }) => (
+    <tr>
+      <td style={{ padding: "8px 12px", fontSize: 11, color: T.text, borderBottom: `1px solid ${T.border}` }}>{kpi}</td>
+      <td style={{ padding: "8px 12px", fontSize: 10, color: T.muted, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>{target}</td>
+      <td style={{ padding: "8px 12px", fontSize: 12, fontWeight: 800, color: T.text, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>
+        {manual ? <span style={{ fontSize: 9, color: T.muted, fontWeight: 400 }}>Qo'lda baholanadi</span> : (actual ?? "–")}
+      </td>
+      <td style={{ padding: "8px 12px", borderBottom: `1px solid ${T.border}`, textAlign: "center" }}>
+        {manual ? "📝" : ok == null ? <span style={{ color: T.muted }}>–</span> : ok ? "✅" : "❌"}
+      </td>
+    </tr>
+  );
+
+  const Card = ({ title, children }) => (
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", marginBottom: 16 }}>
+      <div style={{ padding: "12px 16px", fontSize: 12, fontWeight: 800, color: T.text, background: T.card2, borderBottom: `1px solid ${T.border}` }}>{title}</div>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead><tr>
+          {["KPI", "Maqsad", "Haqiqiy", ""].map(h => <th key={h} style={{ textAlign: "left", padding: "7px 12px", fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase", background: T.card2 }}>{h}</th>)}
+        </tr></thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+
+  const fmtSum = n => n.toLocaleString("uz-UZ") + " so'm";
+  const nameOf = id => team.find(u => String(u.id) === String(id))?.name || `ID:${id}`;
+
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: T.muted, marginBottom: 12 }}>
+        Davr: {from} — {to} · status o'zgarishi vaqtlari (status_log) asosida. Eslatma: log yozila boshlagandan keyingi davr aniqroq.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 14, alignItems: "start" }}>
+        <div>
+          <Card title="📁 HUJJATCHI">
+            <Row kpi="Faol hujjat soni" target="≥ 10 ta jarayonda" actual={`${d.docsActive} ta`} ok={d.docsActive >= 10} />
+            <Row kpi="O'rtacha hujjat muddati (Ishga qabul → Jo'natildi)" target="≤ 15 kun" actual={d.avgDocsDays != null ? `${d.avgDocsDays} kun (${d.avgDocsN} ta)` : null} ok={d.avgDocsDays != null ? d.avgDocsDays <= 15 : null} />
+            <Row kpi="Muddati o'tgan fayllar (14+ kun)" target="0 ta" actual={`${d.docsOverdue} ta`} ok={d.docsOverdue === 0} />
+            <Row kpi="Viza muvaffaqiyati" target="≥ 95%" actual={visaPct != null ? `${visaPct}% (${d.visaOk}/${visaTotal})` : null} ok={visaPct != null ? visaPct >= 95 : null} />
+            <Row kpi="Hujjat qaytarilish soni" target="≤ 2 ta/oy" manual />
+          </Card>
+
+          <Card title="📞 CALL CENTER">
+            <Row kpi="Arizaga javob vaqti (10 daqiqada)" target="100%" actual={respPct != null ? `${respPct}% (o'rt. ${d.respAvgMin} daq)` : null} ok={respPct != null ? respPct >= 100 : null} />
+            <Row kpi="Konsultatsiyaga yozilganlar" target="≥ 10 ta/kun" actual={`${consultDaily} ta/kun (${d.consultEntered} ta)`} ok={Number(consultDaily) >= 10} />
+            <Row kpi="Konversiya (lead → suhbat)" target="≥ 40%" actual={convLS != null ? `${convLS}% (${d.leadsReachedSuhbat}/${d.leadsCreated})` : null} ok={convLS != null ? convLS >= 40 : null} />
+            <Row kpi="Yashirin mijoz bahosi" target="≥ 11/14 ball" manual />
+          </Card>
+
+          <Card title="💼 SALES / OPERATION">
+            <Row kpi="Suhbat → Shartnoma+XBA konversiyasi" target="≥ 60%" actual={convSS != null ? `${convSS}% (${d.shartnomaEntered}/${d.suhbatEntered})` : null} ok={convSS != null ? convSS >= 60 : null} />
+            <Row kpi="Oylik XBA to'lovlar soni" target="60+ ta" actual={`${d.xbaCount} ta`} ok={d.xbaCount >= 60} />
+            <Row kpi="Ishga qabul → hujjat jo'natish" target="≤ 15 kun" actual={d.avgDocsDays != null ? `${d.avgDocsDays} kun` : null} ok={d.avgDocsDays != null ? d.avgDocsDays <= 15 : null} />
+            <Row kpi="Bekor qilingan shartnomalar" target="≤ 10%" actual={cancelPct != null ? `${cancelPct}% (${d.cancelled}/${d.contracts})` : null} ok={cancelPct != null ? cancelPct <= 10 : null} />
+            <Row kpi="Mijoz mamnuniyati" target="≥ 4/5" manual />
+            <Row kpi="Pipeline qiymat" target="Oylik pul target" manual />
+            <Row kpi="Reanimatsiya qo'ng'iroqlari" target="10+/hafta" manual />
+          </Card>
+        </div>
+
+        {/* Bonus calculator (auto components only) */}
+        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ padding: "12px 16px", fontSize: 12, fontWeight: 800, color: T.text, background: T.card2, borderBottom: `1px solid ${T.border}` }}>💰 BONUS HISOBI (avtomatik qism)</div>
+          <div style={{ padding: 14 }}>
+            <div style={{ fontSize: 9, color: T.muted, marginBottom: 12, lineHeight: 1.5 }}>
+              Oklad, davomat (500 000), senariy (500 000) va muddatida tugatilgan fayllar (500 000) — qo'lda tasdiqlanadi.
+              Quyida faqat avtomatik hisoblanadigan qismlar:
+            </div>
+
+            <div style={{ fontSize: 10, fontWeight: 800, color: T.text, marginBottom: 6 }}>📁 Hujjatchi — viza tasdig'i × 100 000</div>
+            {d.bonusDocs.length === 0 && <div style={{ fontSize: 10, color: T.muted, marginBottom: 10 }}>Bu davrda viza tasdiqlari yo'q</div>}
+            {d.bonusDocs.map(b => (
+              <div key={"d" + b.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ color: T.text }}>{nameOf(b.id)} <span style={{ color: T.muted, fontSize: 9 }}>({b.n} ta viza)</span></span>
+                <b style={{ color: T.green }}>{fmtSum(b.n * 100000)}</b>
+              </div>
+            ))}
+
+            <div style={{ fontSize: 10, fontWeight: 800, color: T.text, margin: "14px 0 6px" }}>💼 Sales — XBA × 50 000 + 1-qism × 100 000</div>
+            {d.bonusSales.length === 0 && <div style={{ fontSize: 10, color: T.muted, marginBottom: 10 }}>Bu davrda to'lovlar yo'q</div>}
+            {d.bonusSales.map(b => (
+              <div key={"s" + b.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ color: T.text }}>{nameOf(b.id)} <span style={{ color: T.muted, fontSize: 9 }}>({b.xba} XBA · {b.q1} ta 1-qism)</span></span>
+                <b style={{ color: T.green }}>{fmtSum(b.xba * 50000 + b.q1 * 100000)}</b>
+              </div>
+            ))}
+
+            <div style={{ fontSize: 10, fontWeight: 800, color: T.text, margin: "14px 0 6px" }}>📞 Call Center — shartnoma+XBA × 100 000</div>
+            {d.bonusCall.length === 0 && <div style={{ fontSize: 10, color: T.muted }}>Bu davrda yo'q</div>}
+            {d.bonusCall.map(b => (
+              <div key={"c" + b.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
+                <span style={{ color: T.text }}>{nameOf(b.id)} <span style={{ color: T.muted, fontSize: 9 }}>({b.n} ta)</span></span>
+                <b style={{ color: T.green }}>{fmtSum(b.n * 100000)}</b>
+              </div>
+            ))}
+            <div style={{ fontSize: 8, color: T.muted, marginTop: 10 }}>Call Center stavkasi 80–120 ming oralig'ida — hisobda o'rtacha 100 000 ishlatildi.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export { Analytics };

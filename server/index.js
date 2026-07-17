@@ -1052,6 +1052,97 @@ app.get("/api/stats/funnel", auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── ROLE KPI STATS (Hujjatchi / Call Center / Sales) ────────────────────────
+// All metrics derived from status_log timestamps + payment date columns.
+const DOCS_STATUSES = ["Hujjatlar Tayyorlanmoqda", "Hujjatlar Jonatilishga Tayyor", "Hujjatlar Jonatildi", "Ish shartnomasi keldi", "Ish shartnomasi imzolandi", "Elchixonaga Hujjatlar Tayyor"];
+const SUHBAT_STATUSES = ["Onlayn Suhbat Uchun", "Onlayn Suhbat", "Suhbat"];
+const SHARTNOMA_STATUSES = ["Shartnoma qildi", "XBA To'lov qildi", "CV Topshirildi", "Interview ga qo'yildi", "Ishga qabul qilindi", "1 - Qism To'landi"];
+
+app.get("/api/stats/kpi", auth, async (req, res) => {
+  if (["partner", "employer"].includes(req.user.role))
+    return res.status(403).json({ error: "Forbidden" });
+  const now = new Date();
+  const from = req.query.from || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const to = req.query.to || now.toISOString().slice(0, 10);
+  const P = [from, to];
+  const q = (sql, params = P) => pool.query(sql, params).then(r => r.rows);
+  try {
+    const [
+      docsActive, docsOverdue, avgDocs, visa, resp, consult, convLS, convSS,
+      xbaCnt, cancel, bonusDocs, bonusSales, bonusCall,
+    ] = await Promise.all([
+      // Currently in a document-processing status
+      q(`SELECT COUNT(*) n FROM leads WHERE status = ANY($1)`, [DOCS_STATUSES]),
+      // In docs status AND no status change for 14+ days
+      q(`SELECT COUNT(*) n FROM leads l WHERE l.status = ANY($1)
+         AND COALESCE((SELECT MAX(sl.logged_at) FROM status_log sl WHERE sl.lead_id=l.id), l.updated_at, l.created_at) < NOW() - INTERVAL '14 days'`, [DOCS_STATUSES]),
+      // Avg days: "Ishga qabul qilindi" → "Hujjatlar Jonatildi" (completed in period)
+      q(`SELECT AVG(EXTRACT(EPOCH FROM (b.t - a.t)) / 86400)::numeric(10,1) d, COUNT(*) n FROM
+         (SELECT lead_id, MIN(logged_at) t FROM status_log WHERE status='Ishga qabul qilindi' GROUP BY lead_id) a
+         JOIN (SELECT lead_id, MIN(logged_at) t FROM status_log WHERE status='Hujjatlar Jonatildi' GROUP BY lead_id) b USING (lead_id)
+         WHERE b.t >= a.t AND b.t::date BETWEEN $1::date AND $2::date`),
+      // Visa success in period
+      q(`SELECT
+           COUNT(DISTINCT lead_id) FILTER (WHERE status='Viza Oldi') ok,
+           COUNT(DISTINCT lead_id) FILTER (WHERE status='Viza Rad Etildi') bad
+         FROM status_log WHERE logged_at::date BETWEEN $1::date AND $2::date`),
+      // Response time: lead created → first logged status change (minutes)
+      q(`SELECT AVG(EXTRACT(EPOCH FROM (f.t - l.created_at)) / 60)::numeric(10,0) m,
+           COUNT(*) FILTER (WHERE f.t - l.created_at <= INTERVAL '10 minutes') fast, COUNT(*) n
+         FROM leads l JOIN (SELECT lead_id, MIN(logged_at) t FROM status_log GROUP BY lead_id) f ON f.lead_id=l.id
+         WHERE l.created_at::date BETWEEN $1::date AND $2::date`),
+      // Entered interview stage in period (for daily consult rate)
+      q(`SELECT COUNT(DISTINCT lead_id) n FROM status_log WHERE status = ANY($3) AND logged_at::date BETWEEN $1::date AND $2::date`, [...P, SUHBAT_STATUSES]),
+      // Conversion: leads created in period that reached interview
+      q(`SELECT COUNT(*) total,
+           COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id=l.id AND sl.status = ANY($3))) reached
+         FROM leads l WHERE l.created_at::date BETWEEN $1::date AND $2::date`, [...P, SUHBAT_STATUSES]),
+      // Conversion: entered interview → entered contract (period entries)
+      q(`SELECT
+           (SELECT COUNT(DISTINCT lead_id) FROM status_log WHERE status = ANY($3) AND logged_at::date BETWEEN $1::date AND $2::date) suhbat,
+           (SELECT COUNT(DISTINCT lead_id) FROM status_log WHERE status = ANY($4) AND logged_at::date BETWEEN $1::date AND $2::date) shartnoma`,
+        [...P, SUHBAT_STATUSES, SHARTNOMA_STATUSES]),
+      // XBA payments in period
+      q(`SELECT COUNT(*) n FROM leads WHERE xba_date BETWEEN $1::date AND $2::date`),
+      // Cancelled contracts rate
+      q(`SELECT
+           (SELECT COUNT(DISTINCT lead_id) FROM status_log WHERE status='Bekor qildi' AND logged_at::date BETWEEN $1::date AND $2::date) cancelled,
+           (SELECT COUNT(DISTINCT lead_id) FROM status_log WHERE status='Shartnoma qildi' AND logged_at::date BETWEEN $1::date AND $2::date) contracts`),
+      // Bonus: visa approvals per docs owner (100k each)
+      q(`SELECT l.owner_docs id, COUNT(DISTINCT sl.lead_id) n FROM status_log sl JOIN leads l ON l.id=sl.lead_id
+         WHERE sl.status='Viza Oldi' AND sl.logged_at::date BETWEEN $1::date AND $2::date AND l.owner_docs IS NOT NULL GROUP BY l.owner_docs`),
+      // Bonus: XBA (50k) + 1-qism (100k) per sales owner
+      q(`SELECT owner_sales id,
+           COUNT(*) FILTER (WHERE xba_date BETWEEN $1::date AND $2::date) xba,
+           COUNT(*) FILTER (WHERE q1_date BETWEEN $1::date AND $2::date) q1
+         FROM leads WHERE owner_sales IS NOT NULL AND (xba_date BETWEEN $1::date AND $2::date OR q1_date BETWEEN $1::date AND $2::date)
+         GROUP BY owner_sales`),
+      // Bonus: call-center — contracts+XBA from leads they own as consultant
+      q(`SELECT l.owner_consult id, COUNT(*) n FROM leads l
+         WHERE l.owner_consult IS NOT NULL AND l.xba_date BETWEEN $1::date AND $2::date GROUP BY l.owner_consult`),
+    ]);
+    const days = Math.max(1, Math.round((new Date(to) - new Date(from)) / 864e5) + 1);
+    res.json({
+      from, to, days,
+      docsActive: Number(docsActive[0].n),
+      docsOverdue: Number(docsOverdue[0].n),
+      avgDocsDays: avgDocs[0].d != null ? Number(avgDocs[0].d) : null,
+      avgDocsN: Number(avgDocs[0].n),
+      visaOk: Number(visa[0].ok), visaBad: Number(visa[0].bad),
+      respAvgMin: resp[0].m != null ? Number(resp[0].m) : null,
+      respFast: Number(resp[0].fast), respN: Number(resp[0].n),
+      consultEntered: Number(consult[0].n),
+      leadsCreated: Number(convLS[0].total), leadsReachedSuhbat: Number(convLS[0].reached),
+      suhbatEntered: Number(convSS[0].suhbat), shartnomaEntered: Number(convSS[0].shartnoma),
+      xbaCount: Number(xbaCnt[0].n),
+      cancelled: Number(cancel[0].cancelled), contracts: Number(cancel[0].contracts),
+      bonusDocs: bonusDocs.map(r => ({ id: r.id, n: Number(r.n) })),
+      bonusSales: bonusSales.map(r => ({ id: r.id, xba: Number(r.xba), q1: Number(r.q1) })),
+      bonusCall: bonusCall.map(r => ({ id: r.id, n: Number(r.n) })),
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── EMPLOYEE STATS ──────────────────────────────────────────────────────────
 app.get("/api/stats/employees", auth, async (req, res) => {
   try {
