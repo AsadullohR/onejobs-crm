@@ -57,6 +57,7 @@ export const leadsAPI = {
   },
   get: (id) => req("GET", `/api/leads/${id}`),
   getNew: (since) => req("GET", `/api/leads/new?since=${encodeURIComponent(since)}`),
+  statusLog: (id) => req("GET", `/api/leads/${id}/status-log`),
   save: (lead) => req("POST", "/api/leads", lead),
   updateProfileFields: (id, patch) => req("PUT", `/api/leads/${id}/profile-fields`, patch),
   delete: (id) => req("DELETE", `/api/leads/${id}`),

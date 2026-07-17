@@ -480,6 +480,26 @@ app.delete("/api/leads/:id", auth, adminOnly, async (req, res) => {
   }
 });
 
+// Status change history for one lead (timeline in the drawer)
+app.get("/api/leads/:id/status-log", auth, async (req, res) => {
+  try {
+    if (req.user.role === "employer") return res.status(403).json({ error: "Forbidden" });
+    if (req.user.role === "partner") {
+      const { rows: pl } = await pool.query(
+        `SELECT 1 FROM leads WHERE id=$1 AND (source ILIKE $2 OR owner_sales=$3 OR owner_consult=$3 OR owner_docs=$3)`,
+        [req.params.id, `%${req.user.name}%`, req.user.id]);
+      if (!pl[0]) return res.status(403).json({ error: "Forbidden" });
+    }
+    const { rows } = await pool.query(
+      `SELECT sl.status, sl.logged_at, sl.owner_id, u.name AS owner_name
+       FROM status_log sl LEFT JOIN users u ON u.id = sl.owner_id
+       WHERE sl.lead_id = $1 ORDER BY sl.logged_at DESC`,
+      [req.params.id],
+    );
+    res.json(rows.map(r => ({ status: r.status, at: r.logged_at, by: r.owner_name || null })));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── DUPLICATE CHECK ──────────────────────────────────────────────────────────
 app.post("/api/leads/check-duplicate", auth, async (req, res) => {
   try {

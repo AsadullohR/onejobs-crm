@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useT } from "./theme.js";
 import { STAGES, DONE, LOST } from "./constants.js";
 import { uid, fmtM, fmtMs, fmtD, isOD, inp, lab, I, Pill, Av, Modal, SearchSelect, gS } from "./helpers.jsx";
-import { candidatesAPI, leadDocsAPI } from "./api.js";
+import { candidatesAPI, leadDocsAPI, leadsAPI } from "./api.js";
 
 // ─── LEAD DRAWER ──────────────────────────────────────────────────────────────
 function Drawer({lead, user, team, leads, tasks, onSave, onClose, onAddTask, config, roles, addNotif}) {
@@ -100,6 +100,12 @@ const [form,setForm]=useState({
     na:      { label:"— N/A",      next:"pending" },
   };
   const [leadDocs, setLeadDocs] = useState({});
+  // Status change timeline from status_log
+  const [statusHistory, setStatusHistory] = useState([]);
+  useEffect(() => {
+    if (!lead.id || String(lead.id).startsWith("tmp-")) return;
+    leadsAPI.statusLog(lead.id).then(r => setStatusHistory(Array.isArray(r) ? r : [])).catch(() => {});
+  }, [lead.id]);
   useEffect(() => {
     if (!lead.id) return;
     leadDocsAPI.getByLead(lead.id)
@@ -130,6 +136,7 @@ const [form,setForm]=useState({
     {k:"vacancies",l:`Vakansiyalar(${vacCands.length})`},
     {k:"tasks",l:`Vazifalar(${leadTasks.length})`},
     {k:"notes",l:`Izohlar(${(form.history||[]).length})`},
+    {k:"history",l:`📜 Tarix(${statusHistory.length})`},
   ];
   const inpS=inp(T); const labS=lab(T);
 
@@ -166,7 +173,7 @@ const [form,setForm]=useState({
       </div>
       {/* Tabs */}
       <div style={{display:"flex",borderBottom:`1px solid ${T.border}`,background:T.card,overflowX:"auto",flexShrink:0}}>
-        {TABS.filter(t=>!isPartner||["docs","cv","info"].includes(t.k)).map(({k,l})=>(
+        {TABS.filter(t=>!isPartner||["docs","cv","info","history"].includes(t.k)).map(({k,l})=>(
           <button key={k} onClick={()=>setTab(k)} style={{padding:"7px 10px",border:"none",borderBottom:tab===k?`2px solid ${T.accent}`:"2px solid transparent",background:"none",cursor:"pointer",fontSize:10,fontWeight:tab===k?700:400,color:tab===k?T.text:T.muted,whiteSpace:"nowrap"}}>{l}</button>
         ))}
       </div>
@@ -526,6 +533,37 @@ const [form,setForm]=useState({
                 <div style={{fontSize:9,color:T.muted,marginTop:2}}>{u?.name} · {fmtD(item.at)}</div></div>
             </div>
           );})}
+        </div>}
+
+        {/* STATUS HISTORY TIMELINE */}
+        {tab==="history"&&<div>
+          <div style={{fontSize:11,color:T.muted,marginBottom:12}}>Har bir status o'zgarishi sana va mas'ul bilan (avtomatik yoziladi)</div>
+          {statusHistory.length===0&&<div style={{textAlign:"center",color:T.muted,fontSize:12,padding:30}}>Hali status o'zgarishlari yozilmagan</div>}
+          {statusHistory.map((h,i)=>{
+            const stC=STAGES.find(s=>s.key===h.status)?.c||T.muted;
+            const dt=String(h.at);
+            const prev=statusHistory[i+1];
+            const daysDiff=prev?Math.round((new Date(h.at)-new Date(prev.at))/864e5):null;
+            return(
+              <div key={i} style={{display:"flex",gap:10,position:"relative"}}>
+                {/* timeline rail */}
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",width:14,flexShrink:0}}>
+                  <div style={{width:11,height:11,borderRadius:"50%",background:stC,border:`2px solid ${T.card}`,boxShadow:`0 0 0 2px ${stC}55`,marginTop:4,flexShrink:0}}/>
+                  {i<statusHistory.length-1&&<div style={{width:2,flex:1,background:T.border,minHeight:14}}/>}
+                </div>
+                <div style={{paddingBottom:14,flex:1,minWidth:0}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <span style={{fontSize:11,fontWeight:800,color:stC,background:`${stC}15`,border:`1px solid ${stC}44`,borderRadius:8,padding:"2px 10px"}}>{h.status}</span>
+                    <span style={{fontSize:10,color:T.muted,whiteSpace:"nowrap"}}>{dt.slice(0,10)} {dt.slice(11,16)}</span>
+                  </div>
+                  <div style={{fontSize:9,color:T.muted,marginTop:3}}>
+                    {h.by&&<span>👤 {h.by}</span>}
+                    {daysDiff!=null&&daysDiff>0&&<span style={{marginLeft:8,color:daysDiff>14?T.red:T.muted}}>⏱ oldingi statusdan {daysDiff} kun</span>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>}
       </div>
       {/* Footer */}
