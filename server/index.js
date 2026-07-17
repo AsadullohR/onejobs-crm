@@ -1122,15 +1122,19 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
       // Bonus: visa approvals per docs owner (100k each)
       q(`SELECT l.owner_docs id, COUNT(DISTINCT sl.lead_id) n FROM status_log sl JOIN leads l ON l.id=sl.lead_id
          WHERE sl.status='Viza Oldi' AND sl.logged_at::date BETWEEN $1::date AND $2::date AND l.owner_docs IS NOT NULL GROUP BY l.owner_docs`),
-      // Bonus: XBA (50k) + 1-qism (100k) per sales owner
-      q(`SELECT owner_sales id,
-           COUNT(*) FILTER (WHERE xba_date BETWEEN $1::date AND $2::date) xba,
-           COUNT(*) FILTER (WHERE q1_date BETWEEN $1::date AND $2::date) q1
-         FROM leads WHERE owner_sales IS NOT NULL AND (xba_date BETWEEN $1::date AND $2::date OR q1_date BETWEEN $1::date AND $2::date)
-         GROUP BY owner_sales`),
-      // Bonus: call-center — contracts+XBA from leads they own as consultant
-      q(`SELECT l.owner_consult id, COUNT(*) n FROM leads l
-         WHERE l.owner_consult IS NOT NULL AND l.xba_date BETWEEN $1::date AND $2::date GROUP BY l.owner_consult`),
+      // Bonus (Manager / Sales-Ops formula): XBA (50k) + 1-qism (100k) —
+      // only users whose ROLE is manager, matched as the lead's sales owner
+      q(`SELECT l.owner_sales id,
+           COUNT(*) FILTER (WHERE l.xba_date BETWEEN $1::date AND $2::date) xba,
+           COUNT(*) FILTER (WHERE l.q1_date BETWEEN $1::date AND $2::date) q1
+         FROM leads l JOIN users u ON u.id = l.owner_sales AND u.role = 'manager'
+         WHERE (l.xba_date BETWEEN $1::date AND $2::date OR l.q1_date BETWEEN $1::date AND $2::date)
+         GROUP BY l.owner_sales`),
+      // Bonus (Call Center formula): contract + XBA paid × ~100k — users
+      // whose ROLE is sales (Sotuv/Call), matched as the lead's sales owner
+      q(`SELECT l.owner_sales id, COUNT(*) n FROM leads l
+         JOIN users u ON u.id = l.owner_sales AND u.role = 'sales'
+         WHERE l.xba_date BETWEEN $1::date AND $2::date GROUP BY l.owner_sales`),
     ]);
     const days = Math.max(1, Math.round((new Date(to) - new Date(from)) / 864e5) + 1);
     res.json({

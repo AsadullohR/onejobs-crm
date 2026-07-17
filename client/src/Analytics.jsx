@@ -750,7 +750,7 @@ function KpiTab({ team, T, periodStart }) {
               </div>
             ))}
 
-            <div style={{ fontSize: 10, fontWeight: 800, color: T.text, margin: "14px 0 6px" }}>💼 Sales — XBA × 50 000 + 1-qism × 100 000</div>
+            <div style={{ fontSize: 10, fontWeight: 800, color: T.text, margin: "14px 0 6px" }}>💼 Menejer (Sales/Ops) — XBA × 50 000 + 1-qism × 100 000</div>
             {d.bonusSales.length === 0 && <div style={{ fontSize: 10, color: T.muted, marginBottom: 10 }}>Bu davrda to'lovlar yo'q</div>}
             {d.bonusSales.map(b => (
               <div key={"s" + b.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
@@ -759,7 +759,7 @@ function KpiTab({ team, T, periodStart }) {
               </div>
             ))}
 
-            <div style={{ fontSize: 10, fontWeight: 800, color: T.text, margin: "14px 0 6px" }}>📞 Call Center — shartnoma+XBA × 100 000</div>
+            <div style={{ fontSize: 10, fontWeight: 800, color: T.text, margin: "14px 0 6px" }}>📞 Sotuv/Call — shartnoma+XBA × 100 000</div>
             {d.bonusCall.length === 0 && <div style={{ fontSize: 10, color: T.muted }}>Bu davrda yo'q</div>}
             {d.bonusCall.map(b => (
               <div key={"c" + b.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
