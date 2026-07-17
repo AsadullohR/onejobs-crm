@@ -1119,11 +1119,12 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
            COUNT(DISTINCT lead_id) FILTER (WHERE status='Viza Oldi') ok,
            COUNT(DISTINCT lead_id) FILTER (WHERE status='Viza Rad Etildi') bad
          FROM status_log WHERE logged_at::date BETWEEN $1::date AND $2::date`),
-      // Response time: lead created → first logged status change (minutes)
+      // Response time: lead created → first logged status change (minutes).
+      // Backdated/imported leads (log before created_at) are excluded.
       q(`SELECT AVG(EXTRACT(EPOCH FROM (f.t - l.created_at)) / 60)::numeric(10,0) m,
            COUNT(*) FILTER (WHERE f.t - l.created_at <= INTERVAL '10 minutes') fast, COUNT(*) n
          FROM leads l JOIN (SELECT lead_id, MIN(logged_at) t FROM status_log GROUP BY lead_id) f ON f.lead_id=l.id
-         WHERE l.created_at::date BETWEEN $1::date AND $2::date`),
+         WHERE l.created_at::date BETWEEN $1::date AND $2::date AND f.t >= l.created_at`),
       // Entered interview stage in period (for daily consult rate)
       q(`SELECT COUNT(DISTINCT lead_id) n FROM status_log WHERE status = ANY($3) AND logged_at::date BETWEEN $1::date AND $2::date`, [...P, SUHBAT_STATUSES]),
       // Conversion: leads created in period that reached interview
@@ -1137,9 +1138,12 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
         [...P, SUHBAT_STATUSES, SHARTNOMA_STATUSES]),
       // XBA payments in period
       q(`SELECT COUNT(*) n FROM leads WHERE xba_date BETWEEN $1::date AND $2::date`),
-      // Cancelled contracts rate
+      // Cancelled contracts rate — only cancellations of leads that actually
+      // had a contract (Bekor qildi after Shartnoma qildi)
       q(`SELECT
-           (SELECT COUNT(DISTINCT lead_id) FROM status_log WHERE status='Bekor qildi' AND logged_at::date BETWEEN $1::date AND $2::date) cancelled,
+           (SELECT COUNT(DISTINCT c.lead_id) FROM status_log c
+             WHERE c.status='Bekor qildi' AND c.logged_at::date BETWEEN $1::date AND $2::date
+               AND EXISTS (SELECT 1 FROM status_log s WHERE s.lead_id=c.lead_id AND s.status='Shartnoma qildi' AND s.logged_at <= c.logged_at)) cancelled,
            (SELECT COUNT(DISTINCT lead_id) FROM status_log WHERE status='Shartnoma qildi' AND logged_at::date BETWEEN $1::date AND $2::date) contracts`),
       // Bonus: visa approvals per docs owner (100k each)
       q(`SELECT l.owner_docs id, COUNT(DISTINCT sl.lead_id) n FROM status_log sl JOIN leads l ON l.id=sl.lead_id
