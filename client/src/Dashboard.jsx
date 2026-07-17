@@ -261,11 +261,14 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
   const FC = [
     "#6366f1",
     "#3b82f6",
+    "#0891b2",
     "#f59e0b",
     "#ec4899",
     "#f97316",
-    "#0891b2",
+    "#a855f7",
     "#7c3aed",
+    "#0ea5e9",
+    "#14b8a6",
     "#22c55e",
     "#166534",
   ];
