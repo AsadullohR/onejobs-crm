@@ -613,6 +613,7 @@ const deleteLead = useCallback(async (id) => {
           manager: ["dashboard","pipeline","leads","tasks","finance"],
           sales:   ["dashboard","pipeline","leads","tasks"],
           docs:    ["dashboard","pipeline","leads","tasks"],
+          hujjatchi:["dashboard","pipeline","leads","tasks"],
           partner: ["partner"],
           employer:["employer"],
           finance_manager:["dashboard","finance","vacancies"],

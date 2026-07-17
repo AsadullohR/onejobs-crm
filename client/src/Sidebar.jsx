@@ -27,6 +27,7 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     manager: ["dashboard","pipeline","leads","tasks","finance","team","settings","visa","vacancies","turnir"],
     sales:   ["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],
     docs:    ["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],
+    hujjatchi:["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],
     partner: ["partner"],
     employer:["employer"],
     finance_manager:["dashboard","finance","vacancies"],

@@ -144,7 +144,7 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
 
   // Team stats
   const teamStats = team
-    .filter((t) => ["sales", "manager", "docs"].includes(t.role))
+    .filter((t) => ["sales", "manager", "docs", "hujjatchi"].includes(t.role))
     .map((t) => {
       const myLeads = filteredLeads.filter(
         (l) =>
@@ -1404,9 +1404,7 @@ function Dashboard({ leads, tasks, user, team, txns, roles }) {
   const tabs = [
     { k: "kpi",    l: "📈 Biznes KPI" },
     { k: "calls",  l: "📞 Qo'ng'iroqlar" },
-    { k: "team",   l: "👔 Xodimlar" },
-    { k: "time",   l: "⏱️ Vaqt Tahlili" },
-    ...(perm.canSalary ? [{ k: "salary", l: "💰 Maosh Tahlili" }] : []),
+    { k: "team",   l: "📊 Tahlil Markazi" },
   ];
 
   return (
@@ -1425,8 +1423,6 @@ function Dashboard({ leads, tasks, user, team, txns, roles }) {
         {tab === "kpi"    && <DashboardKPI leads={leads} tasks={tasks} user={user} team={team} txns={txns} roles={roles} />}
         {tab === "calls"  && <CallsDashboard leads={leads} team={team} user={user} roles={roles} />}
         {tab === "team"   && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user} initialTab="productivity" />}
-        {tab === "time"   && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user} initialTab="time" />}
-        {tab === "salary" && <Analytics leads={leads} tasks={tasks} team={team} txns={txns} roles={roles} user={user} initialTab="salary" />}
       </div>
     </div>
   );

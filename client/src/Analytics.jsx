@@ -714,14 +714,14 @@ function KpiTab({ team, T, periodStart }) {
             <Row kpi="Hujjat qaytarilish soni" target="≤ 2 ta/oy" manual />
           </Card>
 
-          <Card title="📞 CALL CENTER">
+          <Card title="📞 SOTUV/CALL">
             <Row kpi="Arizaga javob vaqti (10 daqiqada)" target="100%" actual={respPct != null ? `${respPct}% (o'rt. ${d.respAvgMin} daq)` : null} ok={respPct != null ? respPct >= 100 : null} />
             <Row kpi="Konsultatsiyaga yozilganlar" target="≥ 10 ta/kun" actual={`${consultDaily} ta/kun (${d.consultEntered} ta)`} ok={Number(consultDaily) >= 10} />
             <Row kpi="Konversiya (lead → suhbat)" target="≥ 40%" actual={convLS != null ? `${convLS}% (${d.leadsReachedSuhbat}/${d.leadsCreated})` : null} ok={convLS != null ? convLS >= 40 : null} />
             <Row kpi="Yashirin mijoz bahosi" target="≥ 11/14 ball" manual />
           </Card>
 
-          <Card title="💼 SALES / OPERATION">
+          <Card title="💼 MENEJER (Sales/Ops)">
             <Row kpi="Suhbat → Shartnoma+XBA konversiyasi" target="≥ 60%" actual={convSS != null ? `${convSS}% (${d.shartnomaEntered}/${d.suhbatEntered})` : null} ok={convSS != null ? convSS >= 60 : null} />
             <Row kpi="Oylik XBA to'lovlar soni" target="60+ ta" actual={`${d.xbaCount} ta`} ok={d.xbaCount >= 60} />
             <Row kpi="Ishga qabul → hujjat jo'natish" target="≤ 15 kun" actual={d.avgDocsDays != null ? `${d.avgDocsDays} kun` : null} ok={d.avgDocsDays != null ? d.avgDocsDays <= 15 : null} />

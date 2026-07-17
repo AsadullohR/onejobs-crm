@@ -47,6 +47,7 @@ const INIT_ROLES = {
   manager: {label:"Menejer",    color:"#22c55e",canOwner:true, canFin:true, canSalary:false,canEdit:true, canCfg:true, canTeam:false, seeAll:true, canTakeUnassigned:true, canChangeOwner:true},
   sales:   {label:"Sotuv/Call", color:"#f97316",canOwner:true, canFin:false,canSalary:false,canEdit:false,canCfg:false,canTeam:false, seeAll:true, canTakeUnassigned:true, canChangeOwner:true, canEditVacancy:false},
   docs:    {label:"Konsultant", color:"#06b6d4",canOwner:true, canFin:false,canSalary:false,canEdit:false,canCfg:false,canTeam:false, seeAll:true, canTakeUnassigned:true, canChangeOwner:false,canEditVacancy:false},
+  hujjatchi:{label:"Hujjatchi", color:"#8b5cf6",canOwner:true, canFin:false,canSalary:false,canEdit:false,canCfg:false,canTeam:false, seeAll:true, canTakeUnassigned:true, canChangeOwner:false,canEditVacancy:false},
   partner: {label:"Hamkor",     color:"#6b7280",canOwner:false,canFin:false,canSalary:false,canEdit:false,canCfg:false,canTeam:false, seeAll:false,canTakeUnassigned:false,canChangeOwner:false,canEditVacancy:false},
   employer:{label:"Ish Beruvchi",color:"#0891b2",canOwner:false,canFin:false,canSalary:false,canEdit:false,canCfg:false,canTeam:false, seeAll:false,canTakeUnassigned:false,canChangeOwner:false,canEditVacancy:true},
   finance_manager:{label:"Moliya Menejer",color:"#10b981",canOwner:false,canFin:true,canSalary:true,canEdit:false,canCfg:false,canTeam:false,seeAll:true,canTakeUnassigned:false,canChangeOwner:false},
