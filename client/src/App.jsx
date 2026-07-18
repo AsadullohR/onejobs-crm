@@ -145,6 +145,7 @@ const mapLead = useCallback(l => ({
   shartnomaSana:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.contract_date),
   officeSuhbat:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.interview_date),
   suhbatBelgilangan:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.interview_scheduled),
+  statusSince:l.status_since||l.updated_at||l.created_at||null,
   dest:l.dest||"",
   docsStage:l.docs_stage||null, archived:l.archived||false,
   reklamaName:l.reklama_name||"",

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useT } from "./theme.js";
-import { DONE } from "./constants.js";
+import { DONE, LOST } from "./constants.js";
 import { isOD, inp, I, Pill, Av, fmtD, dateRange } from "./helpers.jsx";
 import { leadsAPI } from "./api.js";
 
@@ -62,6 +62,34 @@ function Pipeline({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  // Multi-select: Ctrl/Cmd+click toggles; dragging a selected card moves all.
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  useEffect(() => {
+    const h = (e) => { if (e.key === "Escape") setSelectedIds(new Set()); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+
+  // Time-in-status color coding: fresh = green, stale = red, smooth gradient.
+  // [hoursFullyGreenUntil, hoursFullyRedAt] per status; done/lost not colored.
+  const STALE_RULES = {
+    "Yangi": [10 / 60, 48], "Qilindi": [1, 72],
+    "Bog'landi": [1, 72], "Boglanildi": [1, 72],
+    "Onlayn Suhbat Uchun": [24, 120], "Onlayn Suhbat": [24, 120], "Suhbat": [24, 120],
+    "Shartnoma qildi": [24, 168], "XBA To'lov qildi": [24, 336],
+  };
+  const STALE_DEFAULT = [48, 336];
+  const staleColor = (lead) => {
+    if (DONE.includes(lead.status) || LOST.includes(lead.status)) return null;
+    if (!lead.statusSince) return null;
+    const h = (Date.now() - new Date(lead.statusSince).getTime()) / 36e5;
+    if (!(h >= 0)) return null;
+    const [g, r] = STALE_RULES[lead.status] || STALE_DEFAULT;
+    const ratio = Math.max(0, Math.min(1, (h - g) / (r - g)));
+    const hue = 120 * (1 - ratio);
+    return { bar: `hsl(${hue},72%,42%)`, bg: `hsla(${hue},72%,50%,0.08)`, hours: h };
+  };
 
   const [dragStg, setDragStg] = useState(null);
   const [dragOverStg, setDragOverStg] = useState(null);
@@ -237,19 +265,33 @@ function Pipeline({
     e.preventDefault();
     e.stopPropagation();
     if (!dragLeadId) return;
-    const lead = leads.find(l => l.id === dragLeadId);
-    if (!lead || lead.status === stageKey) { setDragLeadId(null); setDragLeadOver(null); return; }
-    const updated = { ...lead, status: stageKey };
-    setLeads(p => p.map(l => l.id === dragLeadId ? updated : l));
+    // Dragging a selected card moves the whole selection; otherwise just it.
+    const ids = selectedIds.has(dragLeadId) && selectedIds.size > 1 ? [...selectedIds] : [dragLeadId];
+    const moving = ids.map(id => leads.find(l => l.id === id)).filter(l => l && l.status !== stageKey);
     setDragLeadId(null);
     setDragLeadOver(null);
-    try {
-      await leadsAPI.save({ id: lead.id, status: stageKey });
-    } catch(err) { console.warn("Lead status update failed:", err.message); }
+    if (!moving.length) return;
+    const prevStatus = Object.fromEntries(moving.map(m => [m.id, m.status]));
+    setLeads(p => p.map(l => prevStatus[l.id] !== undefined ? { ...l, status: stageKey, statusSince: new Date().toISOString() } : l));
+    setSelectedIds(new Set());
+    // Status-only endpoint: never touches the rest of the lead's fields
+    const results = await Promise.allSettled(moving.map(m => leadsAPI.setStatus(m.id, stageKey)));
+    const failed = moving.filter((m, i) => results[i].status === "rejected");
+    if (failed.length) {
+      setLeads(p => p.map(l => failed.some(f => f.id === l.id) ? { ...l, status: prevStatus[l.id] } : l));
+      const reason = results.find(r => r.status === "rejected")?.reason?.message || "xatolik";
+      alert(`${failed.length} ta lead ko'chirilmadi: ${reason}`);
+    }
   };
 
   return (
     <div>
+      {selectedIds.size > 0 && (
+        <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 600, background: T.accent, color: "#fff", borderRadius: 22, padding: "8px 18px", fontSize: 12, fontWeight: 700, boxShadow: "0 8px 24px rgba(0,0,0,0.35)", display: "flex", gap: 10, alignItems: "center" }}>
+          ✅ {selectedIds.size} ta tanlandi — bittasini sudrab, hammasini ko'chiring
+          <button onClick={() => setSelectedIds(new Set())} style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "#fff", borderRadius: 10, padding: "2px 10px", cursor: "pointer", fontSize: 10, fontWeight: 700 }}>Esc · Bekor</button>
+        </div>
+      )}
       <div
         style={{
           display: "flex",
@@ -1135,23 +1177,31 @@ function Pipeline({
                   ]
                     .filter(Boolean)
                     .filter((v, i, a) => a.indexOf(v) === i);
+                  const sc = staleColor(lead);
+                  const isSel = selectedIds.has(lead.id);
                   return (
                     <div
                       key={lead.id}
                       draggable
                       onDragStart={(e) => onLeadDragStart(e, lead.id)}
                       onDragEnd={() => { setDragLeadId(null); setDragLeadOver(null); }}
-                      onClick={() => open(lead)}
+                      onClick={(e) => {
+                        if (e.ctrlKey || e.metaKey) {
+                          e.preventDefault();
+                          setSelectedIds(p => { const n = new Set(p); n.has(lead.id) ? n.delete(lead.id) : n.add(lead.id); return n; });
+                        } else open(lead);
+                      }}
+                      title={sc ? `Bu bosqichda: ${sc.hours < 48 ? Math.round(sc.hours) + " soat" : Math.round(sc.hours / 24) + " kun"}` : undefined}
                       style={{
-                        background: T.card,
+                        background: isSel ? `${T.accent}15` : (sc ? sc.bg : T.card),
                         borderRadius: 7,
                         padding: "8px 9px",
                         marginBottom: 4,
                         cursor: dragLeadId ? "grabbing" : "pointer",
                         opacity: dragLeadId === lead.id ? 0.4 : 1,
-                        border: `1px solid ${T.border}`,
-                        borderLeft: `3px solid ${stage.c}66`,
-                        transition: "box-shadow 0.15s, opacity 0.15s",
+                        border: isSel ? `1.5px solid ${T.accent}` : `1px solid ${T.border}`,
+                        borderLeft: `3px solid ${isSel ? T.accent : (sc ? sc.bar : stage.c + "66")}`,
+                        transition: "box-shadow 0.15s, opacity 0.15s, background 0.3s, border-color 0.3s",
                       }}
                       onMouseEnter={(e) =>
                         (e.currentTarget.style.boxShadow = T.shadow)
@@ -1201,6 +1251,17 @@ function Pipeline({
                           {I.phone} {lead.phone}
                         </div>
                       )}
+                      {/* Payment tags: lit when paid, dim otherwise */}
+                      <div style={{ display: "flex", gap: 2, marginBottom: 3 }}>
+                        {[["XBA", lead.xba, "#f97316"], ["1-q", lead.q1, "#ec4899"], ["2-q", lead.q2, "#8b5cf6"], ["3-q", lead.q3, "#3b82f6"]].map(([lb, on, c]) => (
+                          <span key={lb} style={{
+                            fontSize: 7, fontWeight: 800, borderRadius: 3, padding: "1px 4px", lineHeight: 1.5,
+                            background: on ? `${c}22` : "transparent",
+                            color: on ? c : T.border,
+                            border: `1px solid ${on ? c + "77" : T.border}`,
+                          }}>{on ? "✓" : ""}{lb}</span>
+                        ))}
+                      </div>
                       <div
                         style={{
                           display: "flex",

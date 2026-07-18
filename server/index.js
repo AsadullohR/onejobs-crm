@@ -259,6 +259,7 @@ app.get("/api/leads", auth, async (req, res) => {
         l.xba_date, l.q1_date, l.q2_date, l.q3_date,
         l.total_income, l.total_expense, l.net_balance, l.sof_foyda,
         l.last_contact, l.contract_date, l.interview_date, l.interview_scheduled, l.dest,
+        COALESCE((SELECT MAX(sl.logged_at) FROM status_log sl WHERE sl.lead_id = l.id AND sl.status = l.status), l.updated_at, l.created_at) AS status_since,
         l.quality, l.quality_note, l.created_at, l.updated_at,
         u_s.name as owner_sales_name, u_s.avatar as owner_sales_av, u_s.color as owner_sales_color,
         u_c.name as owner_consult_name, u_c.avatar as owner_consult_av, u_c.color as owner_consult_color,
@@ -339,6 +340,37 @@ app.put("/api/leads/:id/profile-fields", auth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Status-only update — used by pipeline drag & drop (single and multi-select).
+// The full upsert (POST /api/leads) overwrites every column, so a partial
+// {id,status} payload through it silently wipes the lead. This endpoint
+// touches ONLY the status, with the same gate/log/notify side-effects.
+app.put("/api/leads/:id/status", auth, async (req, res) => {
+  const { status } = req.body;
+  if (!status) return res.status(400).json({ error: "status required" });
+  if (["partner", "employer"].includes(req.user.role))
+    return res.status(403).json({ error: "Forbidden" });
+  try {
+    const { rows: oldR } = await pool.query(`SELECT status, owner_sales, name FROM leads WHERE id=$1`, [req.params.id]);
+    if (!oldR[0]) return res.status(404).json({ error: "Topilmadi" });
+    const oldStatus = oldR[0].status;
+    if (status === "Qilindi" && oldStatus && !["Yangi", "Qilindi"].includes(oldStatus))
+      return res.status(400).json({ error: `"Qilindi" holatiga qaytarib bo'lmaydi — lead allaqachon "${oldStatus}" bosqichida` });
+    if (status === oldStatus) return res.json({ ok: true, status });
+    const { rows } = await pool.query(
+      `UPDATE leads SET status=$2, updated_at=NOW() WHERE id=$1 RETURNING id, status, owner_sales, name`,
+      [req.params.id, status],
+    );
+    const owner = rows[0].owner_sales;
+    pool.query(`INSERT INTO status_log (lead_id, owner_id, status, logged_at) VALUES ($1,$2,$3,NOW())`,
+      [req.params.id, owner || req.user.id, status]).catch(() => {});
+    if (status === "XBA To'lov qildi" && owner) {
+      pool.query(`INSERT INTO notifications (user_id, message, type, created_at) VALUES ($1,$2,'xba_payment',NOW())`,
+        [owner, `💰 XBA To'lov! ${rows[0].name} to'lov qildi! 🎉`]).catch(() => {});
+    }
+    res.json({ ok: true, status });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post("/api/leads", auth, async (req, res) => {
@@ -1873,9 +1905,11 @@ const EMPLOYER_ALLOWED_STATUSES = ["added", "interview", "approved_client", "rej
 
 app.put("/api/candidates/:id", auth, async (req, res) => {
   let { name, phone, status, note } = req.body;
+  let vacancyId = req.body.vacancy_id || req.body.vacancyId || null;
   try {
     if (req.user.role === "partner") return res.status(403).json({ error: "Forbidden" });
     if (req.user.role === "employer") {
+      vacancyId = null; // employers can't move candidates between vacancies
       const { rows: own } = await pool.query(
         `SELECT c.vacancy_id FROM candidates c WHERE c.id=$1`, [req.params.id]);
       if (!own[0] || !(await canAccessVacancy(req.user, own[0].vacancy_id)))
@@ -1890,9 +1924,10 @@ app.put("/api/candidates/:id", auth, async (req, res) => {
       `UPDATE candidates SET
         name=COALESCE($1,name), phone=COALESCE($2,phone),
         status=COALESCE($3,status), note=COALESCE($4,note),
+        vacancy_id=COALESCE($6,vacancy_id),
         updated_at=NOW()
        WHERE id=$5 RETURNING *`,
-      [name || null, phone || null, status || null, note || null, req.params.id],
+      [name || null, phone || null, status || null, note || null, req.params.id, vacancyId],
     );
     if (!rows[0]) return res.status(404).json({ error: "Not found" });
     const cand = rows[0];
@@ -2410,6 +2445,7 @@ app.listen(PORT, async () => {
       logged_at TIMESTAMPTZ DEFAULT NOW()
     )`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_status_log_owner_date ON status_log(owner_id, logged_at)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_status_log_lead_status ON status_log(lead_id, status)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read, created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_phone ON leads(phone)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_updated ON leads(updated_at DESC)`);

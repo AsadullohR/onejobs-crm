@@ -296,6 +296,7 @@ function StatusBadge({ status, T }) {
 // ─── VACANCY DETAIL MODAL ─────────────────────────────────────────────────────
 function VacancyDetail({
   v,
+  allVacancies = [],
   leads,
   team,
   user,
@@ -1117,7 +1118,26 @@ function VacancyDetail({
                             <td
                               style={{ padding: "10px 12px", color: T.muted }}
                             >
-                              {v.jobType || v.title || "–"}
+                              {canEdit ? (
+                                <select
+                                  value={v.id}
+                                  onChange={async (e) => {
+                                    const newVacId = e.target.value;
+                                    if (newVacId === v.id) return;
+                                    const target = allVacancies.find(x => String(x.id) === String(newVacId));
+                                    if (!confirm(`${c.leadName || c.name} → "${target?.title || newVacId}" vakansiyasiga ko'chirilsinmi?`)) { e.target.value = v.id; return; }
+                                    try {
+                                      await candidatesAPI.update(c.id, { vacancy_id: newVacId });
+                                      setCandidates(p => p.filter(x => x.id !== c.id));
+                                    } catch (err) { alert(err.message); }
+                                  }}
+                                  style={{ fontSize: 10, color: T.text, background: "transparent", border: `1px solid ${T.border}`, borderRadius: 5, padding: "2px 4px", cursor: "pointer", maxWidth: 140 }}
+                                >
+                                  {allVacancies.map(x => (
+                                    <option key={x.id} value={x.id} style={{ color: T.text }}>{x.title}</option>
+                                  ))}
+                                </select>
+                              ) : (v.jobType || v.title || "–")}
                             </td>
                             <td
                               style={{ padding: "10px 12px", color: T.muted }}
@@ -2061,6 +2081,7 @@ function Vacancies({ leads, user, team, roles, setLeads }) {
       {selected && (
         <VacancyDetail
           v={selected}
+          allVacancies={vacancies}
           leads={leads}
           team={team}
           user={user}

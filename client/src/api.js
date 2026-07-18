@@ -60,6 +60,7 @@ export const leadsAPI = {
   statusLog: (id) => req("GET", `/api/leads/${id}/status-log`),
   save: (lead) => req("POST", "/api/leads", lead),
   updateProfileFields: (id, patch) => req("PUT", `/api/leads/${id}/profile-fields`, patch),
+  setStatus: (id, status) => req("PUT", `/api/leads/${id}/status`, { status }),
   delete: (id) => req("DELETE", `/api/leads/${id}`),
   bulkImport: (leads) => req("POST", "/api/leads/bulk", { leads }),
 };
