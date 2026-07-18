@@ -772,6 +772,29 @@ function KpiTab({ team, T, periodStart, canEditCfg }) {
             <Row kpi="Hujjat qaytarilish soni" target="≤ 2 ta/oy" manual />
           </Card>
 
+          {/* Per-employee funnel: called → office → XBA */}
+          <Card title="📈 XODIMLAR VORONKASI (qo'ng'iroq → ofis → XBA)">
+            {(d.empFunnel || []).length === 0 && (
+              <tr><td colSpan={4} style={{ padding: "10px 12px", fontSize: 10, color: T.muted }}>Bu davrda ma'lumot yo'q</td></tr>
+            )}
+            {(d.empFunnel || []).map(f => {
+              const pOff = f.called > 0 ? Math.round((f.office / f.called) * 100) : 0;
+              const pXba = f.office > 0 ? Math.round((f.xba / f.office) * 100) : (f.xba > 0 ? 100 : 0);
+              return (
+                <tr key={"ef" + f.id}>
+                  <td style={{ padding: "8px 12px", fontSize: 11, fontWeight: 700, color: T.text, borderBottom: `1px solid ${T.border}` }}>{nameOf(f.id)}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 11, color: T.text, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>📞 {f.called}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 11, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>
+                    🏢 <b>{f.office}</b> <span style={{ fontSize: 9, fontWeight: 700, color: pOff >= 30 ? T.green : pOff >= 15 ? T.yellow : T.red }}>({pOff}%)</span>
+                  </td>
+                  <td style={{ padding: "8px 12px", fontSize: 11, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>
+                    💰 <b>{f.xba}</b> <span style={{ fontSize: 9, fontWeight: 700, color: pXba >= 40 ? T.green : pXba >= 20 ? T.yellow : T.red }}>({pXba}%)</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </Card>
+
           {/* Suhbat → Ofis conversion per agent */}
           <Card title="🏢 SUHBAT → OFIS (agent bo'yicha)">
             {(d.officeConv || []).length === 0 && (

@@ -1156,7 +1156,7 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
   try {
     const [
       docsActive, docsOverdue, avgDocs, visa, resp, consult, convLS, convSS,
-      xbaCnt, cancel, bonusDocs, bonusSales, bonusCall, officeConv, noShow,
+      xbaCnt, cancel, bonusDocs, bonusSales, bonusCall, officeConv, empFunnel, noShow,
     ] = await Promise.all([
       // Currently in a document-processing status
       q(`SELECT COUNT(*) n FROM leads WHERE status = ANY($1)`, [DOCS_STATUSES]),
@@ -1222,6 +1222,23 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
          WHERE l.owner_sales IS NOT NULL AND l.interview_scheduled ~ '^\\d{4}-\\d{2}-\\d{2}'
            AND NULLIF(l.interview_scheduled,'')::date BETWEEN $1::date AND $2::date
          GROUP BY l.owner_sales ORDER BY booked DESC`, [...P, CAME_STATUSES]),
+      // Per-employee funnel: called → came to office → paid XBA (period)
+      q(`SELECT l.owner_sales id,
+           COUNT(DISTINCT l.id) FILTER (WHERE
+             EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id=l.id AND sl.status = ANY($3) AND sl.logged_at::date BETWEEN $1::date AND $2::date)
+             OR (l.last_contact ~ '^\\d{4}-\\d{2}-\\d{2}' AND NULLIF(l.last_contact,'')::date BETWEEN $1::date AND $2::date)) called,
+           COUNT(DISTINCT l.id) FILTER (WHERE
+             EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id=l.id AND sl.status = 'Suhbat' AND sl.logged_at::date BETWEEN $1::date AND $2::date)
+             OR (l.interview_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND NULLIF(l.interview_date,'')::date BETWEEN $1::date AND $2::date)) office,
+           COUNT(DISTINCT l.id) FILTER (WHERE l.xba_date BETWEEN $1::date AND $2::date) xba
+         FROM leads l JOIN users u ON u.id = l.owner_sales AND u.role IN ('sales','manager')
+         GROUP BY l.owner_sales
+         HAVING COUNT(DISTINCT l.id) FILTER (WHERE
+             EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id=l.id AND sl.status = ANY($3) AND sl.logged_at::date BETWEEN $1::date AND $2::date)
+             OR (l.last_contact ~ '^\\d{4}-\\d{2}-\\d{2}' AND NULLIF(l.last_contact,'')::date BETWEEN $1::date AND $2::date)) > 0
+             OR COUNT(DISTINCT l.id) FILTER (WHERE l.xba_date BETWEEN $1::date AND $2::date) > 0
+         ORDER BY called DESC`,
+        [...P, ["Bog'landi", "Boglanildi"]]),
       // No-show list: SCHEDULED date passed (last 30 days), never came
       q(`SELECT l.id, l.name, l.phone, NULLIF(l.interview_scheduled,'') idate, u.name owner
          FROM leads l LEFT JOIN users u ON u.id = l.owner_sales
@@ -1253,6 +1270,7 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
       mgrQ1Total: Number(bonusSales[0].q1_total),
       bonusCall: bonusCall.map(r => ({ id: r.id, n: Number(r.n) })),
       officeConv: officeConv.map(r => ({ id: r.id, booked: Number(r.booked), came: Number(r.came) })),
+      empFunnel: empFunnel.map(r => ({ id: r.id, called: Number(r.called), office: Number(r.office), xba: Number(r.xba) })),
       noShow: noShow.map(r => ({ id: r.id, name: r.name, phone: r.phone, date: r.idate, owner: r.owner })),
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
