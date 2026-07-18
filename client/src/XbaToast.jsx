@@ -71,14 +71,18 @@ function XbaToastItem({ toast, onDismiss, T }) {
   const [particles] = useState(() => makeParticles(24));
   const [visible, setVisible] = useState(true);
   const timerRef = useRef(null);
+  // Keep the latest onDismiss in a ref so the 6s timer runs exactly once —
+  // depending on the (re-created every render) callback restarted it forever.
+  const dismissRef = useRef(onDismiss);
+  dismissRef.current = onDismiss;
 
   useEffect(() => {
     timerRef.current = setTimeout(() => {
       setVisible(false);
-      setTimeout(() => onDismiss(toast.id), 400);
+      setTimeout(() => dismissRef.current(toast.id), 400);
     }, 6000);
     return () => clearTimeout(timerRef.current);
-  }, [toast.id, onDismiss]);
+  }, [toast.id]);
 
   if (!visible) return null;
 

@@ -81,7 +81,18 @@ export default function App() {
   const [showNotif,setShowNotif]=useState(false);
   const [showImport,setShowImport]=useState(false);
   const [xbaToasts,setXbaToasts]=useState([]);
-  const seenXbaIds = useRef(new Set());
+  // Persisted across sessions so a refresh/login never replays old celebrations
+  const seenXbaIds = useRef((() => {
+    try { return new Set(JSON.parse(localStorage.getItem("oj_seen_xba") || "[]")); }
+    catch { return new Set(); }
+  })());
+  const markXbaSeen = (id) => {
+    seenXbaIds.current.add(id);
+    try {
+      const arr = [...seenXbaIds.current].slice(-300); // cap growth
+      localStorage.setItem("oj_seen_xba", JSON.stringify(arr));
+    } catch {}
+  };
   const T=mkT(dark);
 
 const addNotif=useCallback((msg,type="info",recipients=null)=>{
@@ -397,7 +408,7 @@ const deleteLead = useCallback(async (id) => {
           setNotifs(notifsRes);
           // Show XBA toast for any new xba_payment notifications
           notifsRes.filter(n => n.type === 'xba_payment' && !n.read && !seenXbaIds.current.has(n.id)).forEach(n => {
-            seenXbaIds.current.add(n.id);
+            markXbaSeen(n.id);
             setXbaToasts(p => [...p, { id: n.id, message: n.message }]);
           });
         }

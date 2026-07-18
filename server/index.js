@@ -451,16 +451,12 @@ app.post("/api/leads", auth, async (req, res) => {
       ).catch(() => {});
     }
 
-    // XBA payment notification
+    // XBA payment notification — single insert even when the same save both
+    // sets the xba flag AND moves the status (previously fired twice).
     const newXba = saved.xba || l.xba || false;
-    if (newXba && !oldXba && newOwner) {
-      pool.query(
-        `INSERT INTO notifications (user_id, message, type, created_at) VALUES ($1,$2,'xba_payment',NOW())`,
-        [newOwner, `💰 XBA To'lov! ${saved.name} to'lov qildi! 🎉`]
-      ).catch(() => {});
-    }
-    // Also log when status moves to "XBA To'lov qildi"
-    if (newStatus === "XBA To'lov qildi" && oldStatus !== "XBA To'lov qildi" && newOwner) {
+    const xbaFlagTurnedOn = newXba && !oldXba;
+    const xbaStatusEntered = newStatus === "XBA To'lov qildi" && oldStatus !== "XBA To'lov qildi";
+    if ((xbaFlagTurnedOn || xbaStatusEntered) && newOwner) {
       pool.query(
         `INSERT INTO notifications (user_id, message, type, created_at) VALUES ($1,$2,'xba_payment',NOW())`,
         [newOwner, `💰 XBA To'lov! ${saved.name} to'lov qildi! 🎉`]
