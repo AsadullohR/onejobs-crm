@@ -75,17 +75,25 @@ function Pipeline({
   // KPI / Vaqt Tahlili section — no separate configuration to maintain.
   // Norm days per status; card is green up to 50% of the norm, hits the
   // orange midpoint AT the norm, and is fully red at 1.5x the norm.
-  const STATUS_NORM_DAYS = {
-    "Yangi": 1, "Qilindi": 1, "Bog'landi": 1, "Boglanildi": 1,
-    "Onlayn Suhbat Uchun": 5, "Onlayn Suhbat": 5, "Suhbat": 5,
-    "Shartnoma qildi": 3, "XBA To'lov qildi": 3,
-    "CV Topshirildi": 14, "Interview ga qo'yildi": 14, "Ishga qabul qilindi": 14, "1 - Qism To'landi": 14,
-    "Hujjatlar Tayyorlanmoqda": 14, "Hujjatlar Jonatilishga Tayyor": 14, "Hujjatlar Jonatildi": 14,
-    "Ish shartnomasi keldi": 14, "Ish shartnomasi imzolandi": 14,
-    "Taklifnoma keldi": 90, "Elchixonaga Hujjatlar Tayyor": 90,
-    "Vizaga Topshirildi": 30,
+  // Per-stage rules in DAYS: { g: fully green until, r: fully red at, mez: norm }
+  const mkRule = (g, r, mez) => ({ g, r, mez });
+  const EARLY   = mkRule(1, 7, 1);      // Yangi / Qilindi / Bog'lanildi: green 24h, red at 7 days
+  const SUHBAT_R = mkRule(2.5, 7.5, 5);
+  const CONTRACT = mkRule(1.5, 4.5, 3);
+  const HIREDOCS = mkRule(7, 21, 14);
+  const INVITE   = mkRule(45, 135, 90);
+  const VISA_R   = mkRule(15, 45, 30);
+  const STALE = {
+    "Yangi": EARLY, "Qilindi": EARLY, "Bog'landi": EARLY, "Boglanildi": EARLY,
+    "Onlayn Suhbat Uchun": SUHBAT_R, "Onlayn Suhbat": SUHBAT_R, "Suhbat": SUHBAT_R,
+    "Shartnoma qildi": CONTRACT, "XBA To'lov qildi": CONTRACT,
+    "CV Topshirildi": HIREDOCS, "Interview ga qo'yildi": HIREDOCS, "Ishga qabul qilindi": HIREDOCS, "1 - Qism To'landi": HIREDOCS,
+    "Hujjatlar Tayyorlanmoqda": HIREDOCS, "Hujjatlar Jonatilishga Tayyor": HIREDOCS, "Hujjatlar Jonatildi": HIREDOCS,
+    "Ish shartnomasi keldi": HIREDOCS, "Ish shartnomasi imzolandi": HIREDOCS,
+    "Taklifnoma keldi": INVITE, "Elchixonaga Hujjatlar Tayyor": INVITE,
+    "Vizaga Topshirildi": VISA_R,
   };
-  const NORM_DEFAULT_DAYS = 14;
+  const STALE_DEFAULT = HIREDOCS;
 
   const staleColor = (lead) => {
     if (DONE.includes(lead.status) || LOST.includes(lead.status)) return null;
@@ -100,8 +108,7 @@ function Pipeline({
       .reduce((a, b) => Math.max(a, b), 0);
     if (!anchor) return null;
     const days = Math.max(0, (now - anchor) / 864e5);
-    const mez = STATUS_NORM_DAYS[lead.status] || NORM_DEFAULT_DAYS;
-    const g = mez * 0.5, r = mez * 1.5;
+    const { g, r, mez } = STALE[lead.status] || STALE_DEFAULT;
     const ratio = Math.max(0, Math.min(1, (days - g) / (r - g)));
     const hue = 120 * (1 - ratio);
     return { bar: `hsl(${hue},72%,42%)`, bg: `hsla(${hue},72%,50%,0.08)`, hours: days * 24, mez };
