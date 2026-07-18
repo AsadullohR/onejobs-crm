@@ -167,19 +167,22 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
   //                + (Overdue Done / Total Done) adjusted penalty * 20
   //                + (Contracts / Leads) conversion * 30
   // Normalized 0-100
-  const empStats = team.filter(t=>!["partner","employer"].includes(t.role) && t.active!==false).map(t => {
+  // Scoreboard covers operational roles only — admin/finance have no leads or
+  // tasks pipeline, so scoring them just produced meaningless floor values.
+  const empStats = team.filter(t=>["sales","manager","docs","hujjatchi"].includes(t.role) && t.active!==false).map(t => {
     const myTasks   = tasks.filter(x => x.assignee===t.id && inPeriod(x.createdAt||x.due));
     const doneTasks = myTasks.filter(x => x.status==="done");
     const lateDone  = doneTasks.filter(x => x.due && new Date(x.completedAt||x.due) > new Date(x.due));
     const overduePending = myTasks.filter(x => x.status!=="done" && isOD(x.due));
 
-    // Speed score: avg days to complete tasks (lower=better, cap at 14 days)
-    const completionDays = doneTasks.map(x => {
-      if(!x.due||!x.completedAt) return null;
-      return daysBetween(x.createdAt||x.due, x.completedAt);
-    }).filter(x=>x!=null);
-    const avgDays = avg(completionDays) || 0;
-    const speedScore = Math.max(0, Math.min(100, 100 - (avgDays/14)*100));
+    // Speed score: REAL reaction time from status_log — avg days from lead
+    // creation to the first status change on leads they own as sales.
+    // No measured data (e.g. docs-only employees) → neutral 50, never a free 100.
+    const sp = serverTiming?.empSpeed?.find(x => String(x.id) === String(t.id));
+    const avgDays = sp ? Math.round(sp.avgDays * 10) / 10 : null;
+    const speedScore = sp
+      ? Math.max(0, Math.min(100, 100 - (sp.avgDays / 14) * 100))
+      : 50;
 
     // Accuracy score: (done - late) / done
     const total = myTasks.length;
@@ -423,8 +426,8 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,fontSize:9,color:T.sub}}>
           <div style={{background:T.card,borderRadius:7,padding:"8px 10px"}}>
             <div style={{fontWeight:700,color:T.accent,marginBottom:3}}>⚡ Tezlik Ball (40%)</div>
-            <div style={{fontFamily:"monospace",background:T.card2,padding:"4px 7px",borderRadius:4,marginBottom:4,fontSize:8}}>{'max(0, 100 − (avgDays/14)×100)'}</div>
-            <div style={{color:T.muted}}>Vazifani bajarish o'rtacha vaqti. 14 kundan kam = 100 ball. Har qo'shimcha kun uchun minus.</div>
+            <div style={{fontFamily:"monospace",background:T.card2,padding:"4px 7px",borderRadius:4,marginBottom:4,fontSize:8}}>{'max(0, 100 − (reaksiya kunlari/14)×100)'}</div>
+            <div style={{color:T.muted}}>Lead kelgandan birinchi status o'zgarishigacha o'rtacha kun (status tarixidan, real o'lchov). Ma'lumot yo'q bo'lsa — neytral 50.</div>
           </div>
           <div style={{background:T.card,borderRadius:7,padding:"8px 10px"}}>
             <div style={{fontWeight:700,color:T.green,marginBottom:3}}>✅ Sifat Ball (35%)</div>

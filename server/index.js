@@ -1249,7 +1249,26 @@ app.get("/api/stats/timing", auth, async (req, res) => {
       return { key: tr.key, exp: tr.exp, avg: rows[0].d != null ? Math.round(Number(rows[0].d) * 10) / 10 : null, n: Number(rows[0].n) };
     }));
 
-    res.json({ phases, transitions });
+    // Per-employee reaction speed: avg days from lead creation to the FIRST
+    // logged status change on leads they own as sales — real measured speed.
+    const { rows: empSpeed } = await pool.query(
+      `SELECT l.owner_sales AS id,
+              AVG(EXTRACT(EPOCH FROM (f.t - l.created_at)) / 86400)::numeric(10,1) AS avg_days,
+              COUNT(*) AS n
+       FROM leads l
+       JOIN (SELECT lead_id, MIN(logged_at) t FROM status_log GROUP BY lead_id) f ON f.lead_id = l.id
+       WHERE l.owner_sales IS NOT NULL AND f.t >= l.created_at
+         AND EXTRACT(EPOCH FROM (f.t - l.created_at)) / 86400 < 1000
+         AND ($1::date IS NULL OR l.created_at::date >= $1::date)
+         AND ($2::date IS NULL OR l.created_at::date <= $2::date)
+       GROUP BY l.owner_sales`,
+      [from, to],
+    );
+
+    res.json({
+      phases, transitions,
+      empSpeed: empSpeed.map(r => ({ id: r.id, avgDays: Number(r.avg_days), n: Number(r.n) })),
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
