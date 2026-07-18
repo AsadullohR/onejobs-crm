@@ -772,6 +772,38 @@ function KpiTab({ team, T, periodStart, canEditCfg }) {
             <Row kpi="Hujjat qaytarilish soni" target="≤ 2 ta/oy" manual />
           </Card>
 
+          {/* Suhbat → Ofis conversion per agent */}
+          <Card title="🏢 SUHBAT → OFIS (agent bo'yicha)">
+            {(d.officeConv || []).length === 0 && (
+              <tr><td colSpan={4} style={{ padding: "10px 12px", fontSize: 10, color: T.muted }}>Bu davrda belgilangan ofis suhbatlari yo'q</td></tr>
+            )}
+            {(d.officeConv || []).map(o => {
+              const p = o.booked > 0 ? Math.round((o.came / o.booked) * 100) : 0;
+              return (
+                <tr key={"oc" + o.id}>
+                  <td style={{ padding: "8px 12px", fontSize: 11, color: T.text, borderBottom: `1px solid ${T.border}` }}>{nameOf(o.id)}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 10, color: T.muted, borderBottom: `1px solid ${T.border}` }}>belgilandi: {o.booked}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 12, fontWeight: 800, borderBottom: `1px solid ${T.border}`, color: p >= 50 ? T.green : p >= 30 ? T.yellow : T.red }}>{o.came} ta · {p}%</td>
+                  <td style={{ padding: "8px 12px", borderBottom: `1px solid ${T.border}`, textAlign: "center" }}>{p >= 35 ? "✅" : "❌"}</td>
+                </tr>
+              );
+            })}
+          </Card>
+
+          {/* No-show list */}
+          {(d.noShow || []).length > 0 && (
+            <div style={{ background: `${T.red}08`, border: `1px solid ${T.red}33`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: T.red, marginBottom: 8 }}>⚠️ KELMAGANLAR (oxirgi 30 kun) — {d.noShow.length} ta</div>
+              <div style={{ fontSize: 9, color: T.muted, marginBottom: 8 }}>Suhbat sanasi o'tgan, lekin ofisga kelmagan — qayta qo'ng'iroq qiling</div>
+              {d.noShow.map(n => (
+                <div key={n.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 10, padding: "4px 0", borderBottom: `1px solid ${T.border}` }}>
+                  <span style={{ color: T.text, fontWeight: 600 }}>{n.name} <span style={{ color: T.muted, fontWeight: 400 }}>{n.phone}</span></span>
+                  <span style={{ color: T.muted, whiteSpace: "nowrap" }}>{String(n.date).slice(0, 10)} · {n.owner || "–"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <Card title="📞 SOTUV/CALL">
             <Row kpi="Arizaga javob vaqti (10 daqiqada)" target="100%" actual={respPct != null ? `${respPct}% (o'rt. ${d.respAvgMin} daq)` : null} ok={respPct != null ? respPct >= 100 : null} />
             <Row kpi="Konsultatsiyaga yozilganlar" target="≥ 10 ta/kun" actual={`${consultDaily} ta/kun (${d.consultEntered} ta)`} ok={Number(consultDaily) >= 10} />

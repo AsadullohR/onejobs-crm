@@ -359,8 +359,9 @@ app.post("/api/leads", auth, async (req, res) => {
       }
     }
     // Fetch old status/xba before upsert for change detection
-    const oldRow = await pool.query(`SELECT status, xba, owner_sales FROM leads WHERE id=$1`, [id]);
+    const oldRow = await pool.query(`SELECT status, xba, owner_sales, interview_date FROM leads WHERE id=$1`, [id]);
     const oldStatus = oldRow.rows[0]?.status || null;
+    const oldInterview = oldRow.rows[0]?.interview_date || null;
 
     // One-way gate: a lead that has moved past "Qilindi" can never be set
     // back to it (enforced here so pipeline drag-and-drop can't bypass it).
@@ -449,6 +450,27 @@ app.post("/api/leads", auth, async (req, res) => {
         `INSERT INTO status_log (lead_id, owner_id, status, logged_at) VALUES ($1,$2,$3,NOW())`,
         [saved.id, newOwner || req.user.id, newStatus]
       ).catch(() => {});
+    }
+
+    // Office-interview reminder: when an interview date is set/changed and is
+    // in the future, auto-create a reminder task (due the day before, or today
+    // if the interview is tomorrow/today) for the responsible salesperson.
+    const newInterview = l.interviewDate || null;
+    if (newInterview && newInterview !== oldInterview && /^\d{4}-\d{2}-\d{2}/.test(newInterview)) {
+      const iDate = new Date(newInterview.slice(0, 10));
+      const today0 = new Date(new Date().toISOString().slice(0, 10));
+      if (iDate >= today0) {
+        const remind = new Date(Math.max(iDate.getTime() - 864e5, today0.getTime())).toISOString().slice(0, 10);
+        const assignee = saved.owner_sales || req.user.id;
+        pool.query(
+          `INSERT INTO tasks (title, description, assignee, lead_id, priority, status, due_date, created_by)
+           SELECT $1,$2,$3,$4,'high','todo',$5,$6
+           WHERE NOT EXISTS (SELECT 1 FROM tasks WHERE lead_id=$4 AND due_date=$5 AND title LIKE '📞 Eslatma%')`,
+          [`📞 Eslatma qo'ng'irog'i — ${saved.name}`,
+           `Ertaga (${newInterview.slice(0, 10)}) ofis suhbatiga kelishi kerak. Eslatma qo'ng'irog'i qiling, manzilni yuboring.`,
+           assignee, saved.id, remind, req.user.id],
+        ).catch(() => {});
+      }
     }
 
     // XBA payment notification — single insert even when the same save both
@@ -1086,6 +1108,8 @@ app.get("/api/stats/funnel", auth, async (req, res) => {
 const DOCS_STATUSES = ["Hujjatlar Tayyorlanmoqda", "Hujjatlar Jonatilishga Tayyor", "Hujjatlar Jonatildi", "Ish shartnomasi keldi", "Ish shartnomasi imzolandi", "Elchixonaga Hujjatlar Tayyor"];
 const SUHBAT_STATUSES = ["Onlayn Suhbat Uchun", "Onlayn Suhbat", "Suhbat"];
 const SHARTNOMA_STATUSES = ["Shartnoma qildi", "XBA To'lov qildi", "CV Topshirildi", "Interview ga qo'yildi", "Ishga qabul qilindi", "1 - Qism To'landi"];
+// "Came to office" evidence: reached the office-interview stage or anything after it
+const CAME_STATUSES = ["Suhbat", ...SHARTNOMA_STATUSES, ...DOCS_STATUSES, "Taklifnoma keldi", "Vizaga Topshirildi", "Viza Oldi", "Viza Rad Etildi", "Jo'nab ketdi"];
 
 app.get("/api/stats/kpi", auth, async (req, res) => {
   if (["partner", "employer"].includes(req.user.role))
@@ -1098,7 +1122,7 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
   try {
     const [
       docsActive, docsOverdue, avgDocs, visa, resp, consult, convLS, convSS,
-      xbaCnt, cancel, bonusDocs, bonusSales, bonusCall,
+      xbaCnt, cancel, bonusDocs, bonusSales, bonusCall, officeConv, noShow,
     ] = await Promise.all([
       // Currently in a document-processing status
       q(`SELECT COUNT(*) n FROM leads WHERE status = ANY($1)`, [DOCS_STATUSES]),
@@ -1155,6 +1179,23 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
       q(`SELECT l.owner_sales id, COUNT(*) n FROM leads l
          JOIN users u ON u.id = l.owner_sales AND u.role = 'sales'
          WHERE l.xba_date BETWEEN $1::date AND $2::date GROUP BY l.owner_sales`),
+      // Suhbat→Ofis conversion per agent: interviews BOOKED in period vs CAME
+      q(`SELECT l.owner_sales id, COUNT(*) booked,
+           COUNT(*) FILTER (WHERE l.status = ANY($3)
+             OR EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id = l.id AND sl.status = ANY($3))) came
+         FROM leads l
+         WHERE l.owner_sales IS NOT NULL AND l.interview_date ~ '^\\d{4}-\\d{2}-\\d{2}'
+           AND NULLIF(l.interview_date,'')::date BETWEEN $1::date AND $2::date
+         GROUP BY l.owner_sales ORDER BY booked DESC`, [...P, CAME_STATUSES]),
+      // No-show list: interview date passed (last 30 days), never came
+      q(`SELECT l.id, l.name, l.phone, NULLIF(l.interview_date,'') idate, u.name owner
+         FROM leads l LEFT JOIN users u ON u.id = l.owner_sales
+         WHERE l.interview_date ~ '^\\d{4}-\\d{2}-\\d{2}'
+           AND NULLIF(l.interview_date,'')::date < CURRENT_DATE
+           AND NULLIF(l.interview_date,'')::date >= CURRENT_DATE - INTERVAL '30 days'
+           AND NOT (l.status = ANY($1))
+           AND NOT EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id = l.id AND sl.status = ANY($1))
+         ORDER BY NULLIF(l.interview_date,'')::date DESC LIMIT 50`, [CAME_STATUSES]),
     ]);
     const days = Math.max(1, Math.round((new Date(to) - new Date(from)) / 864e5) + 1);
     res.json({
@@ -1175,6 +1216,8 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
       mgrCallXba: Number(bonusSales[0].call_xba),
       mgrQ1Total: Number(bonusSales[0].q1_total),
       bonusCall: bonusCall.map(r => ({ id: r.id, n: Number(r.n) })),
+      officeConv: officeConv.map(r => ({ id: r.id, booked: Number(r.booked), came: Number(r.came) })),
+      noShow: noShow.map(r => ({ id: r.id, name: r.name, phone: r.phone, date: r.idate, owner: r.owner })),
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
