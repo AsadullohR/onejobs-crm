@@ -5,7 +5,7 @@ import { uid, fmtM, fmtMs, fmtD, isOD, inp, lab, I, Pill, Av, Modal, SearchSelec
 import { candidatesAPI, leadDocsAPI, leadsAPI } from "./api.js";
 
 // ─── LEAD DRAWER ──────────────────────────────────────────────────────────────
-function Drawer({lead, user, team, leads, tasks, onSave, onClose, onAddTask, config, roles, addNotif}) {
+function Drawer({lead, user, team, leads, tasks, onSave, onClose, onAddTask, config, roles, addNotif, vacancies=[]}) {
 const T=useT();
 const isNew=!lead.id||String(lead.id).startsWith("tmp-");
 const [form,setForm]=useState({
@@ -488,6 +488,27 @@ const [form,setForm]=useState({
         {/* VACANCIES */}
         {tab==="vacancies"&&<div>
           <div style={{fontSize:11,color:T.muted,marginBottom:12}}>Bu mijoz qo'shilgan vakansiyalar</div>
+          {/* Add this client to a vacancy */}
+          {!isPartner&&!isNew&&(()=>{
+            const addedIds=new Set(vacCands.map(c=>String(c.vacancy_id)));
+            const options=vacancies.filter(v=>!addedIds.has(String(v.id)));
+            return <div style={{display:"flex",gap:6,marginBottom:14,background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:10}}>
+              <select id="drawer-vac-add" style={{...inpS,flex:1}} defaultValue="">
+                <option value="" disabled>Vakansiya tanlang...</option>
+                {options.map(v=><option key={v.id} value={v.id}>{v.title}{v.company?` — ${v.company}`:""}</option>)}
+              </select>
+              <button onClick={async()=>{
+                const sel=document.getElementById("drawer-vac-add");
+                const vid=sel?.value; if(!vid)return;
+                const v=vacancies.find(x=>String(x.id)===String(vid));
+                try{
+                  const saved=await candidatesAPI.create({vacancy_id:vid,lead_id:lead.id,name:form.name,phone:form.phone,status:"added"});
+                  setVacCands(p=>[...p,{...saved,vacancy_title:v?.title,company:v?.company,country:v?.country}]);
+                  sel.value="";
+                }catch(err){alert("Qo'shilmadi: "+err.message);}
+              }} style={{padding:"8px 14px",borderRadius:6,background:T.accent,color:"#fff",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>+ Qo'shish</button>
+            </div>;
+          })()}
           {vacCands.length===0?(
             <div style={{textAlign:"center",padding:"30px 0",color:T.muted,fontSize:12}}>Hech qanday vakansiyaga qo'shilmagan</div>
           ):vacCands.map(c=>{

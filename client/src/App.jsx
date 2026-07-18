@@ -651,7 +651,7 @@ const deleteLead = useCallback(async (id) => {
           ))}
         </div>;
       })()}
-      {drawer&&<Drawer lead={drawer} user={user} team={team} leads={leads} tasks={tasks} onSave={saveLead} onClose={()=>setDrawer(null)} onAddTask={addTask} config={config} roles={roles} addNotif={addNotif}/>}
+      {drawer&&<Drawer lead={drawer} user={user} team={team} leads={leads} tasks={tasks} onSave={saveLead} onClose={()=>setDrawer(null)} onAddTask={addTask} config={config} roles={roles} addNotif={addNotif} vacancies={vacancies}/>}
       {showImport && (user?.role==="admin"||user?.role==="manager") && (
         <ImportModal
           team={team}
