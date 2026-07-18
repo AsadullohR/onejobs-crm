@@ -89,9 +89,17 @@ function Pipeline({
 
   const staleColor = (lead) => {
     if (DONE.includes(lead.status) || LOST.includes(lead.status)) return null;
-    if (!lead.statusSince) return null;
-    const days = (Date.now() - new Date(lead.statusSince).getTime()) / 864e5;
-    if (!(days >= 0)) return null;
+    // Anchor = LAST ACTIVITY, not just status entry: a lead stuck in a status
+    // for 30 days but contacted yesterday is being worked — stays green.
+    const now = Date.now();
+    const anchor = [lead.statusSince, lead.lastCall, lead.onlaynSuhbat, lead.officeSuhbat,
+                    lead.suhbatBelgilangan, lead.shartnomaSana, lead.xbaDate,
+                    lead.q1Date, lead.q2Date, lead.q3Date]
+      .map(d => d ? new Date(d).getTime() : NaN)
+      .filter(t => t > 0 && t <= now + 864e5)   // ignore invalid; allow today's dates
+      .reduce((a, b) => Math.max(a, b), 0);
+    if (!anchor) return null;
+    const days = Math.max(0, (now - anchor) / 864e5);
     const mez = STATUS_NORM_DAYS[lead.status] || NORM_DEFAULT_DAYS;
     const g = mez * 0.5, r = mez * 1.5;
     const ratio = Math.max(0, Math.min(1, (days - g) / (r - g)));
@@ -1199,7 +1207,7 @@ function Pipeline({
                           setSelectedIds(p => { const n = new Set(p); n.has(lead.id) ? n.delete(lead.id) : n.add(lead.id); return n; });
                         } else open(lead);
                       }}
-                      title={sc ? `Bu bosqichda: ${sc.hours < 48 ? Math.round(sc.hours) + " soat" : Math.round(sc.hours / 24) + " kun"} · mez: ${sc.mez} kun` : undefined}
+                      title={sc ? `So'nggi harakat: ${sc.hours < 48 ? Math.round(sc.hours) + " soat" : Math.round(sc.hours / 24) + " kun"} oldin · mez: ${sc.mez} kun` : undefined}
                       style={{
                         background: isSel ? `${T.accent}15` : (sc ? sc.bg : T.card),
                         borderRadius: 7,
