@@ -20,6 +20,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
   // Real timings from status_log (replaces created-date approximations
   // in the phase snapshot and transition rows once loaded)
   const [serverTiming,setServerTiming]=useState(null);
+  const [kpiData,setKpiData]=useState(null);
   const [fPeriod,setFPeriod]=useState("month"); // week | month | quarter | all
   const [fStage,setFStage]=useState("all");
 
@@ -40,6 +41,9 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
     statsAPI.timing(fromStr, toStr)
       .then(r => { if (alive && r?.phases) setServerTiming(r); })
       .catch(() => { if (alive) setServerTiming(null); });
+    statsAPI.kpi(fromStr, toStr)
+      .then(r => { if (alive && r?.empFunnel) setKpiData(r); })
+      .catch(() => { if (alive) setKpiData(null); });
     return () => { alive = false; };
   }, [fPeriod]);
 
@@ -537,17 +541,28 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
         </div>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead><tr style={{background:T.card2}}>
-            {["Xodim","Roli","Lead (jami)","Jo'nab ketdi","Lead→Shartnoma (o'rt. kun)","Natija"].map(h=>(
+            {["Xodim","Roli","Lead (jami)","📞 Qo'ng'iroq","🏢 Ofis","💰 XBA","✈️ Jo'nab ketdi","Lead→Shartnoma (o'rt. kun)","Natija"].map(h=>(
               <th key={h} style={{padding:"7px 10px",textAlign:"left",fontSize:8,fontWeight:600,color:T.muted,textTransform:"uppercase",borderBottom:`1px solid ${T.border}`,whiteSpace:"nowrap"}}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
-            {empTimeRows.map(e=>(
+            {empTimeRows.map(e=>{
+              const ef=kpiData?.empFunnel?.find(x=>String(x.id)===String(e.t.id));
+              const pOff=ef&&ef.called>0?Math.round((ef.office/ef.called)*100):null;
+              const pXba=ef&&ef.office>0?Math.round((ef.xba/ef.office)*100):null;
+              return (
               <tr key={e.t.id} style={{borderBottom:`1px solid ${T.border}22`}}>
                 <td style={{padding:"7px 10px"}}><div style={{display:"flex",alignItems:"center",gap:6}}><Av id={e.t.id} team={[e.t]} size={20}/><span style={{fontWeight:600,color:T.text,fontSize:10}}>{e.t.name}</span></div></td>
                 <td style={{padding:"7px 10px",color:T.muted,fontSize:9}}>{e.t.role}</td>
                 <td style={{padding:"7px 10px",fontWeight:700,color:T.text}}>{e.total}</td>
-                <td style={{padding:"7px 10px",fontWeight:700,color:T.green}}>{e.gone}</td>
+                <td style={{padding:"7px 10px",fontWeight:700,color:T.text}}>{ef?ef.called:"–"}</td>
+                <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
+                  {ef?<><b style={{color:T.text}}>{ef.office}</b>{pOff!=null&&<span style={{fontSize:8,fontWeight:700,marginLeft:4,color:pOff>=30?T.green:pOff>=15?T.yellow:T.red}}>({pOff}%)</span>}</>:"–"}
+                </td>
+                <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}>
+                  {ef?<><b style={{color:T.text}}>{ef.xba}</b>{pXba!=null&&<span style={{fontSize:8,fontWeight:700,marginLeft:4,color:pXba>=40?T.green:pXba>=20?T.yellow:T.red}}>({pXba}%)</span>}</>:"–"}
+                </td>
+                <td style={{padding:"7px 10px",fontWeight:700,color:T.green}}>{ef?ef.departed:e.gone}</td>
                 <td style={{padding:"7px 10px"}}>
                   {e.toContract
                     ? <div style={{display:"flex",alignItems:"center",gap:7}}>
@@ -564,7 +579,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
                     : "–"}
                 </td>
               </tr>
-            ))}
+            );})}
           </tbody>
         </table>
         {empTimeRows.length===0&&<div style={{textAlign:"center",padding:"24px 0",color:T.muted,fontSize:11}}>

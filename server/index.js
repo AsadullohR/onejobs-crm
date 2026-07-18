@@ -1230,15 +1230,17 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
            COUNT(DISTINCT l.id) FILTER (WHERE
              EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id=l.id AND sl.status = 'Suhbat' AND sl.logged_at::date BETWEEN $1::date AND $2::date)
              OR (l.interview_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND NULLIF(l.interview_date,'')::date BETWEEN $1::date AND $2::date)) office,
-           COUNT(DISTINCT l.id) FILTER (WHERE l.xba_date BETWEEN $1::date AND $2::date) xba
-         FROM leads l JOIN users u ON u.id = l.owner_sales AND u.role IN ('sales','manager')
+           COUNT(DISTINCT l.id) FILTER (WHERE l.xba_date BETWEEN $1::date AND $2::date) xba,
+           COUNT(DISTINCT l.id) FILTER (WHERE
+             EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id=l.id AND sl.status = ANY($4) AND sl.logged_at::date BETWEEN $1::date AND $2::date)) departed
+         FROM leads l JOIN users u ON u.id = l.owner_sales AND u.role IN ('sales','manager','hujjatchi','docs')
          GROUP BY l.owner_sales
          HAVING COUNT(DISTINCT l.id) FILTER (WHERE
              EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id=l.id AND sl.status = ANY($3) AND sl.logged_at::date BETWEEN $1::date AND $2::date)
              OR (l.last_contact ~ '^\\d{4}-\\d{2}-\\d{2}' AND NULLIF(l.last_contact,'')::date BETWEEN $1::date AND $2::date)) > 0
              OR COUNT(DISTINCT l.id) FILTER (WHERE l.xba_date BETWEEN $1::date AND $2::date) > 0
          ORDER BY called DESC`,
-        [...P, ["Bog'landi", "Boglanildi"]]),
+        [...P, ["Bog'landi", "Boglanildi"], ["Jo'nab ketdi"]]),
       // No-show list: SCHEDULED date passed (last 30 days), never came
       q(`SELECT l.id, l.name, l.phone, NULLIF(l.interview_scheduled,'') idate, u.name owner
          FROM leads l LEFT JOIN users u ON u.id = l.owner_sales
@@ -1270,7 +1272,7 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
       mgrQ1Total: Number(bonusSales[0].q1_total),
       bonusCall: bonusCall.map(r => ({ id: r.id, n: Number(r.n) })),
       officeConv: officeConv.map(r => ({ id: r.id, booked: Number(r.booked), came: Number(r.came) })),
-      empFunnel: empFunnel.map(r => ({ id: r.id, called: Number(r.called), office: Number(r.office), xba: Number(r.xba) })),
+      empFunnel: empFunnel.map(r => ({ id: r.id, called: Number(r.called), office: Number(r.office), xba: Number(r.xba), departed: Number(r.departed) })),
       noShow: noShow.map(r => ({ id: r.id, name: r.name, phone: r.phone, date: r.idate, owner: r.owner })),
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
