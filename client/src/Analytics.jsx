@@ -17,6 +17,9 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
   const inpS=inp(T);
   const [tab,setTab]=useState(initialTab||"productivity");  // productivity | time | salary
   const [fEmp,setFEmp]=useState("all");
+  // Real timings from status_log (replaces created-date approximations
+  // in the phase snapshot and transition rows once loaded)
+  const [serverTiming,setServerTiming]=useState(null);
   const [fPeriod,setFPeriod]=useState("month"); // week | month | quarter | all
   const [fStage,setFStage]=useState("all");
 
@@ -29,6 +32,16 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
     all:    new Date("2020-01-01"),
   }[fPeriod];
   const inPeriod = d => d && new Date(d) >= periodStart;
+
+  useEffect(() => {
+    let alive = true;
+    const fromStr = fPeriod === "all" ? null : periodStart.toISOString().slice(0, 10);
+    const toStr = fPeriod === "all" ? null : new Date().toISOString().slice(0, 10);
+    statsAPI.timing(fromStr, toStr)
+      .then(r => { if (alive && r?.phases) setServerTiming(r); })
+      .catch(() => { if (alive) setServerTiming(null); });
+    return () => { alive = false; };
+  }, [fPeriod]);
 
   const daysBetween = (a,b) => {
     if(!a||!b) return null;
@@ -132,6 +145,23 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
     return {...s, avg:a, cnt, ok, pct};
   });
 
+  // ── Prefer real status_log timings from the server when available ─────────
+  const TR_EMOJI = { "Lead → Bog'landi":"📞","Bog'landi → Suhbat":"💬","Suhbat → Shartnoma":"🏢","Shartnoma → XBA to'lov":"💳","XBA → Ishga qabul":"📄","Ishga qabul → Hujjatlar":"📁","Hujjatlar → Taklifnoma":"📨","Taklifnoma → Vizaga topshirish":"🗂️","Vizaga topshirish → Viza chiqishi":"🛂","Viza → Jo'nab ketish":"✈️" };
+  const stageTimingsFinal = serverTiming
+    ? serverTiming.transitions.map(tr => ({
+        label: `${TR_EMOJI[tr.key]||"🕒"} ${tr.key}`, key: tr.key, exp: tr.exp,
+        avg: tr.avg, cnt: tr.n,
+        ok: tr.avg != null ? tr.avg <= tr.exp : null,
+        pct: tr.avg ? Math.min(200, Math.round((tr.avg / tr.exp) * 100)) : 0,
+      }))
+    : stageTimings;
+  const phaseStatsFinal = serverTiming
+    ? phaseStats.map(ph => {
+        const s = serverTiming.phases.find(x => x.key === ph.key);
+        return s ? { ...ph, count: s.count, avgDays: s.avgDays, overExpected: s.over } : ph;
+      })
+    : phaseStats;
+
   // ── EMPLOYEE PRODUCTIVITY SCORE ────────────────────────────────────────────
   // Formula: Score = (Tasks Done / Total Assigned) * 50 
   //                + (Overdue Done / Total Done) adjusted penalty * 20
@@ -226,7 +256,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
 
   // ── Alerts ─────────────────────────────────────────────────────────────────
   const alerts = [];
-  stageTimings.filter(s=>s.avg!=null&&s.avg>s.exp).slice(0,3).forEach(s=>{ alerts.push({type:"time",msg:`${s.label}: ${s.avg} kun (mez: ${s.exp} kun)`,sev:s.avg>s.exp*1.5?"red":"yellow"}); });
+  stageTimingsFinal.filter(s=>s.avg!=null&&s.avg>s.exp).slice(0,3).forEach(s=>{ alerts.push({type:"time",msg:`${s.label}: ${s.avg} kun (mez: ${s.exp} kun)`,sev:s.avg>s.exp*1.5?"red":"yellow"}); });
   empStats.forEach(e=>{ if(e.overduePending>2) alerts.push({type:"emp",msg:`${e.t.name}: ${e.overduePending} ta muddati o'tgan vazifa`,sev:"yellow"}); });
   empStats.forEach(e=>{ if(e.productivityScore<40&&e.total>3) alerts.push({type:"emp",msg:`${e.t.name}: Samaradorlik past (${e.productivityScore}/100)`,sev:"red"}); });
 
@@ -431,7 +461,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
           <div style={{marginBottom:12}}>
             <div style={{fontSize:9,fontWeight:700,color:T.muted,marginBottom:6,textTransform:"uppercase"}}>Hozirgi holat: Har bosqichdagi mijozlar</div>
             <div style={{display:"flex",gap:3,overflowX:"auto",paddingBottom:4}}>
-              {phaseStats.map((ph,i)=>(
+              {phaseStatsFinal.map((ph,i)=>(
                 <div key={ph.key} style={{minWidth:80,textAlign:"center",flex:"0 0 auto"}}>
                   <div style={{fontSize:14,marginBottom:2}}>{ph.icon}</div>
                   <div style={{background:ph.count>0?(ph.overExpected>0?`${T.red}22`:`${T.accent}22`):T.card2,border:`1px solid ${ph.count>0?(ph.overExpected>0?T.red:T.accent):T.border}`,borderRadius:7,padding:"5px 4px",marginBottom:3}}>
@@ -441,7 +471,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
                   <div style={{fontSize:7,color:T.sub,lineHeight:1.3,maxWidth:80}}>{ph.label}</div>
                   <div style={{fontSize:7,color:T.muted}}>≤{ph.exp>30?ph.exp+" k":ph.exp+" k"}</div>
                   {ph.overExpected>0&&<div style={{fontSize:7,color:T.red,fontWeight:700}}>{ph.overExpected} kechikmoqda</div>}
-                  {i<phaseStats.length-1&&<div style={{fontSize:10,color:T.muted,marginTop:2}}>→</div>}
+                  {i<phaseStatsFinal.length-1&&<div style={{fontSize:10,color:T.muted,marginTop:2}}>→</div>}
                 </div>
               ))}
             </div>
@@ -450,7 +480,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
           {/* Date-field based timings */}
           <div style={{borderTop:`1px solid ${T.border}`,paddingTop:10}}>
             <div style={{fontSize:9,fontWeight:700,color:T.muted,marginBottom:6,textTransform:"uppercase"}}>O'rtacha kunlar (hozirgi holatga ko'ra)</div>
-            {stageTimings.map(s=>(
+            {stageTimingsFinal.map(s=>(
               <div key={s.label} style={{marginBottom:8}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
                   <span style={{fontSize:9,color:T.text,flex:1}}>{s.label}</span>
@@ -468,7 +498,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
                 </div>}
               </div>
             ))}
-            {stageTimings.every(s=>s.avg==null)&&<div style={{textAlign:"center",padding:"12px 0",color:T.muted,fontSize:10}}>
+            {stageTimingsFinal.every(s=>s.avg==null)&&<div style={{textAlign:"center",padding:"12px 0",color:T.muted,fontSize:10}}>
               💡 Mijoz kartasidagi <b>"📅 Muhim sanalar"</b> bo'limini to'ldiring — sanalar kiritilgan sari bu jadval avtomatik to'ladi
             </div>}
           </div>
@@ -543,7 +573,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
       <div style={{background:`${T.yellow}10`,border:`1px solid ${T.yellow}33`,borderRadius:9,padding:"10px 14px"}}>
         <div style={{fontSize:10,fontWeight:700,color:T.yellow,marginBottom:6}}>⏱️ Standart vaqt mezonlari — OneJobs jarayoni</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
-          {phaseStats.map(ph=>(
+          {phaseStatsFinal.map(ph=>(
             <div key={ph.key} style={{background:T.card,borderRadius:6,padding:"7px 9px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{fontSize:9,color:T.text,fontWeight:600,marginBottom:1}}>{ph.icon} {ph.label}</div>

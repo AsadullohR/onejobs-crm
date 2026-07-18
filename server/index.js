@@ -1179,6 +1179,80 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── TIME ANALYSIS (real durations from status_log) ──────────────────────────
+const TIME_PHASES = [
+  { key: "boglanish",     exp: 1,  statuses: ["Yangi", "Qilindi", "Bog'landi", "Boglanildi"] },
+  { key: "suhbat",        exp: 5,  statuses: ["Onlayn Suhbat Uchun", "Onlayn Suhbat", "Suhbat"] },
+  { key: "tolov",         exp: 3,  statuses: ["Shartnoma qildi", "XBA To'lov qildi"] },
+  { key: "ishqabul",      exp: 14, statuses: ["CV Topshirildi", "Interview ga qo'yildi", "Ishga qabul qilindi", "1 - Qism To'landi"] },
+  { key: "hujjatlar",     exp: 14, statuses: ["Hujjatlar Tayyorlanmoqda", "Hujjatlar Jonatilishga Tayyor", "Hujjatlar Jonatildi", "Ish shartnomasi keldi", "Ish shartnomasi imzolandi"] },
+  { key: "taklifnoma",    exp: 90, statuses: ["Taklifnoma keldi", "Elchixonaga Hujjatlar Tayyor"] },
+  { key: "viza_tayyorlik",exp: 3,  statuses: ["Vizaga Topshirildi"] },
+  { key: "viza_chiqish",  exp: 30, statuses: ["Viza Oldi"] },
+  { key: "jonab",         exp: 7,  statuses: ["Jo'nab ketdi"] },
+];
+const T_BOG = ["Bog'landi", "Boglanildi"];
+const T_SUHBAT = ["Onlayn Suhbat Uchun", "Onlayn Suhbat", "Suhbat"];
+const TIME_TRANSITIONS = [
+  { key: "Lead → Bog'landi",            exp: 1,  from: null,                       to: T_BOG },
+  { key: "Bog'landi → Suhbat",          exp: 5,  from: T_BOG,                      to: T_SUHBAT },
+  { key: "Suhbat → Shartnoma",          exp: 3,  from: T_SUHBAT,                   to: ["Shartnoma qildi"] },
+  { key: "Shartnoma → XBA to'lov",      exp: 3,  from: ["Shartnoma qildi"],        to: ["XBA To'lov qildi"] },
+  { key: "XBA → Ishga qabul",           exp: 14, from: ["XBA To'lov qildi"],       to: ["Ishga qabul qilindi"] },
+  { key: "Ishga qabul → Hujjatlar",     exp: 14, from: ["Ishga qabul qilindi"],    to: ["Hujjatlar Jonatildi"] },
+  { key: "Hujjatlar → Taklifnoma",      exp: 90, from: ["Hujjatlar Jonatildi"],    to: ["Taklifnoma keldi"] },
+  { key: "Taklifnoma → Vizaga topshirish", exp: 3, from: ["Taklifnoma keldi"],     to: ["Vizaga Topshirildi"] },
+  { key: "Vizaga topshirish → Viza chiqishi", exp: 30, from: ["Vizaga Topshirildi"], to: ["Viza Oldi"] },
+  { key: "Viza → Jo'nab ketish",        exp: 7,  from: ["Viza Oldi"],              to: ["Jo'nab ketdi"] },
+];
+
+app.get("/api/stats/timing", auth, async (req, res) => {
+  if (["partner", "employer"].includes(req.user.role))
+    return res.status(403).json({ error: "Forbidden" });
+  const from = req.query.from || null;
+  const to = req.query.to || null;
+  try {
+    // Phase snapshot: clients currently in each phase + REAL days in the
+    // current stage (since the last status change, not since creation)
+    const phases = await Promise.all(TIME_PHASES.map(async (ph) => {
+      const { rows } = await pool.query(
+        `SELECT COUNT(*) n,
+                AVG(days)::numeric(10,1) avg_days,
+                COUNT(*) FILTER (WHERE days > $2 * 3) over_n
+         FROM (
+           SELECT EXTRACT(EPOCH FROM (NOW() - COALESCE(
+             (SELECT MAX(sl.logged_at) FROM status_log sl WHERE sl.lead_id = l.id AND sl.status = l.status),
+             l.updated_at, l.created_at))) / 86400 AS days
+           FROM leads l WHERE l.status = ANY($1)
+         ) x`,
+        [ph.statuses, ph.exp],
+      );
+      return { key: ph.key, count: Number(rows[0].n), avgDays: rows[0].avg_days != null ? Math.round(Number(rows[0].avg_days)) : null, over: Number(rows[0].over_n) };
+    }));
+
+    // Transition durations: first entry into A → first entry into B
+    const transitions = await Promise.all(TIME_TRANSITIONS.map(async (tr) => {
+      const aSel = tr.from
+        ? `(SELECT lead_id, MIN(logged_at) t FROM status_log WHERE status = ANY($3) GROUP BY lead_id)`
+        : `(SELECT id AS lead_id, created_at AS t FROM leads)`;
+      const params = tr.from ? [from, to, tr.from, tr.to] : [from, to, tr.to];
+      const bParam = tr.from ? "$4" : "$3";
+      const { rows } = await pool.query(
+        `SELECT AVG(EXTRACT(EPOCH FROM (b.t - a.t)) / 86400)::numeric(10,1) d, COUNT(*) n
+         FROM ${aSel} a
+         JOIN (SELECT lead_id, MIN(logged_at) t FROM status_log WHERE status = ANY(${bParam}) GROUP BY lead_id) b USING (lead_id)
+         WHERE b.t >= a.t AND EXTRACT(EPOCH FROM (b.t - a.t)) / 86400 < 1000
+           AND ($1::date IS NULL OR b.t::date >= $1::date)
+           AND ($2::date IS NULL OR b.t::date <= $2::date)`,
+        params,
+      );
+      return { key: tr.key, exp: tr.exp, avg: rows[0].d != null ? Math.round(Number(rows[0].d) * 10) / 10 : null, n: Number(rows[0].n) };
+    }));
+
+    res.json({ phases, transitions });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── EMPLOYEE STATS ──────────────────────────────────────────────────────────
 app.get("/api/stats/employees", auth, async (req, res) => {
   try {
