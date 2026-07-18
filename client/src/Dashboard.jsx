@@ -14,9 +14,10 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
   const now = new Date();
   const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const today = now.toISOString().slice(0, 10);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [preset, setPreset] = useState("all"); // all | month | year | custom
+  // Default view: current month (Bu oy)
+  const [dateFrom, setDateFrom] = useState(firstOfMonth);
+  const [dateTo, setDateTo] = useState(today);
+  const [preset, setPreset] = useState("month"); // all | month | year | custom
 
   const applyPreset = (p) => {
     setPreset(p);
