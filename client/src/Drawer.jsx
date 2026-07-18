@@ -209,7 +209,22 @@ const [form,setForm]=useState({
               <div><label style={labS}>📅 Qayd qilingan sana</label><input type="date" value={form.createdAt||""} onChange={e=>f("createdAt",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
               <div><label style={labS}>📞 So'ngi aloqa vaqti</label><input type="date" value={form.lastCall||""} onChange={e=>f("lastCall",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
               <div><label style={labS}>💻 Onlayn suhbat sanasi</label><input type="date" value={form.onlaynSuhbat||""} onChange={e=>f("onlaynSuhbat",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
-              <div><label style={labS}>📅 Suhbat belgilangan sana</label><input type="date" value={form.suhbatBelgilangan||""} onChange={e=>f("suhbatBelgilangan",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
+              <div>
+                <label style={labS}>📅 Suhbat belgilangan sana</label>
+                <input type="date" value={form.suhbatBelgilangan||""} onChange={e=>f("suhbatBelgilangan",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/>
+                {form.suhbatBelgilangan&&(()=>{
+                  // One-click client reminder with prefilled text
+                  const msg=`Assalomu alaykum${form.name?", "+form.name:""}! OneJobs'dan eslatma: ${fmtD(form.suhbatBelgilangan)} kuni ofisimizdagi suhbatga taklif qilingansiz. Iltimos, kelishingizni tasdiqlang. Savollaringiz bo'lsa shu yerga yozing. Rahmat! 🤝`;
+                  const enc=encodeURIComponent(msg);
+                  const digits=(form.phone||"").replace(/\D/g,"");
+                  const aS={fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:5,textDecoration:"none",border:"1px solid",lineHeight:1.6};
+                  return <div style={{display:"flex",gap:5,marginTop:5,flexWrap:"wrap"}}>
+                    <a href={`https://t.me/share/url?url=%20&text=${enc}`} target="_blank" rel="noopener" style={{...aS,color:"#229ED9",background:"#229ED915",borderColor:"#229ED944"}}>📲 Telegram eslatma</a>
+                    {digits.length>=9&&<a href={`https://wa.me/${digits}?text=${enc}`} target="_blank" rel="noopener" style={{...aS,color:"#25D366",background:"#25D36615",borderColor:"#25D36644"}}>💬 WhatsApp</a>}
+                    <button onClick={()=>{navigator.clipboard.writeText(msg).then(()=>alert("✅ Xabar nusxalandi — istalgan joyga yuboring"));}} style={{...aS,color:T.muted,background:T.card2,borderColor:T.border,cursor:"pointer"}}>📋 Nusxalash</button>
+                  </div>;
+                })()}
+              </div>
               <div><label style={labS}>🏢 Suhbatga kelgan sana</label><input type="date" value={form.officeSuhbat||""} onChange={e=>f("officeSuhbat",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
               <div><label style={labS}>📄 Shartnoma qilgan sana</label><input type="date" value={form.shartnomaSana||""} onChange={e=>f("shartnomaSana",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
             </div>
