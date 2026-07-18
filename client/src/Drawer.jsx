@@ -216,7 +216,9 @@ const [form,setForm]=useState({
                   // One-click client reminder with prefilled text
                   const msg=`Assalomu alaykum${form.name?", "+form.name:""}! OneJobs'dan eslatma: ${fmtD(form.suhbatBelgilangan)} kuni ofisimizdagi suhbatga taklif qilingansiz. Iltimos, kelishingizni tasdiqlang. Savollaringiz bo'lsa shu yerga yozing. Rahmat! 🤝`;
                   const enc=encodeURIComponent(msg);
-                  const digits=(form.phone||"").replace(/\D/g,"");
+                  let digits=(form.phone||"").replace(/\D/g,"");
+                  if(digits.length===9)digits="998"+digits;          // local format -> +998
+                  else if(digits.length===10&&digits[0]==="0")digits="998"+digits.slice(1);
                   const aS={fontSize:9,fontWeight:700,padding:"3px 8px",borderRadius:5,textDecoration:"none",border:"1px solid",lineHeight:1.6};
                   return <div style={{display:"flex",gap:5,marginTop:5,flexWrap:"wrap"}}>
                     <a href={`https://t.me/share/url?url=%20&text=${enc}`} target="_blank" rel="noopener" style={{...aS,color:"#229ED9",background:"#229ED915",borderColor:"#229ED944"}}>📲 Telegram eslatma</a>
