@@ -810,24 +810,6 @@ function KpiTab({ team, T, periodStart, canEditCfg }) {
             })}
           </Card>
 
-          {/* Suhbat → Ofis conversion per agent */}
-          <Card title="🏢 SUHBAT → OFIS (agent bo'yicha)">
-            {(d.officeConv || []).length === 0 && (
-              <tr><td colSpan={4} style={{ padding: "10px 12px", fontSize: 10, color: T.muted }}>Bu davrda belgilangan ofis suhbatlari yo'q</td></tr>
-            )}
-            {(d.officeConv || []).map(o => {
-              const p = o.booked > 0 ? Math.round((o.came / o.booked) * 100) : 0;
-              return (
-                <tr key={"oc" + o.id}>
-                  <td style={{ padding: "8px 12px", fontSize: 11, color: T.text, borderBottom: `1px solid ${T.border}` }}>{nameOf(o.id)}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 10, color: T.muted, borderBottom: `1px solid ${T.border}` }}>belgilandi: {o.booked}</td>
-                  <td style={{ padding: "8px 12px", fontSize: 12, fontWeight: 800, borderBottom: `1px solid ${T.border}`, color: p >= 50 ? T.green : p >= 30 ? T.yellow : T.red }}>{o.came} ta · {p}%</td>
-                  <td style={{ padding: "8px 12px", borderBottom: `1px solid ${T.border}`, textAlign: "center" }}>{p >= 35 ? "✅" : "❌"}</td>
-                </tr>
-              );
-            })}
-          </Card>
-
           {/* No-show list */}
           {(d.noShow || []).length > 0 && (
             <div style={{ background: `${T.red}08`, border: `1px solid ${T.red}33`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
