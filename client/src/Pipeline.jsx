@@ -2,8 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
 import { isOD, inp, I, Pill, Av, fmtD, dateRange } from "./helpers.jsx";
-import { leadsAPI, configAPI } from "./api.js";
-import { Modal } from "./helpers.jsx";
+import { leadsAPI } from "./api.js";
 
 // ─── PIPELINE ────────────────────────────────────────────────────────────────
 function Pipeline({
@@ -72,33 +71,32 @@ function Pipeline({
     return () => window.removeEventListener("keydown", h);
   }, []);
 
-  // Time-in-status color coding: fresh = green, stale = red, smooth gradient.
-  // Rules are [minutesFullyGreenUntil, minutesFullyRedAt] per status —
-  // editable by admins (stored in config key "staleRules").
-  const DEFAULT_STALE_RULES = {
-    "Yangi": [10, 2880], "Qilindi": [60, 4320],
-    "Bog'landi": [60, 4320], "Boglanildi": [60, 4320],
-    "Onlayn Suhbat Uchun": [1440, 7200], "Onlayn Suhbat": [1440, 7200], "Suhbat": [1440, 7200],
-    "Shartnoma qildi": [1440, 10080], "XBA To'lov qildi": [1440, 20160],
-    default: [2880, 20160],
+  // Time-in-status color coding driven by the SAME norms (mez) as the
+  // KPI / Vaqt Tahlili section — no separate configuration to maintain.
+  // Norm days per status; card is green up to 50% of the norm, hits the
+  // orange midpoint AT the norm, and is fully red at 1.5x the norm.
+  const STATUS_NORM_DAYS = {
+    "Yangi": 1, "Qilindi": 1, "Bog'landi": 1, "Boglanildi": 1,
+    "Onlayn Suhbat Uchun": 5, "Onlayn Suhbat": 5, "Suhbat": 5,
+    "Shartnoma qildi": 3, "XBA To'lov qildi": 3,
+    "CV Topshirildi": 14, "Interview ga qo'yildi": 14, "Ishga qabul qilindi": 14, "1 - Qism To'landi": 14,
+    "Hujjatlar Tayyorlanmoqda": 14, "Hujjatlar Jonatilishga Tayyor": 14, "Hujjatlar Jonatildi": 14,
+    "Ish shartnomasi keldi": 14, "Ish shartnomasi imzolandi": 14,
+    "Taklifnoma keldi": 90, "Elchixonaga Hujjatlar Tayyor": 90,
+    "Vizaga Topshirildi": 30,
   };
-  const [staleOverrides, setStaleOverrides] = useState(null);
-  useEffect(() => { if (config?.staleRules) setStaleOverrides(config.staleRules); }, [config?.staleRules]);
-  const STALE_RULES = { ...DEFAULT_STALE_RULES, ...(staleOverrides || {}) };
-  const [showStaleCfg, setShowStaleCfg] = useState(false);
-  const [staleDraft, setStaleDraft] = useState(null);
+  const NORM_DEFAULT_DAYS = 14;
 
   const staleColor = (lead) => {
     if (DONE.includes(lead.status) || LOST.includes(lead.status)) return null;
     if (!lead.statusSince) return null;
-    const m = (Date.now() - new Date(lead.statusSince).getTime()) / 60000;
-    if (!(m >= 0)) return null;
-    const rule = STALE_RULES[lead.status] || STALE_RULES.default;
-    const [g, r] = rule;
-    if (!(r > g)) return null;
-    const ratio = Math.max(0, Math.min(1, (m - g) / (r - g)));
+    const days = (Date.now() - new Date(lead.statusSince).getTime()) / 864e5;
+    if (!(days >= 0)) return null;
+    const mez = STATUS_NORM_DAYS[lead.status] || NORM_DEFAULT_DAYS;
+    const g = mez * 0.5, r = mez * 1.5;
+    const ratio = Math.max(0, Math.min(1, (days - g) / (r - g)));
     const hue = 120 * (1 - ratio);
-    return { bar: `hsl(${hue},72%,42%)`, bg: `hsla(${hue},72%,50%,0.08)`, hours: m / 60 };
+    return { bar: `hsl(${hue},72%,42%)`, bg: `hsla(${hue},72%,50%,0.08)`, hours: days * 24, mez };
   };
 
   const [dragStg, setDragStg] = useState(null);
@@ -296,49 +294,6 @@ function Pipeline({
 
   return (
     <div>
-      {/* Color-threshold editor: minutes until fully green ends / fully red */}
-      {showStaleCfg && staleDraft && (
-        <Modal onClose={() => setShowStaleCfg(false)} width={520}>
-          <div style={{ padding: 20 }}>
-            <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 900, color: T.text }}>🎨 Kartochka ranglari sozlamasi</h3>
-            <div style={{ fontSize: 10, color: T.muted, marginBottom: 14 }}>
-              Har bir bosqich uchun: nechchi <b>daqiqagacha yashil</b> turadi va nechchi daqiqada <b>to'liq qizil</b> bo'ladi.
-              (60 = 1 soat, 1440 = 1 kun, 10080 = 1 hafta)
-            </div>
-            <div style={{ maxHeight: 380, overflowY: "auto" }}>
-              {[...stages.filter(s => !DONE.includes(s.key) && !LOST.includes(s.key)).map(s => s.key), "default"].map(key => {
-                const rule = staleDraft[key] || staleDraft.default || [2880, 20160];
-                const setRule = (i, v) => setStaleDraft(p => { const cur = [...(p[key] || p.default || [2880, 20160])]; cur[i] = Math.max(0, Number(v) || 0); return { ...p, [key]: cur }; });
-                return (
-                  <div key={key} style={{ display: "grid", gridTemplateColumns: "1fr 110px 110px", gap: 8, alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.border}` }}>
-                    <span style={{ fontSize: 11, fontWeight: key === "default" ? 800 : 600, color: T.text }}>{key === "default" ? "🔧 Boshqa bosqichlar" : key}</span>
-                    <label style={{ fontSize: 8, color: T.muted }}>Yashil (daq)
-                      <input type="number" min="0" value={rule[0]} onChange={e => setRule(0, e.target.value)}
-                        style={{ width: "100%", fontSize: 11, padding: "4px 6px", borderRadius: 5, border: `1px solid ${T.border}`, background: T.card, color: "#16a34a", fontWeight: 700 }} />
-                    </label>
-                    <label style={{ fontSize: 8, color: T.muted }}>Qizil (daq)
-                      <input type="number" min="0" value={rule[1]} onChange={e => setRule(1, e.target.value)}
-                        style={{ width: "100%", fontSize: 11, padding: "4px 6px", borderRadius: 5, border: `1px solid ${T.border}`, background: T.card, color: "#dc2626", fontWeight: 700 }} />
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
-              <button onClick={() => setShowStaleCfg(false)} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.card2, color: T.text, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Bekor</button>
-              <button onClick={async () => {
-                const bad = Object.entries(staleDraft).find(([, v]) => Array.isArray(v) && !(Number(v[1]) > Number(v[0])));
-                if (bad) { alert(`"${bad[0]}": qizil qiymat yashildan katta bo'lishi kerak`); return; }
-                try {
-                  await configAPI.set("staleRules", staleDraft);
-                  setStaleOverrides(staleDraft);
-                  setShowStaleCfg(false);
-                } catch (e) { alert(e.message); }
-              }} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>💾 Saqlash</button>
-            </div>
-          </div>
-        </Modal>
-      )}
       {selectedIds.size > 0 && (
         <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 600, background: T.accent, color: "#fff", borderRadius: 22, padding: "8px 18px", fontSize: 12, fontWeight: 700, boxShadow: "0 8px 24px rgba(0,0,0,0.35)", display: "flex", gap: 10, alignItems: "center" }}>
           ✅ {selectedIds.size} ta tanlandi — bittasini sudrab, hammasini ko'chiring
@@ -427,14 +382,6 @@ function Pipeline({
               }}
             >
               ⚙️ Bosqichlar
-            </button>
-          )}
-          {perm.canCfg && (
-            <button
-              onClick={() => { setStaleDraft({ ...STALE_RULES }); setShowStaleCfg(true); }}
-              style={{ padding: "7px 11px", borderRadius: 7, border: `1px solid ${T.border}`, background: "transparent", color: T.muted, cursor: "pointer", fontSize: 11 }}
-            >
-              🎨 Ranglar
             </button>
           )}
           <button
@@ -1252,7 +1199,7 @@ function Pipeline({
                           setSelectedIds(p => { const n = new Set(p); n.has(lead.id) ? n.delete(lead.id) : n.add(lead.id); return n; });
                         } else open(lead);
                       }}
-                      title={sc ? `Bu bosqichda: ${sc.hours < 48 ? Math.round(sc.hours) + " soat" : Math.round(sc.hours / 24) + " kun"}` : undefined}
+                      title={sc ? `Bu bosqichda: ${sc.hours < 48 ? Math.round(sc.hours) + " soat" : Math.round(sc.hours / 24) + " kun"} · mez: ${sc.mez} kun` : undefined}
                       style={{
                         background: isSel ? `${T.accent}15` : (sc ? sc.bg : T.card),
                         borderRadius: 7,
