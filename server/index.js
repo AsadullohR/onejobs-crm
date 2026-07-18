@@ -258,7 +258,7 @@ app.get("/api/leads", auth, async (req, res) => {
         l.kpi_sales, l.kpi_consult, l.kpi_docs,
         l.xba_date, l.q1_date, l.q2_date, l.q3_date,
         l.total_income, l.total_expense, l.net_balance, l.sof_foyda,
-        l.last_contact, l.contract_date, l.interview_date, l.dest,
+        l.last_contact, l.contract_date, l.interview_date, l.interview_scheduled, l.dest,
         l.quality, l.quality_note, l.created_at, l.updated_at,
         u_s.name as owner_sales_name, u_s.avatar as owner_sales_av, u_s.color as owner_sales_color,
         u_c.name as owner_consult_name, u_c.avatar as owner_consult_av, u_c.color as owner_consult_color,
@@ -359,9 +359,9 @@ app.post("/api/leads", auth, async (req, res) => {
       }
     }
     // Fetch old status/xba before upsert for change detection
-    const oldRow = await pool.query(`SELECT status, xba, owner_sales, interview_date FROM leads WHERE id=$1`, [id]);
+    const oldRow = await pool.query(`SELECT status, xba, owner_sales, interview_scheduled FROM leads WHERE id=$1`, [id]);
     const oldStatus = oldRow.rows[0]?.status || null;
-    const oldInterview = oldRow.rows[0]?.interview_date || null;
+    const oldInterview = oldRow.rows[0]?.interview_scheduled || null;
 
     // One-way gate: a lead that has moved past "Qilindi" can never be set
     // back to it (enforced here so pipeline drag-and-drop can't bypass it).
@@ -379,9 +379,9 @@ app.post("/api/leads", auth, async (req, res) => {
         kpi_sales, kpi_consult, kpi_docs, cv, docs, history,
         last_contact, contract_date, interview_date, dest, sof_foyda, quality, quality_note,
         xba_date, q1_date, q2_date, q3_date,
-        xba_receipt, q1_receipt, q2_receipt, q3_receipt, branch)
+        xba_receipt, q1_receipt, q2_receipt, q3_receipt, branch, interview_scheduled)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-        COALESCE($41, (SELECT branch FROM users WHERE id=$42)))
+        COALESCE($41, (SELECT branch FROM users WHERE id=$42)), $43)
       ON CONFLICT (id) DO UPDATE SET
         name=$2, phone=$3, telegram=$4, status=$5, country=$6, sector=$7, position=$8, source=$9, gender=$10,
         comment=$11, note=$12, owner_sales=$13, owner_consult=$14, owner_docs=$15, q1=$16, q2=$17, q3=$18, xba=$19,
@@ -391,6 +391,7 @@ app.post("/api/leads", auth, async (req, res) => {
         xba_date=$33, q1_date=$34, q2_date=$35, q3_date=$36,
         xba_receipt=$37, q1_receipt=$38, q2_receipt=$39, q3_receipt=$40,
         branch=COALESCE($41, leads.branch),
+        interview_scheduled=$43,
         updated_at=NOW()
       RETURNING *`,
       [
@@ -436,6 +437,7 @@ app.post("/api/leads", auth, async (req, res) => {
         l.q3Receipt || null,
         l.branch || null,
         req.user.id,
+        l.interviewScheduled || null,
       ],
     );
     const saved = rows[0];
@@ -452,10 +454,10 @@ app.post("/api/leads", auth, async (req, res) => {
       ).catch(() => {});
     }
 
-    // Office-interview reminder: when an interview date is set/changed and is
-    // in the future, auto-create a reminder task (due the day before, or today
-    // if the interview is tomorrow/today) for the responsible salesperson.
-    const newInterview = l.interviewDate || null;
+    // Office-interview reminder: when a SCHEDULED interview date is set or
+    // changed and is in the future, auto-create a reminder task (due the day
+    // before, or today if the interview is tomorrow/today).
+    const newInterview = l.interviewScheduled || null;
     if (newInterview && newInterview !== oldInterview && /^\d{4}-\d{2}-\d{2}/.test(newInterview)) {
       const iDate = new Date(newInterview.slice(0, 10));
       const today0 = new Date(new Date().toISOString().slice(0, 10));
@@ -1182,20 +1184,22 @@ app.get("/api/stats/kpi", auth, async (req, res) => {
       // Suhbat→Ofis conversion per agent: interviews BOOKED in period vs CAME
       q(`SELECT l.owner_sales id, COUNT(*) booked,
            COUNT(*) FILTER (WHERE l.status = ANY($3)
-             OR EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id = l.id AND sl.status = ANY($3))) came
+             OR EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id = l.id AND sl.status = ANY($3))
+             OR NULLIF(l.interview_date,'') IS NOT NULL) came
          FROM leads l
-         WHERE l.owner_sales IS NOT NULL AND l.interview_date ~ '^\\d{4}-\\d{2}-\\d{2}'
-           AND NULLIF(l.interview_date,'')::date BETWEEN $1::date AND $2::date
+         WHERE l.owner_sales IS NOT NULL AND l.interview_scheduled ~ '^\\d{4}-\\d{2}-\\d{2}'
+           AND NULLIF(l.interview_scheduled,'')::date BETWEEN $1::date AND $2::date
          GROUP BY l.owner_sales ORDER BY booked DESC`, [...P, CAME_STATUSES]),
-      // No-show list: interview date passed (last 30 days), never came
-      q(`SELECT l.id, l.name, l.phone, NULLIF(l.interview_date,'') idate, u.name owner
+      // No-show list: SCHEDULED date passed (last 30 days), never came
+      q(`SELECT l.id, l.name, l.phone, NULLIF(l.interview_scheduled,'') idate, u.name owner
          FROM leads l LEFT JOIN users u ON u.id = l.owner_sales
-         WHERE l.interview_date ~ '^\\d{4}-\\d{2}-\\d{2}'
-           AND NULLIF(l.interview_date,'')::date < CURRENT_DATE
-           AND NULLIF(l.interview_date,'')::date >= CURRENT_DATE - INTERVAL '30 days'
+         WHERE l.interview_scheduled ~ '^\\d{4}-\\d{2}-\\d{2}'
+           AND NULLIF(l.interview_scheduled,'')::date < CURRENT_DATE
+           AND NULLIF(l.interview_scheduled,'')::date >= CURRENT_DATE - INTERVAL '30 days'
+           AND NULLIF(l.interview_date,'') IS NULL
            AND NOT (l.status = ANY($1))
            AND NOT EXISTS (SELECT 1 FROM status_log sl WHERE sl.lead_id = l.id AND sl.status = ANY($1))
-         ORDER BY NULLIF(l.interview_date,'')::date DESC LIMIT 50`, [CAME_STATUSES]),
+         ORDER BY NULLIF(l.interview_scheduled,'')::date DESC LIMIT 50`, [CAME_STATUSES]),
     ]);
     const days = Math.max(1, Math.round((new Date(to) - new Date(from)) / 864e5) + 1);
     res.json({
@@ -2429,6 +2433,7 @@ app.listen(PORT, async () => {
     `);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS branch TEXT`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS branch TEXT`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS interview_scheduled TEXT`);
     await pool.query(`
       ALTER TABLE vacancies
         ADD COLUMN IF NOT EXISTS title_ru TEXT,

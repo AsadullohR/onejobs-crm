@@ -144,6 +144,7 @@ const mapLead = useCallback(l => ({
   lastCall:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.last_contact),
   shartnomaSana:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.contract_date),
   officeSuhbat:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.interview_date),
+  suhbatBelgilangan:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.interview_scheduled),
   dest:l.dest||"",
   docsStage:l.docs_stage||null, archived:l.archived||false,
   reklamaName:l.reklama_name||"",
@@ -206,6 +207,7 @@ const saveLead = useCallback(async f => {
         lastContact:f.lastCall || null,
         contractDate:f.shartnomaSana || null,
         interviewDate:f.officeSuhbat || null,
+        interviewScheduled:f.suhbatBelgilangan || null,
       });
 
       // Use the server-returned row so we have the real ID and DB timestamps

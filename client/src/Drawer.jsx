@@ -209,6 +209,7 @@ const [form,setForm]=useState({
               <div><label style={labS}>📅 Qayd qilingan sana</label><input type="date" value={form.createdAt||""} onChange={e=>f("createdAt",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
               <div><label style={labS}>📞 So'ngi aloqa vaqti</label><input type="date" value={form.lastCall||""} onChange={e=>f("lastCall",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
               <div><label style={labS}>💻 Onlayn suhbat sanasi</label><input type="date" value={form.onlaynSuhbat||""} onChange={e=>f("onlaynSuhbat",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
+              <div><label style={labS}>📅 Suhbat belgilangan sana</label><input type="date" value={form.suhbatBelgilangan||""} onChange={e=>f("suhbatBelgilangan",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
               <div><label style={labS}>🏢 Suhbatga kelgan sana</label><input type="date" value={form.officeSuhbat||""} onChange={e=>f("officeSuhbat",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
               <div><label style={labS}>📄 Shartnoma qilgan sana</label><input type="date" value={form.shartnomaSana||""} onChange={e=>f("shartnomaSana",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
             </div>
