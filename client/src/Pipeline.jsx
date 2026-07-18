@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { useT } from "./theme.js";
 import { DONE, LOST } from "./constants.js";
 import { isOD, inp, I, Pill, Av, fmtD, dateRange } from "./helpers.jsx";
-import { leadsAPI } from "./api.js";
+import { leadsAPI, configAPI } from "./api.js";
+import { Modal } from "./helpers.jsx";
 
 // ─── PIPELINE ────────────────────────────────────────────────────────────────
 function Pipeline({
@@ -72,23 +73,32 @@ function Pipeline({
   }, []);
 
   // Time-in-status color coding: fresh = green, stale = red, smooth gradient.
-  // [hoursFullyGreenUntil, hoursFullyRedAt] per status; done/lost not colored.
-  const STALE_RULES = {
-    "Yangi": [10 / 60, 48], "Qilindi": [1, 72],
-    "Bog'landi": [1, 72], "Boglanildi": [1, 72],
-    "Onlayn Suhbat Uchun": [24, 120], "Onlayn Suhbat": [24, 120], "Suhbat": [24, 120],
-    "Shartnoma qildi": [24, 168], "XBA To'lov qildi": [24, 336],
+  // Rules are [minutesFullyGreenUntil, minutesFullyRedAt] per status —
+  // editable by admins (stored in config key "staleRules").
+  const DEFAULT_STALE_RULES = {
+    "Yangi": [10, 2880], "Qilindi": [60, 4320],
+    "Bog'landi": [60, 4320], "Boglanildi": [60, 4320],
+    "Onlayn Suhbat Uchun": [1440, 7200], "Onlayn Suhbat": [1440, 7200], "Suhbat": [1440, 7200],
+    "Shartnoma qildi": [1440, 10080], "XBA To'lov qildi": [1440, 20160],
+    default: [2880, 20160],
   };
-  const STALE_DEFAULT = [48, 336];
+  const [staleOverrides, setStaleOverrides] = useState(null);
+  useEffect(() => { if (config?.staleRules) setStaleOverrides(config.staleRules); }, [config?.staleRules]);
+  const STALE_RULES = { ...DEFAULT_STALE_RULES, ...(staleOverrides || {}) };
+  const [showStaleCfg, setShowStaleCfg] = useState(false);
+  const [staleDraft, setStaleDraft] = useState(null);
+
   const staleColor = (lead) => {
     if (DONE.includes(lead.status) || LOST.includes(lead.status)) return null;
     if (!lead.statusSince) return null;
-    const h = (Date.now() - new Date(lead.statusSince).getTime()) / 36e5;
-    if (!(h >= 0)) return null;
-    const [g, r] = STALE_RULES[lead.status] || STALE_DEFAULT;
-    const ratio = Math.max(0, Math.min(1, (h - g) / (r - g)));
+    const m = (Date.now() - new Date(lead.statusSince).getTime()) / 60000;
+    if (!(m >= 0)) return null;
+    const rule = STALE_RULES[lead.status] || STALE_RULES.default;
+    const [g, r] = rule;
+    if (!(r > g)) return null;
+    const ratio = Math.max(0, Math.min(1, (m - g) / (r - g)));
     const hue = 120 * (1 - ratio);
-    return { bar: `hsl(${hue},72%,42%)`, bg: `hsla(${hue},72%,50%,0.08)`, hours: h };
+    return { bar: `hsl(${hue},72%,42%)`, bg: `hsla(${hue},72%,50%,0.08)`, hours: m / 60 };
   };
 
   const [dragStg, setDragStg] = useState(null);
@@ -286,6 +296,49 @@ function Pipeline({
 
   return (
     <div>
+      {/* Color-threshold editor: minutes until fully green ends / fully red */}
+      {showStaleCfg && staleDraft && (
+        <Modal onClose={() => setShowStaleCfg(false)} width={520}>
+          <div style={{ padding: 20 }}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 900, color: T.text }}>🎨 Kartochka ranglari sozlamasi</h3>
+            <div style={{ fontSize: 10, color: T.muted, marginBottom: 14 }}>
+              Har bir bosqich uchun: nechchi <b>daqiqagacha yashil</b> turadi va nechchi daqiqada <b>to'liq qizil</b> bo'ladi.
+              (60 = 1 soat, 1440 = 1 kun, 10080 = 1 hafta)
+            </div>
+            <div style={{ maxHeight: 380, overflowY: "auto" }}>
+              {[...stages.filter(s => !DONE.includes(s.key) && !LOST.includes(s.key)).map(s => s.key), "default"].map(key => {
+                const rule = staleDraft[key] || staleDraft.default || [2880, 20160];
+                const setRule = (i, v) => setStaleDraft(p => { const cur = [...(p[key] || p.default || [2880, 20160])]; cur[i] = Math.max(0, Number(v) || 0); return { ...p, [key]: cur }; });
+                return (
+                  <div key={key} style={{ display: "grid", gridTemplateColumns: "1fr 110px 110px", gap: 8, alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${T.border}` }}>
+                    <span style={{ fontSize: 11, fontWeight: key === "default" ? 800 : 600, color: T.text }}>{key === "default" ? "🔧 Boshqa bosqichlar" : key}</span>
+                    <label style={{ fontSize: 8, color: T.muted }}>Yashil (daq)
+                      <input type="number" min="0" value={rule[0]} onChange={e => setRule(0, e.target.value)}
+                        style={{ width: "100%", fontSize: 11, padding: "4px 6px", borderRadius: 5, border: `1px solid ${T.border}`, background: T.card, color: "#16a34a", fontWeight: 700 }} />
+                    </label>
+                    <label style={{ fontSize: 8, color: T.muted }}>Qizil (daq)
+                      <input type="number" min="0" value={rule[1]} onChange={e => setRule(1, e.target.value)}
+                        style={{ width: "100%", fontSize: 11, padding: "4px 6px", borderRadius: 5, border: `1px solid ${T.border}`, background: T.card, color: "#dc2626", fontWeight: 700 }} />
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
+              <button onClick={() => setShowStaleCfg(false)} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.card2, color: T.text, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Bekor</button>
+              <button onClick={async () => {
+                const bad = Object.entries(staleDraft).find(([, v]) => Array.isArray(v) && !(Number(v[1]) > Number(v[0])));
+                if (bad) { alert(`"${bad[0]}": qizil qiymat yashildan katta bo'lishi kerak`); return; }
+                try {
+                  await configAPI.set("staleRules", staleDraft);
+                  setStaleOverrides(staleDraft);
+                  setShowStaleCfg(false);
+                } catch (e) { alert(e.message); }
+              }} style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: T.accent, color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>💾 Saqlash</button>
+            </div>
+          </div>
+        </Modal>
+      )}
       {selectedIds.size > 0 && (
         <div style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 600, background: T.accent, color: "#fff", borderRadius: 22, padding: "8px 18px", fontSize: 12, fontWeight: 700, boxShadow: "0 8px 24px rgba(0,0,0,0.35)", display: "flex", gap: 10, alignItems: "center" }}>
           ✅ {selectedIds.size} ta tanlandi — bittasini sudrab, hammasini ko'chiring
@@ -374,6 +427,14 @@ function Pipeline({
               }}
             >
               ⚙️ Bosqichlar
+            </button>
+          )}
+          {perm.canCfg && (
+            <button
+              onClick={() => { setStaleDraft({ ...STALE_RULES }); setShowStaleCfg(true); }}
+              style={{ padding: "7px 11px", borderRadius: 7, border: `1px solid ${T.border}`, background: "transparent", color: T.muted, cursor: "pointer", fontSize: 11 }}
+            >
+              🎨 Ranglar
             </button>
           )}
           <button
