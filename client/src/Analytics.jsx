@@ -842,7 +842,8 @@ function KpiTab({ team, T, periodStart, canEditCfg }) {
           </Card>
         </div>
 
-        {/* Bonus calculator with editable scheme */}
+        {/* Bonus calculator — ADMIN ONLY (salaries are sensitive) */}
+        {canEditCfg && (
         <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
           <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", background: T.card2, borderBottom: `1px solid ${T.border}` }}>
             <span style={{ fontSize: 12, fontWeight: 800, color: T.text }}>💰 BONUS HISOBI</span>
@@ -907,6 +908,7 @@ function KpiTab({ team, T, periodStart, canEditCfg }) {
             })()}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

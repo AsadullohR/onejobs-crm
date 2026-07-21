@@ -145,7 +145,7 @@ app.post("/api/auth/login", async (req, res) => {
         name: rows[0].name,
       },
       JWT_SECRET,
-      { expiresIn: "7d" },
+      { expiresIn: "90d" },
     );
     const { password: _, ...user } = rows[0];
     res.json({ token, user });
@@ -1021,6 +1021,8 @@ app.get("/api/config", auth, async (req, res) => {
     rows.forEach((r) => {
       try { cfg[r.key] = JSON.parse(r.value); } catch(e) { cfg[r.key] = r.value; }
     });
+    // Salary/bonus scheme is admin-only — strip it for everyone else.
+    if (req.user.role !== "admin") delete cfg.bonusCfg;
     res.json(cfg);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1029,6 +1031,8 @@ app.get("/api/config", auth, async (req, res) => {
 
 app.put("/api/config/:key", auth, async (req, res) => {
   try {
+    if (req.params.key === "bonusCfg" && req.user.role !== "admin")
+      return res.status(403).json({ error: "Faqat admin" });
     await pool.query(
       `INSERT INTO config (key, value) VALUES ($1, $2)
        ON CONFLICT (key) DO UPDATE SET value=$2, updated_at=NOW()`,

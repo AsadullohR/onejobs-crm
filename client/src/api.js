@@ -36,6 +36,13 @@ async function req(method, path, body) {
 
   if (!res.ok) {
     console.error("API ERROR:", res.status, data);
+    // Expired/invalid session: clear it and bounce to login instead of
+    // showing a confusing "token error" on whatever the user was doing.
+    if (res.status === 401 && path !== "/api/auth/login") {
+      clearToken();
+      alert("Sessiya muddati tugadi. Iltimos, qaytadan kiring.");
+      window.location.reload();
+    }
     const err = new Error(data.error || `HTTP ${res.status}`);
     err.status = res.status;
     if (data.duplicates) err.duplicates = data.duplicates;
