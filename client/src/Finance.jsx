@@ -38,6 +38,10 @@ function Finance({
   const [search, setSearch] = useState("");
   const [fView, setFView] = useState("all");
   const [finTab, setFinTab] = useState("txns"); // txns | debts
+  const [showTxnReport, setShowTxnReport] = useState(false);
+  const [repRange, setRepRange] = useState("month"); // month | year | all | custom
+  const [repFrom, setRepFrom] = useState("");
+  const [repTo, setRepTo] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState("");
   const [importResult, setImportResult] = useState(null);
@@ -564,7 +568,7 @@ function Finance({
               📊 Mijoz CSV
             </button>
             <button
-              onClick={exportCSV}
+              onClick={() => setShowTxnReport(true)}
               style={{
                 flex: 1,
                 padding: "3px",
@@ -1900,6 +1904,107 @@ function Finance({
           </div>
         </Modal>
       )}
+
+      {/* ── TRANSACTION REPORT ── */}
+      {showTxnReport && (() => {
+        const now = new Date();
+        let from = "", to = now.toISOString().slice(0, 10);
+        if (repRange === "month") from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+        else if (repRange === "year") from = `${now.getFullYear()}-01-01`;
+        else if (repRange === "custom") { from = repFrom; to = repTo || to; }
+        const inRep = (d) => (!from || d >= from) && (!to || d <= to);
+        const rows = txns.filter((t) => t.date && inRep(t.date))
+          .sort((a, b) => (a.date < b.date ? 1 : -1));
+        const inc = rows.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+        const exp = rows.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+        const bal = inc - exp;
+        const leadName = (id) => leads.find((l) => l.id === id)?.name || (id ? id : "–");
+        const exportRep = () => {
+          const h = ["Sana", "Tur", "Kategoriya", "Tavsif", "Summa", "Mijoz/Xodim"];
+          const r = rows.map((t) => [t.date, t.type === "income" ? "Kirim" : "Chiqim", t.cat || "", (t.desc || "").replace(/,/g, " "), t.amount, (leadName(t.leadId) + (t.empName ? " / " + t.empName : "")).replace(/,/g, " ")]);
+          const csv = [h, ...r].map((x) => x.join(",")).join("\n");
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+          a.download = `moliyaviy_hisobot_${from || "boshidan"}_${to}.csv`;
+          a.click();
+        };
+        const box = (label, val, color) => (
+          <div style={{ flex: 1, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px" }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color }}>{fmtMs(val)} so'm</div>
+          </div>
+        );
+        return (
+          <Modal onClose={() => setShowTxnReport(false)} width={760}>
+            <div style={{ padding: 20, maxHeight: "82vh", overflowY: "auto" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: T.text }}>📋 Moliyaviy hisobot</h3>
+                <button onClick={exportRep} style={{ fontSize: 11, fontWeight: 700, padding: "6px 14px", borderRadius: 7, background: `${T.accent}15`, color: T.accent, border: `1px solid ${T.accent}44`, cursor: "pointer" }}>⬇ CSV</button>
+              </div>
+
+              {/* Range selector */}
+              <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+                {[["month", "Bu oy"], ["year", "Bu yil"], ["all", "Hammasi"], ["custom", "Sana tanlash"]].map(([k, l]) => (
+                  <button key={k} onClick={() => setRepRange(k)}
+                    style={{ padding: "6px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                      border: `1px solid ${repRange === k ? T.accent : T.border}`, background: repRange === k ? T.accent : T.card, color: repRange === k ? "#fff" : T.muted }}>
+                    {l}
+                  </button>
+                ))}
+                {repRange === "custom" && (
+                  <>
+                    <input type="date" value={repFrom} onChange={(e) => setRepFrom(e.target.value)} style={{ ...inp(T), width: "auto", fontSize: 11 }} />
+                    <span style={{ color: T.muted }}>—</span>
+                    <input type="date" value={repTo} onChange={(e) => setRepTo(e.target.value)} style={{ ...inp(T), width: "auto", fontSize: 11 }} />
+                  </>
+                )}
+              </div>
+
+              {/* Summary */}
+              <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+                {box("💚 Jami kirim", inc, T.green)}
+                {box("🔴 Jami chiqim", exp, T.red)}
+                {box("⚖️ Qoldiq", bal, bal >= 0 ? T.green : T.red)}
+              </div>
+              <div style={{ fontSize: 10, color: T.muted, marginBottom: 10 }}>
+                {rows.length} ta tranzaksiya · {from || "boshidan"} — {to}
+              </div>
+
+              {/* Transaction list */}
+              <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead><tr style={{ background: T.card2 }}>
+                    {["Sana", "Tur", "Kategoriya", "Tavsif", "Mijoz/Xodim", "Summa"].map((h) => (
+                      <th key={h} style={{ textAlign: h === "Summa" ? "right" : "left", padding: "8px 10px", fontSize: 8, fontWeight: 700, color: T.muted, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {rows.map((t) => (
+                      <tr key={t.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                        <td style={{ padding: "7px 10px", color: T.muted, whiteSpace: "nowrap" }}>{t.date}</td>
+                        <td style={{ padding: "7px 10px" }}>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: "1px 7px", borderRadius: 8, background: t.type === "income" ? `${T.green}18` : `${T.red}18`, color: t.type === "income" ? T.green : T.red }}>
+                            {t.type === "income" ? "Kirim" : "Chiqim"}
+                          </span>
+                        </td>
+                        <td style={{ padding: "7px 10px", color: T.text }}>{t.cat || "–"}</td>
+                        <td style={{ padding: "7px 10px", color: T.muted, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.desc || "–"}</td>
+                        <td style={{ padding: "7px 10px", color: T.text }}>{leadName(t.leadId)}{t.empName ? ` / ${t.empName}` : ""}</td>
+                        <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 800, whiteSpace: "nowrap", color: t.type === "income" ? T.green : T.red }}>
+                          {t.type === "income" ? "+" : "-"}{fmtMs(t.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                    {rows.length === 0 && (
+                      <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: T.muted }}>Bu davrda tranzaksiya yo'q</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }
