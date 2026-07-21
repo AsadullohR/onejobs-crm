@@ -73,10 +73,13 @@ function Finance({
   const tasdFoyda = leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
   const staffExp = txns.filter(t=>t.type==="expense"&&!t.leadId).reduce((s,t)=>s+t.amount,0);
   const sofFoyda = tasdFoyda - extTotal - staffExp;
+  // Lead IDs that have at least one transaction (income or expense)
+  const leadsWithTxn = new Set(txns.filter((t) => t.leadId).map((t) => t.leadId));
   const visLeads = leads
     .filter((l) => {
+      // Jarayon: only in-progress clients that have at least 1 transaction
       if (fView === "jarayon")
-        return !DONE.includes(l.status) && !LOST.includes(l.status);
+        return !DONE.includes(l.status) && !LOST.includes(l.status) && leadsWithTxn.has(l.id);
       if (fView === "tugatilgan") return DONE.includes(l.status);
       if (fView === "yoqotilgan") return LOST.includes(l.status);
       return true;
