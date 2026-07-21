@@ -1926,14 +1926,57 @@ function Finance({
         const exp = rows.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
         const bal = inc - exp;
         const leadName = (id) => leads.find((l) => l.id === id)?.name || (id ? id : "–");
-        const exportRep = () => {
-          const h = ["Sana", "Tur", "Kategoriya", "Tavsif", "Summa", "Mijoz/Xodim"];
-          const r = rows.map((t) => [t.date, t.type === "income" ? "Kirim" : "Chiqim", t.cat || "", (t.desc || "").replace(/,/g, " "), t.amount, (leadName(t.leadId) + (t.empName ? " / " + t.empName : "")).replace(/,/g, " ")]);
-          const csv = [h, ...r].map((x) => x.join(",")).join("\n");
-          const a = document.createElement("a");
-          a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
-          a.download = `moliyaviy_hisobot_${from || "boshidan"}_${to}.csv`;
-          a.click();
+        const exportPDF = () => {
+          const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          const nf = (n) => Number(n).toLocaleString("uz-UZ");
+          const rangeLbl = { month: "Bu oy", year: "Bu yil", all: "Hammasi", custom: "Tanlangan" }[repRange];
+          const body = rows.map((t) => `<tr>
+            <td>${t.date}</td>
+            <td class="${t.type === "income" ? "inc" : "exp"}">${t.type === "income" ? "Kirim" : "Chiqim"}</td>
+            <td>${esc(t.cat || "–")}</td>
+            <td>${esc(t.desc || "–")}</td>
+            <td>${esc(leadName(t.leadId) + (t.empName ? " / " + t.empName : ""))}</td>
+            <td class="num ${t.type === "income" ? "inc" : "exp"}">${t.type === "income" ? "+" : "-"}${nf(t.amount)}</td>
+          </tr>`).join("");
+          const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Moliyaviy hisobot ${from || ""} — ${to}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:Arial,Helvetica,sans-serif;color:#111;padding:30px;font-size:12px}
+  h1{font-size:20px;margin:0 0 2px;color:#0066d8}
+  .sub{color:#666;font-size:12px;margin-bottom:18px}
+  .cards{display:flex;gap:12px;margin-bottom:20px}
+  .card{flex:1;border:1px solid #ddd;border-radius:10px;padding:12px 16px}
+  .card .l{font-size:10px;color:#888;text-transform:uppercase;font-weight:700;margin-bottom:4px}
+  .card .v{font-size:18px;font-weight:800}
+  .green{color:#16a34a}.red{color:#dc2626}
+  table{width:100%;border-collapse:collapse;margin-top:6px}
+  th{background:#f3f4f6;text-align:left;padding:7px 9px;font-size:9px;text-transform:uppercase;color:#666;border-bottom:1px solid #ddd}
+  td{padding:6px 9px;border-bottom:1px solid #eee}
+  td.num{text-align:right;font-weight:700;white-space:nowrap}
+  td.inc,.card .green{color:#16a34a}td.exp{color:#dc2626}
+  th:last-child{text-align:right}
+  .foot{margin-top:18px;font-size:9px;color:#aaa;text-align:right}
+  @media print{button{display:none}.no-print{display:none}}
+</style></head><body>
+<button class="no-print" onclick="window.print()" style="float:right;padding:8px 16px;background:#0066d8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700">🖨 Chop etish / PDF</button>
+<h1>✈️ OneJobs — Moliyaviy hisobot</h1>
+<div class="sub">Davr: <b>${rangeLbl}</b> · ${from || "boshidan"} — ${to} · ${rows.length} ta tranzaksiya · Yaratildi: ${new Date().toLocaleString("uz-UZ")}</div>
+<div class="cards">
+  <div class="card"><div class="l">💚 Jami kirim</div><div class="v green">${nf(inc)} so'm</div></div>
+  <div class="card"><div class="l">🔴 Jami chiqim</div><div class="v red">${nf(exp)} so'm</div></div>
+  <div class="card"><div class="l">⚖️ Qoldiq</div><div class="v ${bal >= 0 ? "green" : "red"}">${nf(bal)} so'm</div></div>
+</div>
+<table>
+  <thead><tr><th>Sana</th><th>Tur</th><th>Kategoriya</th><th>Tavsif</th><th>Mijoz/Xodim</th><th>Summa</th></tr></thead>
+  <tbody>${body || `<tr><td colspan="6" style="text-align:center;padding:20px;color:#999">Tranzaksiya yo'q</td></tr>`}</tbody>
+</table>
+<div class="foot">OneJobs CRM © ${new Date().getFullYear()}</div>
+<script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
+</body></html>`;
+          const w = window.open("", "_blank");
+          if (!w) { alert("Pop-up bloklandi — brauzerda ruxsat bering"); return; }
+          w.document.write(html);
+          w.document.close();
         };
         const box = (label, val, color) => (
           <div style={{ flex: 1, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px" }}>
@@ -1946,7 +1989,7 @@ function Finance({
             <div style={{ padding: 20, maxHeight: "82vh", overflowY: "auto" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
                 <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: T.text }}>📋 Moliyaviy hisobot</h3>
-                <button onClick={exportRep} style={{ fontSize: 11, fontWeight: 700, padding: "6px 14px", borderRadius: 7, background: `${T.accent}15`, color: T.accent, border: `1px solid ${T.accent}44`, cursor: "pointer" }}>⬇ CSV</button>
+                <button onClick={exportPDF} style={{ fontSize: 11, fontWeight: 700, padding: "6px 14px", borderRadius: 7, background: `${T.accent}15`, color: T.accent, border: `1px solid ${T.accent}44`, cursor: "pointer" }}>🖨 PDF</button>
               </div>
 
               {/* Range selector */}
