@@ -273,7 +273,9 @@ function FinanceDashboard({ txns, leads, extExps }) {
   const extTotal  = filtExt.reduce((s, e) => s + Number(e.amount), 0);
   const totalExp  = salaries + clientExp + extTotal;
   const profit    = income - totalExp;
-  const outstanding = leads.filter(l => l.sofFoyda).reduce((s, l) => s + Number(l.sofFoyda || 0), 0);
+  // Only DONE (Jo'nab ketdi / Viza Oldi) leads count as confirmed profit —
+  // matches the topbar "Tasdiqlangan" and this card's own subtitle.
+  const outstanding = leads.filter(l => DONE.includes(l.status) && l.sofFoyda).reduce((s, l) => s + Number(l.sofFoyda || 0), 0);
 
   const RANGES = [
     { k: "week",    l: "Hafta" },
