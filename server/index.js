@@ -377,15 +377,18 @@ app.post("/api/leads", auth, async (req, res) => {
   const l = req.body;
   const id = l.id || await nextLeadId();
   try {
-    // Duplicate check: phone (hard block) + name (soft, bypassable with force=true)
-    if (l.phone) {
+    // Phone duplicate check applies ONLY to NEW leads. Editing an existing
+    // lead must never be blocked — imported data already has duplicate phones,
+    // and blocking would silently break every save (status, sof foyda, etc.).
+    const isExisting = l.id && !String(l.id).startsWith("tmp-");
+    if (!isExisting && l.phone) {
       const digits = (l.phone.match(/\d/g) || []).join("");
       if (digits.length >= 7) {
         const phoneDup = await pool.query(
           `SELECT id, name, phone, status FROM leads WHERE phone LIKE $1 LIMIT 1`,
           [`%${digits.slice(-9)}`]
         );
-        if (phoneDup.rows.length > 0 && phoneDup.rows[0].id !== (l.id || "")) {
+        if (phoneDup.rows.length > 0) {
           return res.status(409).json({ duplicates: phoneDup.rows, message: `Bu telefon raqam allaqachon ro'yxatda: ${phoneDup.rows[0].name} (${phoneDup.rows[0].id})` });
         }
       }

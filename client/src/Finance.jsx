@@ -934,7 +934,9 @@ function Finance({
                     {bal >= 0 ? "+" : ""}
                     {fmtMs(bal)}
                   </span>
-                  {l.sofFoyda && (
+                  {/* Locked confirmed profit — only for departed clients;
+                      in-progress rows already show live balance above. */}
+                  {DONE.includes(l.status) && l.sofFoyda && (
                     <span style={{ fontSize: 7, color: T.yellow }}>
                       💰{fmtMs(l.sofFoyda)}
                     </span>
@@ -1072,7 +1074,9 @@ function Finance({
                     ↩️ Qaytarish
                   </button>
                 )}
-                {cur.sofFoyda && (
+                {(() => {
+                  const sof = DONE.includes(cur.status) ? (cur.sofFoyda ?? (cf.inc - cf.exp)) : (cf.inc - cf.exp);
+                  return sof ? (
                   <span
                     style={{
                       padding: "5px 8px",
@@ -1083,10 +1087,11 @@ function Finance({
                       fontSize: 10,
                       fontWeight: 700,
                     }}
+                    title={DONE.includes(cur.status) ? "Tasdiqlangan sof foyda" : "Kutilayotgan foyda (Kirim − Chiqim)"}
                   >
-                    💰{fmtMs(cur.sofFoyda)}
+                    💰{fmtMs(sof)}
                   </span>
-                )}
+                ) : null; })()}
               </div>
             </div>
             {/* KPIs */}
@@ -1106,7 +1111,9 @@ function Finance({
                   cf.inc - cf.exp,
                   cf.inc - cf.exp >= 0 ? T.green : T.red,
                 ],
-                ["💰 Sof Foyda", cur.sofFoyda, T.yellow],
+                // Departed (Tugagan) clients: locked confirmed profit.
+                // In-progress: live net = Kirim − Chiqim (expected profit).
+                ["💰 Sof Foyda", DONE.includes(cur.status) ? (cur.sofFoyda ?? (cf.inc - cf.exp)) : (cf.inc - cf.exp), T.yellow],
               ].map(([lb, val, c]) => (
                 <div
                   key={lb}
