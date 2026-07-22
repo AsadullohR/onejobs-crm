@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useT } from "./theme.js";
 import { STAGES, gS } from "./constants.js";
 
@@ -69,8 +69,16 @@ function StatCard({icon,label,value,sub,color}) {
 }
 function Modal({children,onClose,width=480}) {
   const T=useT();
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:16}}>
-    <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,width:"100%",maxWidth:width,maxHeight:"92vh",overflowY:"auto",boxShadow:T.shadow}}>{children}</div>
+  // Close on Escape key
+  useEffect(()=>{
+    if(!onClose) return;
+    const h=e=>{ if(e.key==="Escape") onClose(); };
+    window.addEventListener("keydown",h);
+    return ()=>window.removeEventListener("keydown",h);
+  },[onClose]);
+  // Backdrop click closes; clicks inside the content are ignored via stopPropagation.
+  return <div onClick={()=>onClose&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:16}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,width:"100%",maxWidth:width,maxHeight:"92vh",overflowY:"auto",boxShadow:T.shadow}}>{children}</div>
   </div>;
 }
 // Searchable select for leads/team

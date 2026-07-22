@@ -1989,7 +1989,10 @@ function Finance({
             <div style={{ padding: 20, maxHeight: "82vh", overflowY: "auto" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
                 <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: T.text }}>📋 Moliyaviy hisobot</h3>
-                <button onClick={exportPDF} style={{ fontSize: 11, fontWeight: 700, padding: "6px 14px", borderRadius: 7, background: `${T.accent}15`, color: T.accent, border: `1px solid ${T.accent}44`, cursor: "pointer" }}>🖨 PDF</button>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button onClick={exportPDF} style={{ fontSize: 11, fontWeight: 700, padding: "6px 14px", borderRadius: 7, background: `${T.accent}15`, color: T.accent, border: `1px solid ${T.accent}44`, cursor: "pointer" }}>🖨 PDF</button>
+                  <button onClick={() => setShowTxnReport(false)} title="Yopish (Esc)" style={{ width: 30, height: 30, borderRadius: "50%", border: `1px solid ${T.border}`, background: T.card2, color: T.muted, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>×</button>
+                </div>
               </div>
 
               {/* Range selector */}
