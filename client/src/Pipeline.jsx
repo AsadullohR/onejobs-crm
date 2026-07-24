@@ -636,6 +636,17 @@ function Pipeline({
             {config.sources.map((s) => (
               <option key={s}>{s}</option>
             ))}
+            {team.filter((t) => t.role === "partner").length > 0 && (
+              <optgroup label="Hamkorlar">
+                {team
+                  .filter((t) => t.role === "partner")
+                  .map((p) => (
+                    <option key={`partner-${p.id}`} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
           </select>
           <select
             value={fGender || ""}
