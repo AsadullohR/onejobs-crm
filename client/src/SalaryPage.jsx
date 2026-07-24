@@ -22,7 +22,10 @@ function SalaryPage({team, txns, setTxns, user}) {
   };
   const ROLE_LABEL={admin:"Admin",manager:"Menejer",sales:"Sotuv/Call",docs:"Hujjatchi",partner:"Hamkor"};
 
-  const allSal=txns.filter(t=>t.type==="expense"&&(SAL_CATS.includes(t.cat)||["Maosh","Avans","Bonus","KPI"].includes(t.cat)));
+  // KPI is treated as the client's own expense, NOT a company salary expense —
+  // exclude it here so it never inflates the "Xodimlar Xarajatlari" totals/rows.
+  const SALARY_CATS=SAL_CATS.filter(c=>c!=="KPI");
+  const allSal=txns.filter(t=>t.type==="expense"&&t.cat!=="KPI"&&(SALARY_CATS.includes(t.cat)||["Maosh","Avans","Bonus"].includes(t.cat)));
   const monthSal=selMonth?allSal.filter(t=>t.date?.startsWith(selMonth)):allSal;
   const thisMonthTotal=monthSal.reduce((s,t)=>s+t.amount,0);
   const allTimeTotal=allSal.reduce((s,t)=>s+t.amount,0);
