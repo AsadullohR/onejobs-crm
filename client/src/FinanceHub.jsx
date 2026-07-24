@@ -266,10 +266,12 @@ function FinanceDashboard({ txns, leads, extExps }) {
   const filtExt  = extExps.filter(e => inRange(e.date));
 
   const income  = filtTxns.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  // KPI is treated as the client's own expense, NOT company salary — so it is
+  // excluded from the salary bucket and falls into clientExp (Mijoz) instead.
   const salaries = filtTxns.filter(t => t.type === "expense" &&
-    ["Oylik maosh","Avans","Bonus","KPI","Jarima","Maosh"].includes(t.cat)).reduce((s, t) => s + t.amount, 0);
+    ["Oylik maosh","Avans","Bonus","Jarima","Maosh"].includes(t.cat)).reduce((s, t) => s + t.amount, 0);
   const clientExp = filtTxns.filter(t => t.type === "expense" &&
-    !["Oylik maosh","Avans","Bonus","KPI","Jarima","Maosh"].includes(t.cat)).reduce((s, t) => s + t.amount, 0);
+    !["Oylik maosh","Avans","Bonus","Jarima","Maosh"].includes(t.cat)).reduce((s, t) => s + t.amount, 0);
   const extTotal  = filtExt.reduce((s, e) => s + Number(e.amount), 0);
   const totalExp  = salaries + clientExp + extTotal;
   const profit    = income - totalExp;
@@ -387,7 +389,8 @@ function BarChart({ txns, extExps, T }) {
     });
   }, []);
 
-  const SALARY_CATS = ["Oylik maosh","Avans","Bonus","KPI","Jarima","Maosh"];
+  // KPI excluded — it is a client expense, not company salary (see above).
+  const SALARY_CATS = ["Oylik maosh","Avans","Bonus","Jarima","Maosh"];
   const data = useMemo(() => months.map(({ key }) => {
     const inc = txns.filter(t => t.type==="income" && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
     const sal = txns.filter(t => t.type==="expense" && SALARY_CATS.includes(t.cat) && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
