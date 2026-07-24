@@ -25,7 +25,10 @@ function SalaryPage({team, txns, setTxns, user}) {
   // KPI is treated as the client's own expense, NOT a company salary expense —
   // exclude it here so it never inflates the "Xodimlar Xarajatlari" totals/rows.
   const SALARY_CATS=SAL_CATS.filter(c=>c!=="KPI");
-  const allSal=txns.filter(t=>t.type==="expense"&&t.cat!=="KPI"&&(SALARY_CATS.includes(t.cat)||["Maosh","Avans","Bonus"].includes(t.cat)));
+  // A real company salary is never tied to a client lead. Client-attached
+  // expenses (naqd payments for a candidate, imported "umumiy chiqim", etc.)
+  // must not count as payroll — require lead_id to be empty.
+  const allSal=txns.filter(t=>t.type==="expense"&&!t.leadId&&t.cat!=="KPI"&&(SALARY_CATS.includes(t.cat)||["Maosh","Avans","Bonus"].includes(t.cat)));
   const monthSal=selMonth?allSal.filter(t=>t.date?.startsWith(selMonth)):allSal;
   const thisMonthTotal=monthSal.reduce((s,t)=>s+t.amount,0);
   const allTimeTotal=allSal.reduce((s,t)=>s+t.amount,0);
