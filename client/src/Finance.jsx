@@ -88,12 +88,20 @@ function Finance({
       if (fView === "yoqotilgan") return LOST.includes(l.status);
       return true;
     })
-    .filter(
-      (l) =>
-        !search ||
-        l.name.toLowerCase().includes(search.toLowerCase()) ||
-        l.id.includes(search),
-    );
+    .filter((l) => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      // Match across all logical lead fields...
+      const hay = [
+        l.id, l.name, l.phone, l.country, l.comment, l.note,
+        l.dest, l.source, l.position, l.sector, l.gender, l.telegram,
+      ].filter(Boolean).join(" ").toLowerCase();
+      if (hay.includes(q)) return true;
+      // ...and this client's transaction descriptions / categories.
+      return lf(l.id).txns.some(
+        (t) => `${t.desc || ""} ${t.cat || ""}`.toLowerCase().includes(q),
+      );
+    });
 
   const cur = selLead ? leads.find((l) => l.id === selLead) : null;
   const cf = cur ? lf(cur.id) : { inc: 0, exp: 0, txns: [] };
