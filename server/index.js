@@ -10,6 +10,11 @@ const { Pool } = pg;
 // Return timestamps as ISO strings instead of Date objects
 pg.types.setTypeParser(1114, v => v); // TIMESTAMP
 pg.types.setTypeParser(1184, v => v); // TIMESTAMPTZ
+// Return DATE as a plain "YYYY-MM-DD" string too. Otherwise pg parses DATE
+// into a local-midnight Date object, which JSON-serializes to a UTC ISO
+// string and shifts the day by one in non-UTC timezones — corrupting
+// xba_date/q1_date/q2_date/q3_date by a day on every save/load cycle.
+pg.types.setTypeParser(1082, v => v); // DATE
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
