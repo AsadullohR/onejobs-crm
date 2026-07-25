@@ -38,6 +38,11 @@ function Finance({
   const [search, setSearch] = useState("");
   const [fView, setFView] = useState("all");
   const [finTab, setFinTab] = useState("txns"); // txns | debts
+  // Bulk actions on the client list: multi-select → apply one txn to many, or mark many Tugagan
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkSel, setBulkSel] = useState(() => new Set());
+  const [bulkForm, setBulkForm] = useState(null); // null | {type,cat,amount,desc,date}
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [showTxnReport, setShowTxnReport] = useState(false);
   const [repRange, setRepRange] = useState("month"); // month | year | all | custom
   const [repFrom, setRepFrom] = useState("");
@@ -132,6 +137,80 @@ function Finance({
       addNotif && addNotif(`❌ Saqlashda xato: ${e.message}`, "error");
     }
   };
+  // ── Bulk actions ──────────────────────────────────────────────────────────
+  const toggleBulk = (id) =>
+    setBulkSel((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  const clearBulk = () => { setBulkSel(new Set()); setBulkMode(false); setBulkForm(null); };
+  const selectAllVisible = () => setBulkSel(new Set(visLeads.map((l) => l.id)));
+
+  const openBulkTxn = (type) => {
+    const cats = type === "income"
+      ? (config?.txnInc || ["Asosiy kirim", "XBA", "Shartnoma", "Boshqa"])
+      : (config?.txnExp || ["Xizmat", "Transport", "Hujjat", "Maosh", "Boshqa"]);
+    setBulkForm({ type, cat: cats[0] || "", amount: "", desc: "", date: new Date().toISOString().slice(0, 10) });
+  };
+
+  // B — apply one income/expense to every selected client
+  const saveBulkTxn = async () => {
+    const ids = [...bulkSel];
+    const amt = Number(bulkForm.amount);
+    if (!amt || amt <= 0 || ids.length === 0) return;
+    setBulkBusy(true);
+    const created = [];
+    let fail = 0;
+    for (const leadId of ids) {
+      try {
+        const saved = await txnAPI.create({
+          leadId, date: bulkForm.date, type: bulkForm.type,
+          category: bulkForm.cat || "", description: bulkForm.desc || "",
+          amount: amt, paymentMethod: "cash",
+        });
+        created.push({
+          id: String(saved.id), leadId: saved.lead_id, type: saved.type,
+          cat: saved.category || "", desc: saved.description || "",
+          amount: Number(saved.amount), date: saved.date?.slice(0, 10) || bulkForm.date,
+          by: saved.created_by, paymentMethod: "cash",
+        });
+      } catch (e) { fail++; }
+    }
+    if (created.length) setTxns((p) => [...p, ...created]);
+    setBulkBusy(false);
+    addNotif && addNotif(
+      `✅ ${created.length}/${ids.length} mijozga ${bulkForm.type === "income" ? "kirim" : "chiqim"} qo'shildi` +
+      (fail ? ` (${fail} ta xato)` : ""),
+      fail ? "error" : undefined,
+    );
+    clearBulk();
+  };
+
+  // E — mark every selected client Tugagan (Jo'nab ketdi) with its confirmed profit
+  const bulkTugagan = async () => {
+    const ids = [...bulkSel];
+    if (ids.length === 0) return;
+    if (!window.confirm(`${ids.length} ta mijoz "Tugagan" (Jo'nab ketdi) deb belgilansinmi?\nHar biriga tasdiqlangan foyda saqlanadi.`)) return;
+    setBulkBusy(true);
+    const updates = [];
+    let fail = 0;
+    for (const id of ids) {
+      const lead = leads.find((l) => l.id === id);
+      if (!lead) continue;
+      const cf = lf(id);
+      const updated = { ...lead, status: "Jo'nab ketdi", sofFoyda: cf.inc - cf.exp };
+      try {
+        await leadsAPI.save({ ...updated, ownerSales: updated.ownerSales || null, ownerConsult: updated.ownerConsult || null, ownerDocs: updated.ownerDocs || null });
+        updates.push(updated);
+      } catch (e) { fail++; }
+    }
+    if (updates.length) setLeads((prev) => prev.map((l) => updates.find((u) => u.id === l.id) || l));
+    setBulkBusy(false);
+    addNotif && addNotif(`✈️ ${updates.length}/${ids.length} mijoz Tugagan deb belgilandi` + (fail ? ` (${fail} ta xato)` : ""), fail ? "error" : undefined);
+    clearBulk();
+  };
+
   const openAdd = (type = "income", leadId = "") => {
     const incomeCats = config?.txnInc || [
       "Asosiy kirim",
@@ -878,26 +957,65 @@ function Finance({
             />
           </div>
         </div>
+        {/* Bulk select toggle */}
+        <div style={{ padding: "0 6px 4px", display: "flex", gap: 4, alignItems: "center" }}>
+          <button
+            onClick={() => (bulkMode ? clearBulk() : setBulkMode(true))}
+            style={{ flex: bulkMode ? "none" : 1, fontSize: 8, fontWeight: 700, padding: "4px 8px", borderRadius: 6,
+              border: `1px solid ${bulkMode ? T.red + "55" : T.accent + "44"}`, background: bulkMode ? `${T.red}12` : `${T.accent}10`,
+              color: bulkMode ? T.red : T.accent, cursor: "pointer" }}
+          >
+            {bulkMode ? "✕ Bekor" : "☑️ Tanlash"}
+          </button>
+          {bulkMode && (
+            <button onClick={selectAllVisible}
+              style={{ fontSize: 8, fontWeight: 700, padding: "4px 8px", borderRadius: 6, border: `1px solid ${T.border}`, background: T.card2, color: T.sub, cursor: "pointer" }}>
+              Hammasi ({visLeads.length})
+            </button>
+          )}
+          {bulkMode && <span style={{ fontSize: 8, color: T.muted, marginLeft: "auto" }}>{bulkSel.size} tanlandi</span>}
+        </div>
+        {/* Bulk action bar */}
+        {bulkMode && bulkSel.size > 0 && (
+          <div style={{ padding: "0 6px 6px", display: "flex", gap: 4 }}>
+            <button disabled={bulkBusy} onClick={() => openBulkTxn("income")}
+              style={{ flex: 1, fontSize: 8, fontWeight: 700, padding: "5px 4px", borderRadius: 6, border: "none", background: T.green, color: "#fff", cursor: "pointer", opacity: bulkBusy ? 0.5 : 1 }}>+ Kirim</button>
+            <button disabled={bulkBusy} onClick={() => openBulkTxn("expense")}
+              style={{ flex: 1, fontSize: 8, fontWeight: 700, padding: "5px 4px", borderRadius: 6, border: "none", background: T.red, color: "#fff", cursor: "pointer", opacity: bulkBusy ? 0.5 : 1 }}>+ Chiqim</button>
+            <button disabled={bulkBusy} onClick={bulkTugagan}
+              style={{ flex: 1, fontSize: 8, fontWeight: 700, padding: "5px 4px", borderRadius: 6, border: "none", background: "#166534", color: "#fff", cursor: "pointer", opacity: bulkBusy ? 0.5 : 1 }}>✈️ Tugagan</button>
+          </div>
+        )}
         <div style={{ flex: 1, overflowY: "auto" }}>
           {visLeads.map((l) => {
             const f2 = lf(l.id);
             const bal = f2.inc - f2.exp;
             const sel = selLead === l.id;
+            const picked = bulkSel.has(l.id);
             const hasDebt = debts.some((d) => d.leadId === l.id && !d.paid);
             return (
               <div
                 key={l.id}
-                onClick={() => setSelLead(l.id)}
+                onClick={() => (bulkMode ? toggleBulk(l.id) : setSelLead(l.id))}
                 style={{
                   padding: "6px 9px",
                   cursor: "pointer",
                   borderBottom: `1px solid ${T.border}22`,
-                  background: sel ? `${T.accent}22` : "transparent",
-                  borderLeft: sel
+                  background: picked ? `${T.green}22` : sel ? `${T.accent}22` : "transparent",
+                  borderLeft: picked
+                    ? `3px solid ${T.green}`
+                    : sel
                     ? `3px solid ${T.accent}`
                     : "3px solid transparent",
+                  display: bulkMode ? "flex" : "block",
+                  alignItems: "center",
+                  gap: 6,
                 }}
               >
+                {bulkMode && (
+                  <span style={{ fontSize: 12, flexShrink: 0 }}>{picked ? "☑️" : "⬜"}</span>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
                     fontSize: 10,
@@ -949,6 +1067,7 @@ function Finance({
                       💰{fmtMs(l.sofFoyda)}
                     </span>
                   )}
+                </div>
                 </div>
               </div>
             );
@@ -1760,6 +1879,51 @@ function Finance({
               <button onClick={() => setModal(null)} style={{ padding: "6px 14px", borderRadius: 6, background: T.card2, color: T.text, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 11 }}>Bekor</button>
               <button onClick={save} style={{ padding: "6px 18px", borderRadius: 6, background: form.type === "income" ? T.green : T.red, color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
                 💾 Saqlash
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Bulk transaction modal — one entry applied to many selected clients */}
+      {bulkForm && (
+        <Modal onClose={() => !bulkBusy && setBulkForm(null)} width={420}>
+          <div style={{ padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: T.text }}>
+                {bulkForm.type === "income" ? "💚 Ommaviy kirim" : "🔴 Ommaviy chiqim"}
+              </h3>
+              <button onClick={() => !bulkBusy && setBulkForm(null)} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted }}>{I.x}</button>
+            </div>
+            <div style={{ fontSize: 11, color: T.muted, marginBottom: 14 }}>
+              {bulkSel.size} ta mijozga bir xil {bulkForm.type === "income" ? "kirim" : "chiqim"} qo'shiladi.
+            </div>
+            <div style={{ display: "grid", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div>
+                  <label style={labS}>Kategoriya</label>
+                  <select value={bulkForm.cat} onChange={e => setBulkForm(p => ({ ...p, cat: e.target.value }))} style={inpS}>
+                    {(bulkForm.type === "income" ? (config?.txnInc || ["Asosiy kirim","XBA","Shartnoma","Boshqa"]) : (config?.txnExp || ["Xizmat","Transport","Hujjat","Maosh","Boshqa"])).map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={labS}>Sana</label>
+                  <input type="date" value={bulkForm.date} onChange={e => setBulkForm(p => ({ ...p, date: e.target.value }))} style={inpS} />
+                </div>
+              </div>
+              <div>
+                <label style={labS}>Tavsif</label>
+                <input value={bulkForm.desc} onChange={e => setBulkForm(p => ({ ...p, desc: e.target.value }))} style={inpS} placeholder="Izoh (ixtiyoriy)" />
+              </div>
+              <div>
+                <label style={labS}>Summa (so'm) — har bir mijozga *</label>
+                <input type="number" value={bulkForm.amount} onChange={e => setBulkForm(p => ({ ...p, amount: e.target.value }))} style={{ ...inpS, textAlign: "right", fontSize: 16, fontWeight: 800 }} placeholder="0" onKeyDown={e => e.key === "Enter" && !bulkBusy && saveBulkTxn()} autoFocus />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
+              <button disabled={bulkBusy} onClick={() => setBulkForm(null)} style={{ padding: "6px 14px", borderRadius: 6, background: T.card2, color: T.text, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 11 }}>Bekor</button>
+              <button disabled={bulkBusy} onClick={saveBulkTxn} style={{ padding: "6px 18px", borderRadius: 6, background: bulkForm.type === "income" ? T.green : T.red, color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, opacity: bulkBusy ? 0.6 : 1 }}>
+                {bulkBusy ? "⏳ Saqlanmoqda..." : `💾 ${bulkSel.size} ta mijozga saqlash`}
               </button>
             </div>
           </div>
