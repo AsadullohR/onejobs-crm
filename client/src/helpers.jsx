@@ -4,9 +4,13 @@ import { STAGES, gS } from "./constants.js";
 
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-const NOW = new Date();
-const isOD = d => d && new Date(d) < NOW;
-const isSoon = d => { if(!d)return false; const v=(new Date(d)-NOW)/864e5; return v>=0&&v<=2; };
+// Local calendar day "YYYY-MM-DD", computed fresh each call (no stale module NOW).
+const _todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+// Overdue / late only once a FULL day has passed: a task is red only when its
+// due day is strictly before today. Due today is not yet late.
+const isOD = d => { if(!d) return false; return String(d).slice(0,10) < _todayStr(); };
+// "Soon" (yellow) = due today or tomorrow.
+const isSoon = d => { if(!d) return false; const s=String(d).slice(0,10), t=_todayStr(); if(s<t) return false; const v=(new Date(s)-new Date(t))/864e5; return v>=0&&v<=1; };
 const fmtD = d => { try{return new Date(d).toLocaleDateString("uz-UZ",{day:"2-digit",month:"short"});}catch{return d||"–";} };
 const fmtM = n => { const v=Number(n); return (!v||isNaN(v))?'0':v.toLocaleString('ru-RU'); };
 const fmtMs = n => { const v=Number(n); return (!v||isNaN(v))?'0':v.toLocaleString('ru-RU'); };
