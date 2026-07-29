@@ -2,21 +2,16 @@ import { useState } from "react";
 import { useT } from "./theme.js";
 import { uid, inp, Modal, I } from "./helpers.jsx";
 import { configAPI } from "./api.js";
+import { EDU_CONTENT } from "./educationContent.js";
 
 // ─── EDUCATION / TA'LIM ───────────────────────────────────────────────────────
 // Admin-editable knowledge base for employees: rules, etiquette, duties,
 // roles, career path, training. Stored as config key "education" (array of
 // topics). Only admin sees the edit controls; the server also gates the
-// "education" config key to admin.
-
-const SEED_TOPICS = [
-  { category: "Qoidalar", title: "Ichki mehnat qoidalari", body: "Bu yerga «Ofis xodimlari uchun ichki mehnat qoidalari» hujjati matnini joylashtiring." },
-  { category: "Muomala", title: "Telefon va mijoz muomalasi", body: "Bu yerga «Telefon va mijoz muomalasi» hujjati matnini joylashtiring." },
-  { category: "Vazifalar", title: "Vazifa va mas'uliyatlar", body: "Bu yerga «Vazifa va mas'uliyatlar — OneJobs» hujjati matnini joylashtiring." },
-  { category: "Rollar", title: "Hamkasblar rollari", body: "Bu yerga «Hamkasblar Role» hujjati matnini joylashtiring." },
-  { category: "Karyera", title: "Karyera yo'li (Career Path)", body: "Bu yerga «OneJobs Career Path» hujjati matnini joylashtiring." },
-  { category: "Trening", title: "Training / O'quv materiali", body: "Bu yerga «OneJobs Training» o'quv materiali matnini joylashtiring." },
-];
+// "education" config key to admin. Initial content (EDU_CONTENT) is extracted
+// from the company documents and loaded via the admin "Load from documents"
+// action; everything is editable in-app afterwards.
+const SEED_TOPICS = EDU_CONTENT;
 
 function Education({ user, config, setConfig }) {
   const T = useT();
@@ -41,7 +36,10 @@ function Education({ user, config, setConfig }) {
   };
 
   const seed = async () => {
-    if (!window.confirm("Boshlang'ich 6 ta mavzu qo'shilsinmi?")) return;
+    const msg = topics.length
+      ? `Diqqat: barcha mavzular kompaniya hujjatlari matni bilan ALMASHTIRILADI (${SEED_TOPICS.length} ta). Mavjud tahrirlaringiz o'chadi. Davom etilsinmi?`
+      : `Kompaniya hujjatlaridan ${SEED_TOPICS.length} ta mavzu yuklansinmi?`;
+    if (!window.confirm(msg)) return;
     await persist(SEED_TOPICS.map((t, i) => ({ ...t, id: uid(), order: i })));
   };
 
@@ -89,10 +87,16 @@ function Education({ user, config, setConfig }) {
           <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>Xodimlar uchun qoidalar va o'quv materiallari</div>
         </div>
         {isAdmin && (
-          <button onClick={() => setEdit({ category: "", title: "", body: "" })}
-            style={{ padding: "8px 16px", borderRadius: 8, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
-            + Yangi mavzu
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={seed} title="Kompaniya hujjatlaridan yuklash"
+              style={{ padding: "8px 14px", borderRadius: 8, background: `${T.accent}15`, color: T.accent, border: `1px solid ${T.accent}44`, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
+              📥 Hujjatlardan yuklash
+            </button>
+            <button onClick={() => setEdit({ category: "", title: "", body: "" })}
+              style={{ padding: "8px 16px", borderRadius: 8, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
+              + Yangi mavzu
+            </button>
+          </div>
         )}
       </div>
 
