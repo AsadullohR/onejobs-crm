@@ -1039,7 +1039,7 @@ app.get("/api/config", auth, async (req, res) => {
 
 app.put("/api/config/:key", auth, async (req, res) => {
   try {
-    if (req.params.key === "bonusCfg" && req.user.role !== "admin")
+    if (["bonusCfg", "education"].includes(req.params.key) && req.user.role !== "admin")
       return res.status(403).json({ error: "Faqat admin" });
     await pool.query(
       `INSERT INTO config (key, value) VALUES ($1, $2)

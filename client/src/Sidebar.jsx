@@ -16,6 +16,7 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
     {k:"vacancies", lk:"nav_vacancies", ic:"💼",     group:"work"},
     {k:"finance",   lk:"nav_finance",   ic:I.money, group:"work"},
     {k:"visa",      lk:"nav_visa",      ic:I.flag,  group:"info"},
+    {k:"education", lk:"nav_education", ic:"📚",     group:"info"},
     {k:"team",      lk:"nav_team",      ic:I.team,  group:"admin"},
     {k:"turnir",    lk:"nav_turnir",    ic:"🏆",     group:"main"},
     {k:"settings",  lk:"nav_settings",  ic:I.gear,  group:"admin"},
@@ -24,10 +25,10 @@ function Sidebar({user, pg, go, logout, notif, roles, dark, setDark, col, setCol
   ];
   const allowed={
     admin:   NAV.map(n=>n.k).filter(k=>k!=="employer"&&k!=="partner"),
-    manager: ["dashboard","pipeline","leads","tasks","finance","team","settings","visa","vacancies","turnir"],
-    sales:   ["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],
-    docs:    ["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],
-    hujjatchi:["dashboard","pipeline","leads","tasks","vacancies","visa","turnir"],
+    manager: ["dashboard","pipeline","leads","tasks","finance","team","settings","visa","education","vacancies","turnir"],
+    sales:   ["dashboard","pipeline","leads","tasks","vacancies","visa","education","turnir"],
+    docs:    ["dashboard","pipeline","leads","tasks","vacancies","visa","education","turnir"],
+    hujjatchi:["dashboard","pipeline","leads","tasks","vacancies","visa","education","turnir"],
     partner: ["partner"],
     employer:["employer"],
     finance_manager:["dashboard","finance","vacancies"],

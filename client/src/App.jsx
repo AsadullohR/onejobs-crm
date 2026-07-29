@@ -27,6 +27,7 @@ import { DebtsPage } from "./DebtsPage.jsx";
 import { Analytics } from "./Analytics.jsx";
 import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, configAPI, vacanciesAPI, candidatesAPI, getToken, clearToken } from "./api.js";
 import { Vacancies } from "./Vacancies.jsx";
+import { Education } from "./Education.jsx";
 import { EmployerPortal } from "./EmployerPortal.jsx";
 import { PartnerPortal } from "./PartnerPortal.jsx";
 import { ImportModal } from "./ImportModal.jsx";
@@ -612,6 +613,7 @@ const deleteLead = useCallback(async (id) => {
           {page==="docspipe"  && <DocsPipeline leads={leads} tasks={tasks} team={team} user={user} open={openLead} config={config} roles={roles} setLeads={setLeads}/>}
           {page==="vacancies" && <Vacancies leads={visibleLeads} user={user} team={team} roles={roles} setLeads={setLeads}/>}
           {page==="visa"       && <Visa user={user} roles={roles} config={config} setConfig={setConfig}/>}
+          {page==="education"  && <Education user={user} config={config} setConfig={setConfig}/>}
           {page==="team"       && <TeamPage user={user} team={team} setTeam={setTeam} roles={roles}/>}
           {page==="settings"   && <Settings user={user} config={config} setConfig={setConfig} roles={roles} setRoles={setRoles}/>}
           {page==="finance"    && !isMobile && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts} roles={roles} extExps={extExps} setExtExps={setExtExps}/>}
