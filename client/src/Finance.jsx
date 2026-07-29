@@ -112,6 +112,22 @@ function Finance({
   const cf = cur ? lf(cur.id) : { inc: 0, exp: 0, txns: [] };
   const curDebts = cur ? debts.filter((d) => d.leadId === cur.id) : [];
 
+  // Build a full save payload with the SERVER field names. The mapped lead
+  // uses lastCall/shartnomaSana/officeSuhbat/suhbatBelgilangan, but the upsert
+  // reads lastContact/contractDate/interviewDate/interviewScheduled — so a raw
+  // {...lead} save would overwrite those DB columns with NULL. Mirror the
+  // translation App.saveLead does so no data is wiped on status changes.
+  const leadSavePayload = (l) => ({
+    ...l,
+    ownerSales: l.ownerSales || null,
+    ownerConsult: l.ownerConsult || null,
+    ownerDocs: l.ownerDocs || null,
+    lastContact: l.lastCall || null,
+    contractDate: l.shartnomaSana || null,
+    interviewDate: l.officeSuhbat || null,
+    interviewScheduled: l.suhbatBelgilangan || null,
+  });
+
   const markTugagan = async (lead) => {
     const cf = lf(lead.id);
     const netProfit = cf.inc - cf.exp;
@@ -119,7 +135,7 @@ function Finance({
     const updated = { ...lead, status: "Jo'nab ketdi", sofFoyda: netProfit };
     setLeads(prev => prev.map(l => l.id === lead.id ? updated : l));
     try {
-      await leadsAPI.save({ ...updated, ownerSales: updated.ownerSales||null, ownerConsult: updated.ownerConsult||null, ownerDocs: updated.ownerDocs||null });
+      await leadsAPI.save(leadSavePayload(updated));
       addNotif && addNotif(`✅ ${lead.name} — Tugagan. Tasdiqlangan foyda: ${fmtMs(netProfit)} so'm`);
     } catch(e) {
       addNotif && addNotif(`❌ Saqlashda xato: ${e.message}`, "error");
@@ -131,7 +147,7 @@ function Finance({
     const updated = { ...lead, status: "Shartnoma qildi", sofFoyda: null };
     setLeads(prev => prev.map(l => l.id === lead.id ? updated : l));
     try {
-      await leadsAPI.save({ ...updated, ownerSales: updated.ownerSales||null, ownerConsult: updated.ownerConsult||null, ownerDocs: updated.ownerDocs||null });
+      await leadsAPI.save(leadSavePayload(updated));
       addNotif && addNotif(`↩️ ${lead.name} — faol holatga qaytarildi`);
     } catch(e) {
       addNotif && addNotif(`❌ Saqlashda xato: ${e.message}`, "error");
@@ -201,7 +217,7 @@ function Finance({
       const cf = lf(id);
       const updated = { ...lead, status: "Jo'nab ketdi", sofFoyda: cf.inc - cf.exp };
       try {
-        await leadsAPI.save({ ...updated, ownerSales: updated.ownerSales || null, ownerConsult: updated.ownerConsult || null, ownerDocs: updated.ownerDocs || null });
+        await leadsAPI.save(leadSavePayload(updated));
         updates.push(updated);
       } catch (e) { fail++; }
     }
