@@ -428,7 +428,7 @@ const deleteLead = useCallback(async (id) => {
               return merged;
             });
           }
-          const cfgKeys=['countries','sectors','sources','positions','txnInc','txnExp','checklistItems','visas','staleRules'];
+          const cfgKeys=['countries','sectors','sources','positions','txnInc','txnExp','checklistItems','visas','staleRules','education'];
           const merged={};
           cfgKeys.forEach(k=>{ const v=parse(cfgRes[k]); if(v) merged[k]=v; });
           if(Object.keys(merged).length) setConfigRaw(c=>({...c,...merged}));
