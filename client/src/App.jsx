@@ -25,9 +25,10 @@ import { DocsPipeline } from "./DocsPipeline.jsx";
 import { Dashboard } from "./Dashboard.jsx";
 import { DebtsPage } from "./DebtsPage.jsx";
 import { Analytics } from "./Analytics.jsx";
-import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, configAPI, vacanciesAPI, candidatesAPI, getToken, clearToken } from "./api.js";
+import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, configAPI, vacanciesAPI, candidatesAPI, attendanceAPI, getToken, clearToken } from "./api.js";
 import { Vacancies } from "./Vacancies.jsx";
 import { Education } from "./Education.jsx";
+import { Attendance } from "./Attendance.jsx";
 import { EmployerPortal } from "./EmployerPortal.jsx";
 import { PartnerPortal } from "./PartnerPortal.jsx";
 import { ImportModal } from "./ImportModal.jsx";
@@ -428,7 +429,7 @@ const deleteLead = useCallback(async (id) => {
               return merged;
             });
           }
-          const cfgKeys=['countries','sectors','sources','positions','txnInc','txnExp','checklistItems','visas','staleRules','education'];
+          const cfgKeys=['countries','sectors','sources','positions','txnInc','txnExp','checklistItems','visas','staleRules','education','attendanceCfg'];
           const merged={};
           cfgKeys.forEach(k=>{ const v=parse(cfgRes[k]); if(v) merged[k]=v; });
           if(Object.keys(merged).length) setConfigRaw(c=>({...c,...merged}));
@@ -464,6 +465,12 @@ const deleteLead = useCallback(async (id) => {
     // Expose loadAll for manual refresh button
     window._crmRefresh = () => loadAll(true);
 
+    // Attendance heartbeat: refresh "last_seen" every 5 min while the tab is
+    // open, so a forgotten logout still produces a realistic departure time.
+    const beat = () => { if(document.visibilityState === "visible") attendanceAPI.ping().catch(()=>{}); };
+    beat();
+    const heartbeat = setInterval(beat, 5*60*1000);
+
     // Poll every 30s for new leads from Tally/Meta
     const poll = setInterval(async ()=>{
   try {
@@ -480,7 +487,7 @@ const deleteLead = useCallback(async (id) => {
   } catch(e){}
 }, 30000);
 
-    return ()=>{ clearInterval(poll); window.removeEventListener("focus", onFocus); delete window._crmRefresh; };
+    return ()=>{ clearInterval(poll); clearInterval(heartbeat); window.removeEventListener("focus", onFocus); delete window._crmRefresh; };
   }, [user?.id]);
 
   const isMobile = useIsMobile();
@@ -504,7 +511,7 @@ const deleteLead = useCallback(async (id) => {
   return <ThemeCtx.Provider value={T}>
     <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg,fontFamily:"'Inter',system-ui,sans-serif",color:T.text}}>
       {!isMobile && <Sidebar user={user} pg={page} go={setPage}
-        logout={()=>{ clearToken(); setUser(null); setLeads([]); setTasks([]); setTxns([]); }}
+        logout={async ()=>{ try{ await attendanceAPI.checkout(); }catch(e){} clearToken(); setUser(null); setLeads([]); setTasks([]); setTxns([]); }}
         notif={totalNotif}
         roles={roles} dark={dark} setDark={setDark} col={col} setCol={setCol}/>}
       <div style={{flex:1,overflow:"auto",minWidth:0,display:"flex",flexDirection:"column",paddingBottom:isMobile?56:0}}>
@@ -614,6 +621,7 @@ const deleteLead = useCallback(async (id) => {
           {page==="vacancies" && <Vacancies leads={visibleLeads} user={user} team={team} roles={roles} setLeads={setLeads}/>}
           {page==="visa"       && <Visa user={user} roles={roles} config={config} setConfig={setConfig}/>}
           {page==="education"  && <Education user={user} config={config} setConfig={setConfig}/>}
+          {page==="attendance" && <Attendance user={user} config={config} setConfig={setConfig}/>}
           {page==="team"       && <TeamPage user={user} team={team} setTeam={setTeam} roles={roles}/>}
           {page==="settings"   && <Settings user={user} config={config} setConfig={setConfig} roles={roles} setRoles={setRoles}/>}
           {page==="finance"    && !isMobile && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts} roles={roles} extExps={extExps} setExtExps={setExtExps}/>}

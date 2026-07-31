@@ -96,6 +96,18 @@ export const usersAPI = {
   delete: (id) => req("DELETE", `/api/users/${id}`),
 };
 
+export const attendanceAPI = {
+  list: (from, to) => {
+    const p = new URLSearchParams();
+    if (from) p.set("from", from);
+    if (to) p.set("to", to);
+    const q = p.toString();
+    return req("GET", `/api/attendance${q ? "?" + q : ""}`);
+  },
+  ping: () => req("POST", "/api/attendance/ping", {}),
+  checkout: () => req("POST", "/api/attendance/checkout", {}),
+};
+
 export const configAPI = {
   getAll: () => req("GET", "/api/config"),
   set: (key, value) => req("PUT", `/api/config/${key}`, { value }),

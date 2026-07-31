@@ -15,6 +15,7 @@ pg.types.setTypeParser(1184, v => v); // TIMESTAMPTZ
 // string and shifts the day by one in non-UTC timezones — corrupting
 // xba_date/q1_date/q2_date/q3_date by a day on every save/load cycle.
 pg.types.setTypeParser(1082, v => v); // DATE
+const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
@@ -99,6 +100,9 @@ app.use(
     credentials: true,
   }),
 );
+// Behind nginx: without this req.ip is always 127.0.0.1, which would make
+// every attendance record look like it came from the same machine.
+app.set("trust proxy", true);
 app.use(express.json({ limit: "10mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
@@ -130,6 +134,41 @@ const adminOnly = (req, res, next) => {
 };
 
 // ─── AUTH ROUTES ──────────────────────────────────────────────────────────────
+// ─── ATTENDANCE (Davomat) HELPERS ────────────────────────────────────────────
+// Work day is computed in company local time, not UTC, so a 09:00 arrival in
+// Tashkent isn't recorded against the previous calendar day.
+const APP_TZ = process.env.APP_TZ || "Asia/Tashkent";
+const clientIp = (req) => {
+  const xf = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return (xf || req.ip || "").replace(/^::ffff:/, "");
+};
+// Stable-but-anonymous device marker: a hash of the browser UA. Not a hard
+// identifier (UAs collide), only a signal that the account was used from a
+// different browser/machine than usual.
+const deviceHash = (req) =>
+  crypto.createHash("sha1").update(String(req.headers["user-agent"] || "")).digest("hex").slice(0, 12);
+
+async function touchAttendance(userId, req, isLogin) {
+  const ip = clientIp(req);
+  const dev = deviceHash(req);
+  const ua = String(req.headers["user-agent"] || "").slice(0, 300);
+  try {
+    await pool.query(
+      `INSERT INTO attendance (user_id, work_date, check_in, last_seen, ips, devices, logins, user_agent)
+       VALUES ($1, (NOW() AT TIME ZONE $4)::date, NOW(), NOW(),
+               jsonb_build_array($2::text), jsonb_build_array($3::text), 1, $5)
+       ON CONFLICT (user_id, work_date) DO UPDATE SET
+         last_seen = NOW(),
+         logins = attendance.logins + $6,
+         ips = CASE WHEN attendance.ips @> jsonb_build_array($2::text)
+                    THEN attendance.ips ELSE attendance.ips || jsonb_build_array($2::text) END,
+         devices = CASE WHEN attendance.devices @> jsonb_build_array($3::text)
+                        THEN attendance.devices ELSE attendance.devices || jsonb_build_array($3::text) END`,
+      [userId, ip, dev, APP_TZ, ua, isLogin ? 1 : 0],
+    );
+  } catch (e) { /* attendance must never block the request */ }
+}
+
 app.post("/api/auth/login", async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -152,6 +191,10 @@ app.post("/api/auth/login", async (req, res) => {
       JWT_SECRET,
       { expiresIn: "90d" },
     );
+    // Record arrival (first login of the local work day = check-in)
+    if (!["partner", "employer"].includes(rows[0].role)) {
+      await touchAttendance(rows[0].id, req, true);
+    }
     const { password: _, ...user } = rows[0];
     res.json({ token, user });
   } catch (err) {
@@ -1039,7 +1082,7 @@ app.get("/api/config", auth, async (req, res) => {
 
 app.put("/api/config/:key", auth, async (req, res) => {
   try {
-    if (["bonusCfg", "education"].includes(req.params.key) && req.user.role !== "admin")
+    if (["bonusCfg", "education", "attendanceCfg"].includes(req.params.key) && req.user.role !== "admin")
       return res.status(403).json({ error: "Faqat admin" });
     await pool.query(
       `INSERT INTO config (key, value) VALUES ($1, $2)
@@ -1050,6 +1093,75 @@ app.put("/api/config/:key", auth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ─── ATTENDANCE (Davomat) ─────────────────────────────────────────────────────
+// Heartbeat from an open CRM tab: keeps "last_seen" fresh so a forgotten
+// logout still yields a realistic departure time.
+app.post("/api/attendance/ping", auth, async (req, res) => {
+  if (["partner", "employer"].includes(req.user.role)) return res.json({ ok: true });
+  await touchAttendance(req.user.id, req, false);
+  res.json({ ok: true });
+});
+
+// Explicit "Ketdim" (going home) — the authoritative departure time.
+app.post("/api/attendance/checkout", auth, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE attendance SET check_out = NOW(), last_seen = NOW()
+       WHERE user_id = $1 AND work_date = (NOW() AT TIME ZONE $2)::date`,
+      [req.user.id, APP_TZ],
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/attendance", auth, async (req, res) => {
+  const { from, to } = req.query;
+  const isBoss = ["admin", "manager"].includes(req.user.role);
+  try {
+    const cfgRow = await pool.query(`SELECT value FROM config WHERE key='attendanceCfg'`);
+    const cfg = cfgRow.rows[0]?.value || {};
+    const officeIps = Array.isArray(cfg.officeIps) ? cfg.officeIps : [];
+    const workStart = cfg.workStart || "09:00";
+
+    const params = [APP_TZ];
+    let where = "WHERE 1=1";
+    if (from) { params.push(from); where += ` AND a.work_date >= $${params.length}::date`; }
+    if (to)   { params.push(to);   where += ` AND a.work_date <= $${params.length}::date`; }
+    // Staff only ever see their own record; managers/admin see everyone.
+    if (!isBoss) { params.push(req.user.id); where += ` AND a.user_id = $${params.length}`; }
+
+    const { rows } = await pool.query(
+      `SELECT a.id, a.user_id, a.work_date::text AS work_date,
+              to_char(a.check_in  AT TIME ZONE $1, 'HH24:MI') AS in_time,
+              to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS out_time,
+              to_char(a.last_seen AT TIME ZONE $1, 'HH24:MI') AS seen_time,
+              a.ips, a.devices, a.logins, a.manual_note,
+              ROUND(EXTRACT(EPOCH FROM (COALESCE(a.check_out, a.last_seen) - a.check_in))/3600.0, 2) AS hours,
+              u.name, u.role
+         FROM attendance a JOIN users u ON u.id = a.user_id
+         ${where}
+        ORDER BY a.work_date DESC, u.name ASC`,
+      params,
+    );
+
+    // Flags are computed on read so changing the office-IP list re-evaluates
+    // history instead of freezing yesterday's verdict.
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: APP_TZ });
+    const data = rows.map((r) => {
+      const ips = Array.isArray(r.ips) ? r.ips : [];
+      const devices = Array.isArray(r.devices) ? r.devices : [];
+      const flags = [];
+      if (r.in_time && r.in_time > workStart) flags.push("late");
+      if (officeIps.length && !ips.some((ip) => officeIps.includes(ip))) flags.push("off_network");
+      if (ips.length > 1) flags.push("multi_ip");
+      if (devices.length > 1) flags.push("multi_device");
+      if (!r.out_time && r.work_date < today) flags.push("no_checkout");
+      return { ...r, ips, devices, flags };
+    });
+    res.json({ data, officeIps, workStart, today });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ─── FILE UPLOAD ──────────────────────────────────────────────────────────────
@@ -2476,6 +2588,21 @@ app.listen(PORT, async () => {
       status TEXT NOT NULL,
       logged_at TIMESTAMPTZ DEFAULT NOW()
     )`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS attendance (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      work_date DATE NOT NULL,
+      check_in TIMESTAMPTZ,
+      check_out TIMESTAMPTZ,
+      last_seen TIMESTAMPTZ,
+      ips JSONB DEFAULT '[]'::jsonb,
+      devices JSONB DEFAULT '[]'::jsonb,
+      logins INTEGER DEFAULT 0,
+      user_agent TEXT,
+      manual_note TEXT,
+      UNIQUE(user_id, work_date)
+    )`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(work_date DESC, user_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_status_log_owner_date ON status_log(owner_id, logged_at)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_status_log_lead_status ON status_log(lead_id, status)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read, created_at DESC)`);
