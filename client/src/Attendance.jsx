@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useT } from "./theme.js";
 import { inp, I, Av } from "./helpers.jsx";
-import { attendanceAPI, configAPI } from "./api.js";
+import { attendanceAPI, configAPI, getLocation } from "./api.js";
 
 // ─── ATTENDANCE / DAVOMAT ─────────────────────────────────────────────────────
 // Arrival is recorded automatically on login; departure on explicit "Ketdim"
@@ -16,6 +16,8 @@ const FLAG_META = {
   multi_ip:      { label: "2+ IP",           color: "#ef4444", tip: "Bir kunda turli tarmoqlardan kirilgan — akkaunt bo'lishilgan bo'lishi mumkin" },
   multi_device:  { label: "2+ qurilma",      color: "#f97316", tip: "Bir kunda turli kompyuterdan kirilgan" },
   new_device:    { label: "Yangi qurilma",   color: "#ef4444", tip: "Bu akkaunt ilgari ishlatilmagan kompyuterdan kirilgan — boshqa xodimning kompyuteri bo'lishi mumkin" },
+  off_site:      { label: "Ofisdan tashqarida", color: "#ef4444", tip: "Kelish joylashuvi ofisdan belgilangan masofadan uzoq" },
+  no_location:   { label: "Joylashuv yo'q",  color: "#f59e0b", tip: "Telefon joylashuvga ruxsat bermagan yoki aniqlanmagan" },
   no_checkout:   { label: "Chiqmagan",       color: "#94a3b8", tip: "Ketish qayd etilmagan" },
 };
 
@@ -34,13 +36,21 @@ function Attendance({ user, config, setConfig }) {
   const [loading, setLoading] = useState(false);
   const [ipDraft, setIpDraft] = useState("");
   const [startDraft, setStartDraft] = useState("");
+  const [latDraft, setLatDraft] = useState("");
+  const [lngDraft, setLngDraft] = useState("");
+  const [radDraft, setRadDraft] = useState("200");
+  const [locBusy, setLocBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const r = await attendanceAPI.list(from, to);
       setRows(r.data || []);
-      setMeta({ officeIps: r.officeIps || [], workStart: r.workStart || "09:00", today: r.today });
+      setMeta({ officeIps: r.officeIps || [], workStart: r.workStart || "09:00", today: r.today,
+                officeLat: r.officeLat, officeLng: r.officeLng, radiusM: r.radiusM });
+      setLatDraft(r.officeLat != null ? String(r.officeLat) : "");
+      setLngDraft(r.officeLng != null ? String(r.officeLng) : "");
+      setRadDraft(String(r.radiusM || 200));
       setIpDraft((r.officeIps || []).join(", "));
       setStartDraft(r.workStart || "09:00");
     } catch (e) { /* surfaced by the empty state */ }
@@ -51,7 +61,12 @@ function Attendance({ user, config, setConfig }) {
 
   const saveCfg = async () => {
     const officeIps = ipDraft.split(",").map((s) => s.trim()).filter(Boolean);
-    const next = { officeIps, workStart: startDraft || "09:00" };
+    const next = {
+      officeIps, workStart: startDraft || "09:00",
+      officeLat: latDraft ? Number(latDraft) : null,
+      officeLng: lngDraft ? Number(lngDraft) : null,
+      radiusM: Number(radDraft) || 200,
+    };
     try {
       await configAPI.set("attendanceCfg", next);
       setConfig && setConfig((p) => ({ ...p, attendanceCfg: next }));
@@ -61,14 +76,14 @@ function Attendance({ user, config, setConfig }) {
 
   const goHome = async () => {
     if (!window.confirm("Ish kunini yakunlaysizmi? (Ketdim)")) return;
-    try { await attendanceAPI.checkout(); await load(); }
-    catch (e) { alert("Xatolik: " + e.message); }
+    try { setLocBusy(true); await attendanceAPI.checkout(await getLocation()); setLocBusy(false); await load(); }
+    catch (e) { setLocBusy(false); alert("Xatolik: " + e.message); }
   };
 
   // Summary across the visible range
   const totalHours = rows.reduce((s, r) => s + (Number(r.hours) || 0), 0);
   const lateCount = rows.filter((r) => r.flags.includes("late")).length;
-  const suspCount = rows.filter((r) => r.flags.some((f) => ["off_network", "multi_ip", "multi_device"].includes(f))).length;
+  const suspCount = rows.filter((r) => r.flags.some((f) => ["off_network", "multi_ip", "multi_device", "new_device", "off_site"].includes(f))).length;
   const myToday = rows.find((r) => r.user_id === user.id && r.work_date === meta.today);
 
   const card = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px" };
@@ -129,9 +144,43 @@ function Attendance({ user, config, setConfig }) {
               <label style={{ fontSize: 9, fontWeight: 700, color: T.muted }}>Ish boshlanishi</label>
               <input type="time" value={startDraft} onChange={(e) => setStartDraft(e.target.value)} style={{ ...inpS, fontSize: 11 }} />
             </div>
-            <button onClick={saveCfg} style={{ padding: "8px 16px", borderRadius: 7, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
-              💾 Saqlash
-            </button>
+          </div>
+          {/* Office location — the check that actually works when everyone
+              shares one router and staff log in from personal phones. */}
+          <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 12, paddingTop: 12 }}>
+            <div style={{ fontSize: 10, color: T.muted, marginBottom: 8, lineHeight: 1.6 }}>
+              📍 <b>Ofis joylashuvi.</b> Ofisda turib "Hozirgi joylashuvni olish" tugmasini bosing. Xodim telefonidan
+              kirganda joylashuvi shu nuqtadan radiusdan uzoq bo'lsa — "Ofisdan tashqarida" belgisi chiqadi.
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div style={{ width: 140 }}>
+                <label style={{ fontSize: 9, fontWeight: 700, color: T.muted }}>Kenglik (lat)</label>
+                <input value={latDraft} onChange={(e) => setLatDraft(e.target.value)} placeholder="41.31" style={{ ...inpS, fontSize: 11 }} />
+              </div>
+              <div style={{ width: 140 }}>
+                <label style={{ fontSize: 9, fontWeight: 700, color: T.muted }}>Uzunlik (lng)</label>
+                <input value={lngDraft} onChange={(e) => setLngDraft(e.target.value)} placeholder="69.24" style={{ ...inpS, fontSize: 11 }} />
+              </div>
+              <div style={{ width: 110 }}>
+                <label style={{ fontSize: 9, fontWeight: 700, color: T.muted }}>Radius (m)</label>
+                <input type="number" value={radDraft} onChange={(e) => setRadDraft(e.target.value)} style={{ ...inpS, fontSize: 11 }} />
+              </div>
+              <button disabled={locBusy}
+                onClick={async () => {
+                  setLocBusy(true);
+                  const l = await getLocation();
+                  setLocBusy(false);
+                  if (!l) return alert("Joylashuv aniqlanmadi. Brauzerda ruxsat bering.");
+                  setLatDraft(String(l.lat.toFixed(6)));
+                  setLngDraft(String(l.lng.toFixed(6)));
+                }}
+                style={{ padding: "8px 14px", borderRadius: 7, background: `${T.accent}15`, color: T.accent, border: `1px solid ${T.accent}44`, cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
+                {locBusy ? "⏳..." : "📍 Hozirgi joylashuvni olish"}
+              </button>
+              <button onClick={saveCfg} style={{ padding: "8px 16px", borderRadius: 7, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
+                💾 Saqlash
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -150,7 +199,7 @@ function Attendance({ user, config, setConfig }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
               <thead>
                 <tr style={{ background: T.card2 }}>
-                  {["Sana", isBoss ? "Xodim" : "", "Keldi", "Ketdi", "Soat", "Kirish", "Belgilar"].filter(Boolean).map((h) => (
+                  {["Sana", isBoss ? "Xodim" : "", "Keldi", "Ketdi", "Soat", "Masofa", "Kirish", "Belgilar"].filter(Boolean).map((h) => (
                     <th key={h} style={{ textAlign: "left", padding: "9px 12px", fontSize: 9, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
@@ -172,6 +221,9 @@ function Attendance({ user, config, setConfig }) {
                       {r.out_time || (r.seen_time ? `~${r.seen_time}` : "—")}
                     </td>
                     <td style={{ padding: "9px 12px", color: T.text }}>{r.hours != null ? Number(r.hours).toFixed(1) : "—"}</td>
+                    <td style={{ padding: "9px 12px", fontSize: 10, color: r.flags.includes("off_site") ? T.red : T.muted }}>
+                      {r.distance == null ? "—" : r.distance < 1000 ? `${r.distance} m` : `${(r.distance/1000).toFixed(1)} km`}
+                    </td>
                     <td style={{ padding: "9px 12px", color: T.muted, fontSize: 10 }} title={r.ips.join(", ")}>
                       {r.logins}× · {r.ips.length} IP
                     </td>

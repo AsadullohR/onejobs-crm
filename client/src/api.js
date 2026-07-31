@@ -111,6 +111,23 @@ export const usersAPI = {
   delete: (id) => req("DELETE", `/api/users/${id}`),
 };
 
+// Best-effort browser geolocation. Never rejects — a denied permission or a
+// timeout resolves to null so attendance still records (flagged "no_location")
+// instead of the whole check-in failing.
+export function getLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; resolve(v); } };
+    setTimeout(() => finish(null), 12000);
+    navigator.geolocation.getCurrentPosition(
+      (p) => finish({ lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy || 0) }),
+      () => finish(null),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    );
+  });
+}
+
 export const attendanceAPI = {
   list: (from, to) => {
     const p = new URLSearchParams();
@@ -119,8 +136,9 @@ export const attendanceAPI = {
     const q = p.toString();
     return req("GET", `/api/attendance${q ? "?" + q : ""}`);
   },
-  ping: () => req("POST", "/api/attendance/ping", {}),
-  checkout: () => req("POST", "/api/attendance/checkout", {}),
+  ping: (loc) => req("POST", "/api/attendance/ping", loc || {}),
+  checkout: (loc) => req("POST", "/api/attendance/checkout", loc || {}),
+  devices: () => req("GET", "/api/attendance/devices"),
 };
 
 export const configAPI = {

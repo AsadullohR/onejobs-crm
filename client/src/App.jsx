@@ -25,7 +25,7 @@ import { DocsPipeline } from "./DocsPipeline.jsx";
 import { Dashboard } from "./Dashboard.jsx";
 import { DebtsPage } from "./DebtsPage.jsx";
 import { Analytics } from "./Analytics.jsx";
-import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, configAPI, vacanciesAPI, candidatesAPI, attendanceAPI, getToken, clearToken } from "./api.js";
+import { leadsAPI, tasksAPI, txnAPI, usersAPI, notifAPI, extExpAPI, debtsAPI, configAPI, vacanciesAPI, candidatesAPI, attendanceAPI, getLocation, getToken, clearToken } from "./api.js";
 import { Vacancies } from "./Vacancies.jsx";
 import { Education } from "./Education.jsx";
 import { Attendance } from "./Attendance.jsx";
@@ -467,7 +467,19 @@ const deleteLead = useCallback(async (id) => {
 
     // Attendance heartbeat: refresh "last_seen" every 5 min while the tab is
     // open, so a forgotten logout still produces a realistic departure time.
-    const beat = () => { if(document.visibilityState === "visible") attendanceAPI.ping().catch(()=>{}); };
+    // Location is requested only on the first beat after login (the arrival
+    // fix) and then hourly — asking every 5 min would drain phone battery and
+    // nag for permission.
+    let lastGeo = 0;
+    const beat = async () => {
+      if(document.visibilityState !== "visible") return;
+      let loc = null;
+      if(Date.now() - lastGeo > 60*60*1000){
+        loc = await getLocation();
+        if(loc) lastGeo = Date.now();
+      }
+      attendanceAPI.ping(loc).catch(()=>{});
+    };
     beat();
     const heartbeat = setInterval(beat, 5*60*1000);
 
@@ -511,7 +523,7 @@ const deleteLead = useCallback(async (id) => {
   return <ThemeCtx.Provider value={T}>
     <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg,fontFamily:"'Inter',system-ui,sans-serif",color:T.text}}>
       {!isMobile && <Sidebar user={user} pg={page} go={setPage}
-        logout={async ()=>{ try{ await attendanceAPI.checkout(); }catch(e){} clearToken(); setUser(null); setLeads([]); setTasks([]); setTxns([]); }}
+        logout={async ()=>{ try{ await attendanceAPI.checkout(await getLocation()); }catch(e){} clearToken(); setUser(null); setLeads([]); setTasks([]); setTxns([]); }}
         notif={totalNotif}
         roles={roles} dark={dark} setDark={setDark} col={col} setCol={setCol}/>}
       <div style={{flex:1,overflow:"auto",minWidth:0,display:"flex",flexDirection:"column",paddingBottom:isMobile?56:0}}>
@@ -635,15 +647,15 @@ const deleteLead = useCallback(async (id) => {
         const allowed={
           admin:   ["dashboard","pipeline","leads","tasks","finance"],
           manager: ["dashboard","pipeline","leads","tasks","finance"],
-          sales:   ["dashboard","pipeline","leads","tasks"],
-          docs:    ["dashboard","pipeline","leads","tasks"],
-          hujjatchi:["dashboard","pipeline","leads","tasks"],
+          sales:   ["dashboard","pipeline","leads","tasks","attendance"],
+          docs:    ["dashboard","pipeline","leads","tasks","attendance"],
+          hujjatchi:["dashboard","pipeline","leads","tasks","attendance"],
           partner: ["partner"],
           employer:["employer"],
           finance_manager:["dashboard","finance","vacancies"],
         };
-        const NAV_ICONS={dashboard:"📊",pipeline:"📋",leads:"👥",tasks:"✅",finance:"💰",vacancies:"💼",employer:"🏢",partner:"🤝"};
-        const NAV_LABELS={dashboard:"Bosh",pipeline:"Kanal",leads:"Mijozlar",tasks:"Vazifalar",finance:"Moliya",vacancies:"Vakansiya",employer:"Portal",partner:"Panel"};
+        const NAV_ICONS={dashboard:"📊",pipeline:"📋",leads:"👥",tasks:"✅",attendance:"🕒",finance:"💰",vacancies:"💼",employer:"🏢",partner:"🤝"};
+        const NAV_LABELS={dashboard:"Bosh",pipeline:"Kanal",leads:"Mijozlar",tasks:"Vazifalar",attendance:"Davomat",finance:"Moliya",vacancies:"Vakansiya",employer:"Portal",partner:"Panel"};
         const items=(allowed[user.role]||[]).slice(0,5);
         return <div style={{position:"fixed",bottom:0,left:0,right:0,height:56,background:T.card,
           borderTop:`1px solid ${T.border}`,display:"flex",zIndex:300,boxShadow:"0 -2px 10px rgba(0,0,0,.15)"}}>

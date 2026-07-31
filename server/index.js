@@ -1122,21 +1122,65 @@ app.put("/api/config/:key", auth, async (req, res) => {
 // ─── ATTENDANCE (Davomat) ─────────────────────────────────────────────────────
 // Heartbeat from an open CRM tab: keeps "last_seen" fresh so a forgotten
 // logout still yields a realistic departure time.
+const num = (v) => (typeof v === "number" && isFinite(v) ? v : null);
+
+// Straight-line distance in metres (haversine) — enough to answer "is this
+// phone at the office?" without pulling in a geo library.
+function distanceM(lat1, lng1, lat2, lng2) {
+  const R = 6371000, rad = (d) => (d * Math.PI) / 180;
+  const dLat = rad(lat2 - lat1), dLng = rad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+}
+
 app.post("/api/attendance/ping", auth, async (req, res) => {
   if (["partner", "employer"].includes(req.user.role)) return res.json({ ok: true });
   await touchAttendance(req.user.id, req, false);
+  const lat = num(req.body?.lat), lng = num(req.body?.lng), acc = num(req.body?.acc);
+  if (lat !== null && lng !== null) {
+    try {
+      // First fix of the day is the arrival location; keep it immutable so a
+      // later ping from elsewhere can't overwrite where they checked in.
+      await pool.query(
+        `UPDATE attendance
+            SET in_lat = COALESCE(in_lat, $3), in_lng = COALESCE(in_lng, $4), in_acc = COALESCE(in_acc, $5),
+                last_lat = $3, last_lng = $4
+          WHERE user_id = $1 AND work_date = (NOW() AT TIME ZONE $2)::date`,
+        [req.user.id, APP_TZ, lat, lng, acc],
+      );
+    } catch (e) { /* non-fatal */ }
+  }
   res.json({ ok: true });
 });
 
 // Explicit "Ketdim" (going home) — the authoritative departure time.
 app.post("/api/attendance/checkout", auth, async (req, res) => {
+  const lat = num(req.body?.lat), lng = num(req.body?.lng);
   try {
     await pool.query(
-      `UPDATE attendance SET check_out = NOW(), last_seen = NOW()
+      `UPDATE attendance SET check_out = NOW(), last_seen = NOW(),
+              out_lat = COALESCE($3, out_lat), out_lng = COALESCE($4, out_lng)
        WHERE user_id = $1 AND work_date = (NOW() AT TIME ZONE $2)::date`,
-      [req.user.id, APP_TZ],
+      [req.user.id, APP_TZ, lat, lng],
     );
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Known devices per user — lets an admin see which machines/phones an
+// account has been used from, and spot an unexpected one.
+app.get("/api/attendance/devices", auth, async (req, res) => {
+  const isBoss = ["admin", "manager"].includes(req.user.role);
+  try {
+    const { rows } = await pool.query(
+      `SELECT d.user_id, u.name, d.device_id, d.user_agent, d.logins,
+              d.first_seen, d.last_seen
+         FROM user_devices d JOIN users u ON u.id = d.user_id
+        ${isBoss ? "" : "WHERE d.user_id = $1"}
+        ORDER BY u.name, d.last_seen DESC`,
+      isBoss ? [] : [req.user.id],
+    );
+    res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -1148,6 +1192,9 @@ app.get("/api/attendance", auth, async (req, res) => {
     const cfg = cfgRow.rows[0]?.value || {};
     const officeIps = Array.isArray(cfg.officeIps) ? cfg.officeIps : [];
     const workStart = cfg.workStart || "09:00";
+    const officeLat = num(cfg.officeLat), officeLng = num(cfg.officeLng);
+    const radiusM = num(cfg.radiusM) || 200;
+    const geoRequired = cfg.geoRequired !== false;
 
     const params = [APP_TZ];
     let where = "WHERE 1=1";
@@ -1162,6 +1209,7 @@ app.get("/api/attendance", auth, async (req, res) => {
               to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS out_time,
               to_char(a.last_seen AT TIME ZONE $1, 'HH24:MI') AS seen_time,
               a.ips, a.devices, a.logins, a.manual_note, a.new_device,
+              a.in_lat, a.in_lng, a.in_acc, a.out_lat, a.out_lng,
               ROUND(EXTRACT(EPOCH FROM (COALESCE(a.check_out, a.last_seen) - a.check_in))/3600.0, 2) AS hours,
               u.name, u.role
          FROM attendance a JOIN users u ON u.id = a.user_id
@@ -1182,10 +1230,17 @@ app.get("/api/attendance", auth, async (req, res) => {
       if (ips.length > 1) flags.push("multi_ip");
       if (devices.length > 1) flags.push("multi_device");
       if (r.new_device) flags.push("new_device");
+      let distance = null;
+      if (officeLat !== null && officeLng !== null && r.in_lat != null && r.in_lng != null) {
+        distance = distanceM(Number(r.in_lat), Number(r.in_lng), officeLat, officeLng);
+        // Allow the GPS error margin so an indoor fix isn't punished.
+        if (distance - (Number(r.in_acc) || 0) > radiusM) flags.push("off_site");
+      }
+      if (geoRequired && officeLat !== null && r.in_lat == null) flags.push("no_location");
       if (!r.out_time && r.work_date < today) flags.push("no_checkout");
-      return { ...r, ips, devices, flags };
+      return { ...r, ips, devices, flags, distance };
     });
-    res.json({ data, officeIps, workStart, today });
+    res.json({ data, officeIps, workStart, today, officeLat, officeLng, radiusM, geoRequired });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -2626,9 +2681,17 @@ app.listen(PORT, async () => {
       user_agent TEXT,
       manual_note TEXT,
       new_device BOOLEAN DEFAULT FALSE,
+      in_lat DOUBLE PRECISION, in_lng DOUBLE PRECISION, in_acc INTEGER,
+      out_lat DOUBLE PRECISION, out_lng DOUBLE PRECISION,
+      last_lat DOUBLE PRECISION, last_lng DOUBLE PRECISION,
       UNIQUE(user_id, work_date)
     )`);
     await pool.query(`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS new_device BOOLEAN DEFAULT FALSE`);
+    for (const c of ["in_lat DOUBLE PRECISION","in_lng DOUBLE PRECISION","in_acc INTEGER",
+                     "out_lat DOUBLE PRECISION","out_lng DOUBLE PRECISION",
+                     "last_lat DOUBLE PRECISION","last_lng DOUBLE PRECISION"]) {
+      await pool.query(`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS ${c}`);
+    }
     await pool.query(`CREATE TABLE IF NOT EXISTS user_devices (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL,
