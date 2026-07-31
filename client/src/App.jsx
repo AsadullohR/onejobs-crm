@@ -503,6 +503,21 @@ const deleteLead = useCallback(async (id) => {
   }, [user?.id]);
 
   const isMobile = useIsMobile();
+  // Shared by the desktop sidebar and the mobile topbar. On phones the sidebar
+  // is not rendered at all, so without these the PWA had no way to log out —
+  // and therefore no way to record going home.
+  const [goingHome, setGoingHome] = useState(false);
+  const doCheckout = useCallback(async () => {
+    if(!window.confirm("Ish kunini yakunlaysizmi? (Ketdim)")) return;
+    setGoingHome(true);
+    try { await attendanceAPI.checkout(await getLocation()); alert("✅ Ketish qayd etildi"); }
+    catch(e){ alert("Xatolik: " + e.message); }
+    setGoingHome(false);
+  }, []);
+  const doLogout = useCallback(async () => {
+    try { await attendanceAPI.checkout(await getLocation()); } catch(e) {}
+    clearToken(); setUser(null); setLeads([]); setTasks([]); setTxns([]);
+  }, []);
 
   if(!user)return <Login onLogin={u=>{setUser(u);setPage(u.role==="finance_manager"?"finance":u.role==="employer"?"employer":u.role==="partner"?"partner":"pipeline");}} team={team} roles={roles}/>;
   const perm=roles[user.role]||{};
@@ -523,7 +538,7 @@ const deleteLead = useCallback(async (id) => {
   return <ThemeCtx.Provider value={T}>
     <div style={{display:"flex",height:"100vh",overflow:"hidden",background:T.bg,fontFamily:"'Inter',system-ui,sans-serif",color:T.text}}>
       {!isMobile && <Sidebar user={user} pg={page} go={setPage}
-        logout={async ()=>{ try{ await attendanceAPI.checkout(await getLocation()); }catch(e){} clearToken(); setUser(null); setLeads([]); setTasks([]); setTxns([]); }}
+        logout={doLogout}
         notif={totalNotif}
         roles={roles} dark={dark} setDark={setDark} col={col} setCol={setCol}/>}
       <div style={{flex:1,overflow:"auto",minWidth:0,display:"flex",flexDirection:"column",paddingBottom:isMobile?56:0}}>
@@ -558,7 +573,19 @@ const deleteLead = useCallback(async (id) => {
             })()}
           </div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
-            <span style={{background:`${roles[user.role]?.color||T.accent}18`,color:roles[user.role]?.color||T.accent,fontSize:9,fontWeight:600,padding:"3px 9px",borderRadius:20,textTransform:"uppercase",letterSpacing:"0.05em"}}>{roles[user.role]?.label}</span>
+            {isMobile && !["partner","employer"].includes(user.role) && (
+              <button onClick={doCheckout} disabled={goingHome} title="Ketdim"
+                style={{background:`${T.accent}15`,border:`1px solid ${T.accent}44`,borderRadius:7,height:30,padding:"0 10px",fontSize:11,fontWeight:700,color:T.accent,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                {goingHome ? "⏳" : "🏠 Ketdim"}
+              </button>
+            )}
+            {isMobile && (
+              <button onClick={()=>{ if(window.confirm("Tizimdan chiqasizmi?")) doLogout(); }} title="Chiqish"
+                style={{background:`${T.red}12`,border:`1px solid ${T.red}44`,borderRadius:7,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:T.red,cursor:"pointer",fontFamily:"inherit"}}>
+                ⏻
+              </button>
+            )}
+            {!isMobile && <span style={{background:`${roles[user.role]?.color||T.accent}18`,color:roles[user.role]?.color||T.accent,fontSize:9,fontWeight:600,padding:"3px 9px",borderRadius:20,textTransform:"uppercase",letterSpacing:"0.05em"}}>{roles[user.role]?.label}</span>}
             <button onClick={()=>window._crmRefresh?.()} title="Yangilash" disabled={refreshing} style={{background:T.card2,border:`1px solid ${T.border}`,borderRadius:7,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:refreshing?"default":"pointer",color:T.muted,fontSize:14,transition:"transform 0.4s",transform:refreshing?"rotate(360deg)":"none"}}>
               🔄
             </button>
