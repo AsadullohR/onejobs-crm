@@ -142,29 +142,52 @@ const clientIp = (req) => {
   const xf = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
   return (xf || req.ip || "").replace(/^::ffff:/, "");
 };
-// Stable-but-anonymous device marker: a hash of the browser UA. Not a hard
-// identifier (UAs collide), only a signal that the account was used from a
-// different browser/machine than usual.
-const deviceHash = (req) =>
-  crypto.createHash("sha1").update(String(req.headers["user-agent"] || "")).digest("hex").slice(0, 12);
+// Device marker. Prefer the client-generated X-Device-Id (unique per browser
+// profile) — with the whole office behind one router, IP is identical for
+// everyone and identical office PCs produce identical user-agents, so the UA
+// hash alone cannot tell one desk from another. Falls back to the UA hash.
+const deviceHash = (req) => {
+  const id = String(req.headers["x-device-id"] || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
+  if (id) return id;
+  return "ua" + crypto.createHash("sha1").update(String(req.headers["user-agent"] || "")).digest("hex").slice(0, 10);
+};
 
-async function touchAttendance(userId, req, isLogin) {
+// Remembers every device an account has ever been used from. Returns true when
+// this is the first time ever for that user — the signal that someone logged in
+// from a machine that isn't theirs.
+async function registerDevice(userId, req) {
+  const dev = deviceHash(req);
+  if (!dev) return false;
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO user_devices (user_id, device_id, user_agent, first_seen, last_seen, logins)
+       VALUES ($1,$2,$3,NOW(),NOW(),1)
+       ON CONFLICT (user_id, device_id) DO UPDATE SET last_seen = NOW(), logins = user_devices.logins + 1
+       RETURNING (xmax = 0) AS is_new`,
+      [userId, dev, String(req.headers["user-agent"] || "").slice(0, 300)],
+    );
+    return rows[0]?.is_new === true;
+  } catch (e) { return false; }
+}
+
+async function touchAttendance(userId, req, isLogin, newDevice) {
   const ip = clientIp(req);
   const dev = deviceHash(req);
   const ua = String(req.headers["user-agent"] || "").slice(0, 300);
   try {
     await pool.query(
-      `INSERT INTO attendance (user_id, work_date, check_in, last_seen, ips, devices, logins, user_agent)
+      `INSERT INTO attendance (user_id, work_date, check_in, last_seen, ips, devices, logins, user_agent, new_device)
        VALUES ($1, (NOW() AT TIME ZONE $4)::date, NOW(), NOW(),
-               jsonb_build_array($2::text), jsonb_build_array($3::text), 1, $5)
+               jsonb_build_array($2::text), jsonb_build_array($3::text), 1, $5, $7)
        ON CONFLICT (user_id, work_date) DO UPDATE SET
          last_seen = NOW(),
          logins = attendance.logins + $6,
          ips = CASE WHEN attendance.ips @> jsonb_build_array($2::text)
                     THEN attendance.ips ELSE attendance.ips || jsonb_build_array($2::text) END,
          devices = CASE WHEN attendance.devices @> jsonb_build_array($3::text)
-                        THEN attendance.devices ELSE attendance.devices || jsonb_build_array($3::text) END`,
-      [userId, ip, dev, APP_TZ, ua, isLogin ? 1 : 0],
+                        THEN attendance.devices ELSE attendance.devices || jsonb_build_array($3::text) END,
+         new_device = attendance.new_device OR $7`,
+      [userId, ip, dev, APP_TZ, ua, isLogin ? 1 : 0, !!newDevice],
     );
   } catch (e) { /* attendance must never block the request */ }
 }
@@ -193,7 +216,8 @@ app.post("/api/auth/login", async (req, res) => {
     );
     // Record arrival (first login of the local work day = check-in)
     if (!["partner", "employer"].includes(rows[0].role)) {
-      await touchAttendance(rows[0].id, req, true);
+      const isNewDevice = await registerDevice(rows[0].id, req);
+      await touchAttendance(rows[0].id, req, true, isNewDevice);
     }
     const { password: _, ...user } = rows[0];
     res.json({ token, user });
@@ -1137,7 +1161,7 @@ app.get("/api/attendance", auth, async (req, res) => {
               to_char(a.check_in  AT TIME ZONE $1, 'HH24:MI') AS in_time,
               to_char(a.check_out AT TIME ZONE $1, 'HH24:MI') AS out_time,
               to_char(a.last_seen AT TIME ZONE $1, 'HH24:MI') AS seen_time,
-              a.ips, a.devices, a.logins, a.manual_note,
+              a.ips, a.devices, a.logins, a.manual_note, a.new_device,
               ROUND(EXTRACT(EPOCH FROM (COALESCE(a.check_out, a.last_seen) - a.check_in))/3600.0, 2) AS hours,
               u.name, u.role
          FROM attendance a JOIN users u ON u.id = a.user_id
@@ -1157,6 +1181,7 @@ app.get("/api/attendance", auth, async (req, res) => {
       if (officeIps.length && !ips.some((ip) => officeIps.includes(ip))) flags.push("off_network");
       if (ips.length > 1) flags.push("multi_ip");
       if (devices.length > 1) flags.push("multi_device");
+      if (r.new_device) flags.push("new_device");
       if (!r.out_time && r.work_date < today) flags.push("no_checkout");
       return { ...r, ips, devices, flags };
     });
@@ -2600,7 +2625,20 @@ app.listen(PORT, async () => {
       logins INTEGER DEFAULT 0,
       user_agent TEXT,
       manual_note TEXT,
+      new_device BOOLEAN DEFAULT FALSE,
       UNIQUE(user_id, work_date)
+    )`);
+    await pool.query(`ALTER TABLE attendance ADD COLUMN IF NOT EXISTS new_device BOOLEAN DEFAULT FALSE`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS user_devices (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      device_id TEXT NOT NULL,
+      user_agent TEXT,
+      label TEXT,
+      first_seen TIMESTAMPTZ DEFAULT NOW(),
+      last_seen TIMESTAMPTZ DEFAULT NOW(),
+      logins INTEGER DEFAULT 0,
+      UNIQUE(user_id, device_id)
     )`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(work_date DESC, user_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_status_log_owner_date ON status_log(owner_id, logged_at)`);

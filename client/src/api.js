@@ -14,6 +14,20 @@ export const clearToken = () => {
 
 export const getToken = () => _token;
 
+// Stable per-browser id. Unlike IP (one office router = one IP for everyone)
+// and the user-agent hash (identical office PCs collide), this distinguishes
+// individual machines, so logging in from a colleague's computer is visible.
+function deviceId() {
+  try {
+    let d = localStorage.getItem("oj_device_id");
+    if (!d) {
+      d = (crypto.randomUUID?.() || String(Math.random()).slice(2) + Date.now().toString(36)).replace(/-/g, "").slice(0, 20);
+      localStorage.setItem("oj_device_id", d);
+    }
+    return d;
+  } catch { return ""; }
+}
+
 async function req(method, path, body) {
   const token = _token || localStorage.getItem("onejobs_token");
 
@@ -21,6 +35,7 @@ async function req(method, path, body) {
     method,
     headers: {
       "Content-Type": "application/json",
+      "X-Device-Id": deviceId(),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,

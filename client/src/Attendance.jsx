@@ -14,7 +14,8 @@ const FLAG_META = {
   late:          { label: "Kechikdi",        color: "#f59e0b", tip: "Ish boshlanish vaqtidan kech kirgan" },
   off_network:   { label: "Ofis tarmog'i emas", color: "#ef4444", tip: "Kirish ofis IP manzilidan bo'lmagan" },
   multi_ip:      { label: "2+ IP",           color: "#ef4444", tip: "Bir kunda turli tarmoqlardan kirilgan — akkaunt bo'lishilgan bo'lishi mumkin" },
-  multi_device:  { label: "2+ qurilma",      color: "#f97316", tip: "Bir kunda turli qurilma/brauzerdan kirilgan" },
+  multi_device:  { label: "2+ qurilma",      color: "#f97316", tip: "Bir kunda turli kompyuterdan kirilgan" },
+  new_device:    { label: "Yangi qurilma",   color: "#ef4444", tip: "Bu akkaunt ilgari ishlatilmagan kompyuterdan kirilgan — boshqa xodimning kompyuteri bo'lishi mumkin" },
   no_checkout:   { label: "Chiqmagan",       color: "#94a3b8", tip: "Ketish qayd etilmagan" },
 };
 
@@ -197,9 +198,10 @@ function Attendance({ user, config, setConfig }) {
       </div>
 
       <div style={{ fontSize: 10, color: T.muted, marginTop: 12, lineHeight: 1.7 }}>
-        <b>Eslatma:</b> "2+ IP" va "2+ qurilma" belgilari akkaunt boshqa odam bilan bo'lishilgan bo'lishi mumkinligini
-        bildiradi — lekin bu dalil emas (mobil internet, Wi-Fi almashuvi ham shunday ko'rinadi). Belgilangan holatlarni
-        qo'lda tekshiring.
+        <b>Eslatma:</b> butun ofis bitta routerga ulangani uchun IP hamma xodimda bir xil — shuning uchun ofis ichida
+        asosiy signal <b>"Yangi qurilma"</b> (akkaunt ilgari ishlatilmagan kompyuterdan kirgan). "Ofis tarmog'i emas"
+        esa tashqaridan (uydan) kirishni ko'rsatadi. Bu belgilar dalil emas, tekshirish uchun ishora: xodim brauzerni
+        almashtirsa yoki keshni tozalasa ham "Yangi qurilma" chiqadi.
       </div>
     </div>
   );
