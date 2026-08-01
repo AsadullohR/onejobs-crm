@@ -22,13 +22,11 @@ function SalaryPage({team, txns, setTxns, user}) {
   };
   const ROLE_LABEL={admin:"Admin",manager:"Menejer",sales:"Sotuv/Call",docs:"Hujjatchi",partner:"Hamkor"};
 
-  // KPI is treated as the client's own expense, NOT a company salary expense —
-  // exclude it here so it never inflates the "Xodimlar Xarajatlari" totals/rows.
-  const SALARY_CATS=SAL_CATS.filter(c=>c!=="KPI");
-  // A real company salary is never tied to a client lead. Client-attached
-  // expenses (naqd payments for a candidate, imported "umumiy chiqim", etc.)
-  // must not count as payroll — require lead_id to be empty.
-  const allSal=txns.filter(t=>t.type==="expense"&&!t.leadId&&t.cat!=="KPI"&&(SALARY_CATS.includes(t.cat)||["Maosh","Avans","Bonus"].includes(t.cat)));
+  // A company salary payment is never tied to a client lead. That single rule
+  // already excludes the client-side costs (cash paid for a candidate, imported
+  // "umumiy chiqim") that used to inflate payroll — so a KPI bonus paid to an
+  // EMPLOYEE still counts here, while a client's KPI expense does not.
+  const allSal=txns.filter(t=>t.type==="expense"&&!t.leadId&&(SAL_CATS.includes(t.cat)||t.cat==="Maosh"));
   const monthSal=selMonth?allSal.filter(t=>t.date?.startsWith(selMonth)):allSal;
   const thisMonthTotal=monthSal.reduce((s,t)=>s+t.amount,0);
   const allTimeTotal=allSal.reduce((s,t)=>s+t.amount,0);
@@ -139,11 +137,21 @@ function SalaryPage({team, txns, setTxns, user}) {
           {empTxns.map(x=>(
             <div key={x.id} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",marginBottom:5,background:T.card2,borderRadius:8,border:`1px solid ${T.border}`}}>
               <span style={{width:9,height:9,borderRadius:"50%",background:DOT[x.cat]||T.muted,flexShrink:0}}/>
+              {/* Reason of payment, visible on every row */}
               {editId===x.id
-                ? <input value={editVal.desc??x.desc??x.cat} onChange={e=>setEditVal(p=>({...p,desc:e.target.value}))}
-                    style={{...inpS,flex:1,padding:"4px 8px",fontSize:11}} autoFocus
+                ? <select value={editVal.cat??x.cat} onChange={e=>setEditVal(p=>({...p,cat:e.target.value}))}
+                    style={{...inpS,width:120,padding:"4px 6px",fontSize:10,flexShrink:0}}>
+                    {SAL_CATS.map(c=><option key={c} value={c}>{c}</option>)}
+                  </select>
+                : <span style={{fontSize:9,fontWeight:700,color:DOT[x.cat]||T.muted,background:`${DOT[x.cat]||T.muted}18`,
+                    border:`1px solid ${DOT[x.cat]||T.muted}44`,borderRadius:4,padding:"2px 6px",whiteSpace:"nowrap",flexShrink:0}}>
+                    {x.cat||"—"}
+                  </span>}
+              {editId===x.id
+                ? <input value={editVal.desc??x.desc??""} onChange={e=>setEditVal(p=>({...p,desc:e.target.value}))}
+                    style={{...inpS,flex:1,padding:"4px 8px",fontSize:11}} autoFocus placeholder="Izoh"
                     onKeyDown={e=>{if(e.key==="Enter")saveEdit(x.id);if(e.key==="Escape"){setEditId(null);setEditVal({});}}}/>
-                : <span style={{flex:1,fontSize:11,color:T.text}}>{x.desc||x.cat}</span>}
+                : <span style={{flex:1,fontSize:11,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.desc||"—"}</span>}
               {editId===x.id
                 ? <input type="number" value={editVal.amount??x.amount}
                     onChange={e=>setEditVal(p=>({...p,amount:e.target.value}))}
@@ -165,14 +173,22 @@ function SalaryPage({team, txns, setTxns, user}) {
           ))}
 
           {/* Inline add row  */}
-          <div style={{display:"flex",alignItems:"center",gap:7,marginTop:10,padding:"8px 12px",background:`${T.accent}08`,borderRadius:8,border:`1px dashed ${T.accent}44`}}>
+          <div style={{display:"flex",alignItems:"center",gap:7,marginTop:10,padding:"8px 12px",background:`${T.accent}08`,borderRadius:8,border:`1px dashed ${T.accent}44`,flexWrap:"wrap"}}>
+            {/* Reason of payment — without this every row silently defaulted
+                to "Oylik maosh" and Bonus/KPI/Jarima could never be recorded. */}
+            <select value={nr.cat||"Oylik maosh"} onChange={e=>setNewRow(p=>({...p,[t.id]:{...nr,cat:e.target.value}}))}
+              style={{...inpS,width:130,padding:"5px 9px",fontSize:11,flexShrink:0}}>
+              {SAL_CATS.map(c=><option key={c} value={c}>{c}</option>)}
+            </select>
             <input value={nr.desc||""} onChange={e=>setNewRow(p=>({...p,[t.id]:{...nr,desc:e.target.value}}))}
-              placeholder="Xarajat nomi (Maosh, Bonus ...)"
-              style={{...inpS,flex:1,padding:"5px 9px",fontSize:11}}
+              placeholder="Izoh (ixtiyoriy)"
+              style={{...inpS,flex:1,minWidth:120,padding:"5px 9px",fontSize:11}}
               onKeyDown={e=>e.key==="Enter"&&addTxn(t.id)}/>
+            <input type="date" value={nr.date||selMonth+"-01"} onChange={e=>setNewRow(p=>({...p,[t.id]:{...nr,date:e.target.value}}))}
+              style={{...inpS,width:135,padding:"5px 9px",fontSize:11,flexShrink:0}}/>
             <input type="number" value={nr.amount||""} onChange={e=>setNewRow(p=>({...p,[t.id]:{...nr,amount:e.target.value}}))}
               placeholder="Miqdor"
-              style={{...inpS,width:130,padding:"5px 9px",fontSize:11,textAlign:"right"}}
+              style={{...inpS,width:120,padding:"5px 9px",fontSize:11,textAlign:"right",flexShrink:0}}
               onKeyDown={e=>e.key==="Enter"&&addTxn(t.id)}/>
             <button onClick={()=>addTxn(t.id)}
               style={{padding:"5px 14px",borderRadius:7,background:T.accent,color:"#fff",fontWeight:700,border:"none",cursor:"pointer",fontSize:11,whiteSpace:"nowrap",flexShrink:0}}>
@@ -203,6 +219,17 @@ function SalaryPage({team, txns, setTxns, user}) {
               </button>
             </div>
             <div style={{textAlign:"right"}}>
+              {empTxns.length>0&&(
+                <div style={{display:"flex",gap:6,justifyContent:"flex-end",marginBottom:4,flexWrap:"wrap"}}>
+                  {Object.entries(empTxns.reduce((a,x)=>{a[x.cat]=(a[x.cat]||0)+x.amount;return a;},{}))
+                    .map(([c,v])=>(
+                      <span key={c} style={{fontSize:9,color:DOT[c]||T.muted,background:`${DOT[c]||T.muted}15`,
+                        border:`1px solid ${DOT[c]||T.muted}33`,borderRadius:4,padding:"1px 5px",whiteSpace:"nowrap"}}>
+                        {c}: {fmtMs(v)}
+                      </span>
+                    ))}
+                </div>
+              )}
               <span style={{fontSize:10,color:T.muted,marginRight:10}}>Bu oy jami:</span>
               <span style={{fontSize:16,fontWeight:900,color:T.red}}>{fmtMs(monthTotal)} so'm</span>
             </div>
