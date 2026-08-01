@@ -48,9 +48,26 @@ function SalaryPage({team, txns, setTxns, user}) {
       amount:Number(r.amount),date:r.date||selMonth+"-01",createdBy:user.id};
     try {
       const saved=await txnAPI.create(payload);
-      setTxns(p=>[...p,{...saved,cat:saved.category,desc:saved.description,by:saved.created_by,leadId:saved.lead_id}]);
+      // Fall back to what we sent: if the API build in front of us is older and
+      // doesn't return emp_id yet, the row would otherwise appear under nobody.
+      setTxns(p=>[...p,{...saved,cat:saved.category,desc:saved.description,by:saved.created_by,leadId:saved.lead_id,
+        empId:saved.emp_id??empId, empName:saved.emp_name??(emp?.name||"")}]);
     } catch(e){ alert("Saqlashda xatolik: "+e.message); return; }
     setNewRow(p=>({...p,[empId]:{}}));
+  };
+
+  // Salary rows that match no employee — money counted in the totals but shown
+  // under nobody. Usually payments saved before emp_id was persisted.
+  const assignTxnTo=async(txnId,empId)=>{
+    const emp=team.find(t=>t.id===Number(empId));
+    const x=txns.find(t=>t.id===txnId);
+    if(!emp||!x)return;
+    try {
+      const saved=await txnAPI.update(txnId,{leadId:x.leadId||null,date:x.date,type:x.type,
+        category:x.cat,description:x.desc,amount:x.amount,paymentMethod:x.paymentMethod||"cash",
+        empId:emp.id,empName:emp.name});
+      setTxns(p=>p.map(t=>t.id===txnId?{...t,empId:saved?.emp_id??emp.id,empName:saved?.emp_name??emp.name}:t));
+    } catch(e){ alert("Xatolik: "+e.message); }
   };
 
   const saveEdit=async(txnId)=>{
@@ -105,6 +122,48 @@ function SalaryPage({team, txns, setTxns, user}) {
         </div>
       ))}
     </div>
+
+    {/* ── UNASSIGNED SALARY ROWS ──
+        Without this the page silently disagrees with itself: the totals above
+        include these amounts while every employee card shows 0. */}
+    {(()=>{
+      const idSet=new Set(emps.map(e=>e.id)), nameSet=new Set(emps.map(e=>e.name));
+      const orphans=monthSal.filter(x=>!(x.empId&&idSet.has(x.empId))&&!(x.empName&&nameSet.has(x.empName)));
+      if(!orphans.length)return null;
+      const oTotal=orphans.reduce((s,x)=>s+x.amount,0);
+      return <div style={{background:T.card,border:`1px solid ${T.yellow}55`,borderRadius:12,marginBottom:10,overflow:"hidden"}}>
+        <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{fontSize:20}}>⚠️</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:800,color:T.text}}>Xodimga biriktirilmagan to'lovlar</div>
+            <div style={{fontSize:10,color:T.muted,marginTop:2}}>
+              Bu summalar yuqoridagi umumiy xarajatga kiradi, lekin hech bir xodimga bog'lanmagan.
+              Ro'yxatdan xodimni tanlang — to'lov o'sha xodimga o'tadi.
+            </div>
+          </div>
+          <div style={{fontSize:15,fontWeight:900,color:T.yellow}}>{fmtMs(oTotal)} so'm</div>
+        </div>
+        <div style={{padding:"12px 20px"}}>
+          {orphans.map(x=>(
+            <div key={x.id} style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",marginBottom:5,background:T.card2,borderRadius:8,border:`1px solid ${T.border}`,flexWrap:"wrap"}}>
+              <span style={{width:9,height:9,borderRadius:"50%",background:DOT[x.cat]||T.muted,flexShrink:0}}/>
+              <span style={{fontSize:9,fontWeight:700,color:DOT[x.cat]||T.muted,background:`${DOT[x.cat]||T.muted}18`,
+                border:`1px solid ${DOT[x.cat]||T.muted}44`,borderRadius:4,padding:"2px 6px",whiteSpace:"nowrap"}}>{x.cat||"—"}</span>
+              <span style={{flex:1,minWidth:100,fontSize:11,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.desc||"—"}</span>
+              <span style={{fontSize:10,color:T.muted,minWidth:82,textAlign:"center"}}>{x.date}</span>
+              <span style={{fontSize:12,fontWeight:800,color:T.red,minWidth:100,textAlign:"right"}}>-{fmtMs(x.amount)} so'm</span>
+              <select defaultValue="" onChange={e=>e.target.value&&assignTxnTo(x.id,e.target.value)}
+                style={{...inpS,width:150,padding:"4px 8px",fontSize:10,flexShrink:0}}>
+                <option value="">→ Xodimni tanlang</option>
+                {emps.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+              </select>
+              <button onClick={()=>delTxn(x.id)}
+                style={{padding:"4px 10px",borderRadius:6,background:`${T.red}15`,color:T.red,border:`1px solid ${T.red}33`,cursor:"pointer",fontSize:10,fontWeight:600,flexShrink:0}}>🗑</button>
+            </div>
+          ))}
+        </div>
+      </div>;
+    })()}
 
     {/* ── EMPLOYEE ROWS ── */}
     {emps.map(t=>{
