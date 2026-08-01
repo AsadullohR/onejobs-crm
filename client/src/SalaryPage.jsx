@@ -22,11 +22,17 @@ function SalaryPage({team, txns, setTxns, user}) {
   };
   const ROLE_LABEL={admin:"Admin",manager:"Menejer",sales:"Sotuv/Call",docs:"Hujjatchi",partner:"Hamkor"};
 
-  // A company salary payment is never tied to a client lead. That single rule
-  // already excludes the client-side costs (cash paid for a candidate, imported
-  // "umumiy chiqim") that used to inflate payroll — so a KPI bonus paid to an
-  // EMPLOYEE still counts here, while a client's KPI expense does not.
-  const allSal=txns.filter(t=>t.type==="expense"&&!t.leadId&&(SAL_CATS.includes(t.cat)||t.cat==="Maosh"));
+  // What counts as payroll:
+  //  • never tied to a client lead (that excludes client-side costs), AND
+  //  • either explicitly attached to an employee, or carrying a real salary
+  //    reason. "Boshqa" is a catch-all, so a general company expense (rent,
+  //    marketing) recorded as "Boshqa" with nobody attached is NOT payroll —
+  //    it only counts once someone assigns it to an employee.
+  const SAL_STRICT=SAL_CATS.filter(c=>c!=="Boshqa");
+  const hasEmp=t=>!!(t.empId||t.empName);
+  const allSal=txns.filter(t=>t.type==="expense"&&!t.leadId&&(
+    hasEmp(t) ? (SAL_CATS.includes(t.cat)||t.cat==="Maosh")
+              : (SAL_STRICT.includes(t.cat)||t.cat==="Maosh")));
   const monthSal=selMonth?allSal.filter(t=>t.date?.startsWith(selMonth)):allSal;
   const thisMonthTotal=monthSal.reduce((s,t)=>s+t.amount,0);
   const allTimeTotal=allSal.reduce((s,t)=>s+t.amount,0);
