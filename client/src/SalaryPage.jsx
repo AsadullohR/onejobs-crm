@@ -34,8 +34,8 @@ function SalaryPage({team, txns, setTxns, user}) {
     hasEmp(t) ? (SAL_CATS.includes(t.cat)||t.cat==="Maosh")
               : (SAL_STRICT.includes(t.cat)||t.cat==="Maosh")));
   const monthSal=selMonth?allSal.filter(t=>t.date?.startsWith(selMonth)):allSal;
-  const thisMonthTotal=monthSal.reduce((s,t)=>s+t.amount,0);
-  const allTimeTotal=allSal.reduce((s,t)=>s+t.amount,0);
+  const thisMonthTotal=monthSal.reduce((s,t)=>s+Number(t.amount||0),0);
+  const allTimeTotal=allSal.reduce((s,t)=>s+Number(t.amount||0),0);
   const emps=team.filter(t=>!["partner","employer"].includes(t.role));
   const avgPerEmp=emps.length>0?Math.round(thisMonthTotal/emps.length):0;
 
@@ -56,7 +56,12 @@ function SalaryPage({team, txns, setTxns, user}) {
       const saved=await txnAPI.create(payload);
       // Fall back to what we sent: if the API build in front of us is older and
       // doesn't return emp_id yet, the row would otherwise appear under nobody.
-      setTxns(p=>[...p,{...saved,cat:saved.category,desc:saved.description,by:saved.created_by,leadId:saved.lead_id,
+      // Postgres returns NUMERIC as a STRING via node-postgres. Spreading the
+      // raw response left amount as a string, so every total did string
+      // concatenation instead of addition ("8850000"+"2200000" reading as
+      // 88,500,002,200,000). Always normalise at this boundary.
+      setTxns(p=>[...p,{...saved,id:String(saved.id),amount:Number(saved.amount)||0,
+        cat:saved.category,desc:saved.description,by:saved.created_by,leadId:saved.lead_id,
         empId:saved.emp_id??empId, empName:saved.emp_name??(emp?.name||"")}]);
     } catch(e){ alert("Saqlashda xatolik: "+e.message); return; }
     setNewRow(p=>({...p,[empId]:{}}));
@@ -81,7 +86,8 @@ function SalaryPage({team, txns, setTxns, user}) {
     const payload={...t,category:editVal.cat||t.cat,description:editVal.desc??t.desc,amount:Number(editVal.amount)||t.amount,date:editVal.date||t.date};
     try {
       const saved=await txnAPI.update(txnId,payload);
-      setTxns(p=>p.map(x=>x.id===txnId?{...saved,cat:saved.category,desc:saved.description,by:saved.created_by,leadId:saved.lead_id}:x));
+      setTxns(p=>p.map(x=>x.id===txnId?{...saved,id:String(saved.id),amount:Number(saved.amount)||0,
+        cat:saved.category,desc:saved.description,by:saved.created_by,leadId:saved.lead_id}:x));
     } catch(e){ alert("Xatolik: "+e.message); return; }
     setEditId(null);setEditVal({});
   };
@@ -136,7 +142,7 @@ function SalaryPage({team, txns, setTxns, user}) {
       const idSet=new Set(emps.map(e=>e.id)), nameSet=new Set(emps.map(e=>e.name));
       const orphans=monthSal.filter(x=>!(x.empId&&idSet.has(x.empId))&&!(x.empName&&nameSet.has(x.empName)));
       if(!orphans.length)return null;
-      const oTotal=orphans.reduce((s,x)=>s+x.amount,0);
+      const oTotal=orphans.reduce((s,x)=>s+Number(x.amount||0),0);
       return <div style={{background:T.card,border:`1px solid ${T.yellow}55`,borderRadius:12,marginBottom:10,overflow:"hidden"}}>
         <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:10}}>
           <span style={{fontSize:20}}>⚠️</span>
@@ -174,7 +180,7 @@ function SalaryPage({team, txns, setTxns, user}) {
     {/* ── EMPLOYEE ROWS ── */}
     {emps.map(t=>{
       const empTxns=monthSal.filter(x=>x.empId===t.id||x.empName===t.name);
-      const monthTotal=empTxns.reduce((s,x)=>s+x.amount,0);
+      const monthTotal=empTxns.reduce((s,x)=>s+Number(x.amount||0),0);
       const open=expanded[t.id]!==false; // open by default
       const nr=newRow[t.id]||{};
 
@@ -286,7 +292,7 @@ function SalaryPage({team, txns, setTxns, user}) {
             <div style={{textAlign:"right"}}>
               {empTxns.length>0&&(
                 <div style={{display:"flex",gap:6,justifyContent:"flex-end",marginBottom:4,flexWrap:"wrap"}}>
-                  {Object.entries(empTxns.reduce((a,x)=>{a[x.cat]=(a[x.cat]||0)+x.amount;return a;},{}))
+                  {Object.entries(empTxns.reduce((a,x)=>{a[x.cat]=(a[x.cat]||0)+Number(x.amount||0);return a;},{}))
                     .map(([c,v])=>(
                       <span key={c} style={{fontSize:9,color:DOT[c]||T.muted,background:`${DOT[c]||T.muted}15`,
                         border:`1px solid ${DOT[c]||T.muted}33`,borderRadius:4,padding:"1px 5px",whiteSpace:"nowrap"}}>
