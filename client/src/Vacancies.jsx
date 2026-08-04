@@ -375,7 +375,7 @@ function VacancyDetail({
         lead_id: candForm.leadId,
         name: lead?.name || "Unknown",
         phone: lead?.phone || "",
-        status: candForm.status || "submitted",
+        status: candForm.status || "added",
         note: candForm.note || "",
       });
       setCandidates(p => [saved, ...p]);
@@ -1168,6 +1168,11 @@ function VacancyDetail({
                                     padding: "2px 0",
                                   }}
                                 >
+                                  {!CAND_STATUS[c.status] && (
+                                    <option value={c.status} style={{ color: T.red }}>
+                                      {c.status || "—"} (noma'lum)
+                                    </option>
+                                  )}
                                   {Object.entries(CAND_STATUS).map(([k, v]) => (
                                     <option
                                       key={k}

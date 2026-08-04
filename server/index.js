@@ -2122,7 +2122,7 @@ app.post("/api/candidates", auth, async (req, res) => {
   const lead_id = b.lead_id || b.leadId || null;
   const name = b.name || b.leadName || "Nomsiz";
   const phone = b.phone || b.leadPhone || null;
-  const status = b.status || "applied";
+  const status = b.status || "added";
   const note = b.note || null;
   const applied_at = b.applied_at || null;
   if (!vacancy_id) return res.status(400).json({ error: "vacancy_id required" });
