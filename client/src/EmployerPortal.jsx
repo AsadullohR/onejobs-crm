@@ -203,7 +203,7 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = 
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [cForm, setCForm] = useState({ status: candidate.status, note: candidate.note || "" });
+  const [cForm, setCForm] = useState({ status: normCandStatus(candidate.status), note: candidate.note || "" });
   const [lForm, setLForm] = useState({
     passport: cv.passport || "", dob: cv.dob || "",
     country: lead?.country || "", phone: lead?.phone || "",
@@ -214,7 +214,7 @@ function CandidateProfile({ candidate, vacancy, lead, onClose, T, t, editable = 
   const lf = (k, v) => setLForm(p => ({ ...p, [k]: v }));
 
   const startEdit = () => {
-    setCForm({ status: candidate.status, note: candidate.note || "" });
+    setCForm({ status: normCandStatus(candidate.status), note: candidate.note || "" });
     setLForm({
       passport: cv.passport || "", dob: cv.dob || "",
       country: lead?.country || "", phone: lead?.phone || "",

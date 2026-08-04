@@ -1811,8 +1811,8 @@ app.post("/api/webhook/meta", async (req, res) => {
 // the seat. 'hired'/'approved' are legacy values kept for older rows.
 const FILLED_STATUSES = `('approved_final','approved_client','docs_prep','filed_migration',
   'permit_received','scheduled_visa','visa_docs_sent','submitted_embassy','visa_received',
-  'hired','approved')`;
-const APPROVED_STATUSES = `('approved_final','approved_client','approved')`;
+  'hired','approved','offer')`;
+const APPROVED_STATUSES = `('approved_final','approved_client','approved','offer')`;
 
 const vacRow = (r) => ({
   id: r.id, title: r.title, company: r.company, country: r.country,

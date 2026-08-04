@@ -3,7 +3,7 @@ import { useT } from "./theme.js";
 import { useLang } from "./i18n.jsx";
 import { inp, lab, I, Modal, SearchSelect, Av } from "./helpers.jsx";
 import { vacanciesAPI, candidatesAPI, leadsAPI } from "./api.js";
-import { CandidateProfile } from "./EmployerPortal.jsx";
+import { CandidateProfile, normCandStatus } from "./EmployerPortal.jsx";
 // ─── STATUS CONFIG ────────────────────────────────────────────────────────────
 const V_STATUS = {
   active: { label: "Active", c: "#16a34a", bg: "#dcfce7" },
@@ -580,7 +580,7 @@ function VacancyDetail({
                   </div>
                   <div style={{ fontSize: 10, color: T.muted }}>
                     👥{" "}
-                    {candidates.filter(c => FILLED_CAND_STATUSES.includes(c.status)).length}
+                    {candidates.filter(c => FILLED_CAND_STATUSES.includes(normCandStatus(c.status))).length}
                     {" "}/ {v.positions || 1} approved candidates
                   </div>
                 </div>
@@ -1098,7 +1098,7 @@ function VacancyDetail({
                       {candidates.map((c, i) => {
                         const lead = leads.find((l) => l.id === c.leadId);
                         const cs =
-                          CAND_STATUS[c.status] || CAND_STATUS.added;
+                          CAND_STATUS[normCandStatus(c.status)] || CAND_STATUS.added;
                         return (
                           <tr
                             key={c.id}
@@ -1153,7 +1153,7 @@ function VacancyDetail({
                             <td style={{ padding: "10px 12px" }}>
                               {canEdit ? (
                                 <select
-                                  value={c.status}
+                                  value={normCandStatus(c.status)}
                                   onChange={(e) =>
                                     updateCandStatus(c.id, e.target.value)
                                   }
@@ -1168,7 +1168,7 @@ function VacancyDetail({
                                     padding: "2px 0",
                                   }}
                                 >
-                                  {!CAND_STATUS[c.status] && (
+                                  {!CAND_STATUS[normCandStatus(c.status)] && (
                                     <option value={c.status} style={{ color: T.red }}>
                                       {c.status || "—"} (noma'lum)
                                     </option>
@@ -1493,7 +1493,7 @@ function PartnerVacanciesView({ user, leads, vacancies, T }) {
       <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:10}}>Mening yuborishlarim</div>
       {myCands.length===0&&<div style={{color:T.muted,fontSize:12,padding:20}}>Hali nomzod yuborilmagan</div>}
       {myCands.map(c=>{
-        const cs=CAND_STATUS[c.status]||CAND_STATUS.added;
+        const cs=CAND_STATUS[normCandStatus(c.status)]||CAND_STATUS.added;
         const lead=leads.find(l=>l.id===c.leadId);
         return <div key={c.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
