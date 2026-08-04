@@ -378,7 +378,15 @@ function VacancyDetail({
         status: candForm.status || "added",
         note: candForm.note || "",
       });
-      setCandidates(p => [saved, ...p]);
+      // POST returns the raw DB row (snake_case, no lead join), while the list
+      // renders the enriched shape from /vacancies/:id/candidates — leadName,
+      // leadId, addedByName. Pushing the raw row showed the new candidate as
+      // "–" with no info until a refresh, so re-read the list instead of
+      // hand-mapping a second copy of the server's projection.
+      const fresh = await vacanciesAPI.getCandidates(v.id).catch(() => null);
+      if (fresh) setCandidates(fresh);
+      else setCandidates(p => [{ ...saved, id: String(saved.id), leadId: saved.lead_id,
+        leadName: lead?.name || saved.name, leadPhone: lead?.phone || saved.phone }, ...p]);
       setCandModal(false);
       setCandForm({ leadId: "", status: "added", note: "" });
     } catch (err) { alert("Xato: " + err.message); }
