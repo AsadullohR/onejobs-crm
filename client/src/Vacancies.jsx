@@ -30,6 +30,12 @@ const CAND_STATUS = {
   visa_received:      { label: "Visa received ✅",           c: "#15803d" },
 };
 
+// Mirrors the server's FILLED_STATUSES: the seat is taken from final approval
+// onwards. 'hired'/'approved' are legacy values from the older enum.
+const FILLED_CAND_STATUSES = ["approved_final","approved_client","docs_prep","filed_migration",
+  "permit_received","scheduled_visa","visa_docs_sent","submitted_embassy","visa_received",
+  "hired","approved"];
+
 const CONTRACT_TYPES = [
   "erpr3",
   "erpr4",
@@ -574,7 +580,7 @@ function VacancyDetail({
                   </div>
                   <div style={{ fontSize: 10, color: T.muted }}>
                     👥{" "}
-                    {candidates.filter(c => ["approved","hired"].includes(c.status)).length}
+                    {candidates.filter(c => FILLED_CAND_STATUSES.includes(c.status)).length}
                     {" "}/ {v.positions || 1} approved candidates
                   </div>
                 </div>

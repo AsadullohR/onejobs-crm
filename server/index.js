@@ -1806,6 +1806,14 @@ app.post("/api/webhook/meta", async (req, res) => {
   }
 });
 // ─── VACANCIES ───────────────────────────────────────────────────────────────
+// A position counts as FILLED once the candidate has cleared final approval —
+// every later stage (docs, permit, visa) is that same person still occupying
+// the seat. 'hired'/'approved' are legacy values kept for older rows.
+const FILLED_STATUSES = `('approved_final','approved_client','docs_prep','filed_migration',
+  'permit_received','scheduled_visa','visa_docs_sent','submitted_embassy','visa_received',
+  'hired','approved')`;
+const APPROVED_STATUSES = `('approved_final','approved_client','approved')`;
+
 const vacRow = (r) => ({
   id: r.id, title: r.title, company: r.company, country: r.country,
   jobType: r.job_type, contractType: r.contract_type, salary: r.salary,
@@ -1839,8 +1847,8 @@ app.get("/api/vacancies", auth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT v.*,
         COUNT(c.id) FILTER (WHERE c.id IS NOT NULL) as candidate_count,
-        COUNT(c.id) FILTER (WHERE c.status IN ('hired','approved')) as hired_count,
-        COUNT(c.id) FILTER (WHERE c.status = 'approved') as approved_count
+        COUNT(c.id) FILTER (WHERE c.status IN ${FILLED_STATUSES}) as hired_count,
+        COUNT(c.id) FILTER (WHERE c.status IN ${APPROVED_STATUSES}) as approved_count
        FROM vacancies v LEFT JOIN candidates c ON c.vacancy_id = v.id
        ${whereClause}
        GROUP BY v.id ORDER BY v.created_at DESC`,
@@ -1907,8 +1915,8 @@ app.put("/api/vacancies/:id", auth, async (req, res) => {
     const { rows } = await pool.query(
       `SELECT v.*,
         COUNT(c.id) FILTER (WHERE c.id IS NOT NULL) as candidate_count,
-        COUNT(c.id) FILTER (WHERE c.status IN ('hired','approved')) as hired_count,
-        COUNT(c.id) FILTER (WHERE c.status = 'approved') as approved_count
+        COUNT(c.id) FILTER (WHERE c.status IN ${FILLED_STATUSES}) as hired_count,
+        COUNT(c.id) FILTER (WHERE c.status IN ${APPROVED_STATUSES}) as approved_count
        FROM vacancies v LEFT JOIN candidates c ON c.vacancy_id = v.id
        WHERE v.id=$1 GROUP BY v.id`,
       [req.params.id],
