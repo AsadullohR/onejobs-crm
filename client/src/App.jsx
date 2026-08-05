@@ -547,13 +547,15 @@ const deleteLead = useCallback(async (id) => {
           <div style={{display:"flex",gap:8,alignItems:"center",minWidth:0,flex:1}}>
             <span style={{color:T.muted,fontSize:12,fontWeight:400,flexShrink:0}}>👋 <span style={{color:T.text,fontWeight:600}}>{isMobile ? user.name.split(" ")[0] : user.name}</span></span>
             {perm.canFin&&!isMobile&&(()=>{
-              const tI=txns.filter(t=>t.type==="income").reduce((s,t)=>s+Number(t.amount||0),0);
+              const tIt=txns.filter(t=>t.type==="income").reduce((s,t)=>s+Number(t.amount||0),0);
               const tE=txns.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
-              const tExtExp=extExps.reduce((s,e)=>s+Number(e.amount||0),0);
+              const tExtExp=extExps.filter(e=>e.type!=="income").reduce((s,e)=>s+Number(e.amount||0),0);
+              const tExtInc=extExps.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount||0),0);
+              const tI=tIt+tExtInc;
               const totalE=tE+tExtExp;
               const tasdFoyda=leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
               const staffExp=txns.filter(t=>t.type==="expense"&&!t.leadId).reduce((s,t)=>s+Number(t.amount||0),0);
-              const sofFoyda=tasdFoyda-tExtExp-staffExp;
+              const sofFoyda=tasdFoyda+tExtInc-tExtExp-staffExp;
               const stats=[
                 {l:"Kirim",v:`+${fmtMs(tI)}`,c:T.green,bg:`${T.green}14`},
                 {l:"Chiqim",v:`-${fmtMs(totalE)}`,c:T.red,bg:`${T.red}14`},

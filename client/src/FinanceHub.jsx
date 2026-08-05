@@ -9,13 +9,15 @@ import { extExpAPI } from "./api.js";
 
 // ─── EXTERNAL EXPENSES TAB ────────────────────────────────────────────────────
 const EXT_CATS = ["Ofis ijara", "Kommunal", "Marketing", "Reklama", "Transport", "Jihozlar", "Soliq", "Boshqa"];
+// Income that isn't tied to a client (consulting, referral fees, rent received…)
+const EXT_INC_CATS = ["Qo'shimcha xizmat", "Konsalting", "Hamkorlik", "Qaytarilgan mablag'", "Investitsiya", "Boshqa"];
 
 function ExternalExpenses({ user, addNotif }) {
   const T = useT();
   const inpS = inp(T);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0,10), category: "Ofis ijara", description: "", amount: "", recurring: false });
+  const [form, setForm] = useState({ date: new Date().toISOString().slice(0,10), category: "Ofis ijara", description: "", amount: "", recurring: false, type: "expense" });
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
   const [filterCat, setFilterCat] = useState("all");
@@ -32,8 +34,10 @@ function ExternalExpenses({ user, addNotif }) {
     return monthMatch && catMatch;
   }), [items, filterMonth, filterCat]);
 
-  const total = filtered.reduce((s, i) => s + Number(i.amount), 0);
-  const allTotal = items.reduce((s, i) => s + Number(i.amount), 0);
+  const isInc = i => i.type === "income";
+  const total    = filtered.filter(i => !isInc(i)).reduce((s, i) => s + Number(i.amount), 0);
+  const totalInc = filtered.filter(isInc).reduce((s, i) => s + Number(i.amount), 0);
+  const allTotal = items.filter(i => !isInc(i)).reduce((s, i) => s + Number(i.amount), 0);
 
   const add = async () => {
     if (!form.amount || Number(form.amount) <= 0) return;
@@ -41,7 +45,7 @@ function ExternalExpenses({ user, addNotif }) {
       const saved = await extExpAPI.create({ ...form, amount: Number(form.amount) });
       setItems(p => [saved, ...p]);
       setForm(p => ({ ...p, description: "", amount: "", recurring: false }));
-      addNotif(`💸 Xarajat qo'shildi: ${saved.category}`);
+      addNotif(`${form.type === "income" ? "💰 Kirim" : "💸 Xarajat"} qo'shildi: ${saved.category}`);
     } catch (e) { alert(e.message); }
   };
 
@@ -66,11 +70,12 @@ function ExternalExpenses({ user, addNotif }) {
   return (
     <div style={{ maxWidth: 860, margin: "0 auto" }}>
       {/* KPI */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
         {[
-          ["💸", "BU OY", fmtMs(total) + " so'm", T.red],
-          ["📅", "JAMI BARCHA VAQT", fmtMs(allTotal) + " so'm", T.red],
-          ["📦", "YOZUVLAR SONI", filtered.length + " ta", T.text],
+          ["💸", "BU OY CHIQIM", fmtMs(total) + " so'm", T.red],
+          ["💰", "BU OY KIRIM", fmtMs(totalInc) + " so'm", T.green],
+          ["⚖️", "BU OY FARQ", fmtMs(totalInc - total) + " so'm", (totalInc - total) >= 0 ? T.green : T.red],
+          ["📅", "CHIQIM (BARCHA VAQT)", fmtMs(allTotal) + " so'm", T.red],
         ].map(([ic, lb, val, c]) => (
           <div key={lb} style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px" }}>
             <div style={{ fontSize: 8, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{ic} {lb}</div>
@@ -92,13 +97,27 @@ function ExternalExpenses({ user, addNotif }) {
 
       {/* Add form */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 12 }}>+ Yangi xarajat</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 12 }}>
+          + Yangi {form.type === "income" ? "kirim" : "xarajat"}
+        </div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          {[["expense", "💸 Chiqim", T.red], ["income", "💰 Kirim", T.green]].map(([k, lb, c]) => (
+            <button key={k}
+              onClick={() => setForm(p => ({ ...p, type: k, category: k === "income" ? EXT_INC_CATS[0] : EXT_CATS[0] }))}
+              style={{ padding: "5px 14px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                border: `1px solid ${form.type === k ? c : T.border}`,
+                background: form.type === k ? `${c}18` : "transparent",
+                color: form.type === k ? c : T.muted, fontFamily: "inherit" }}>
+              {lb}
+            </button>
+          ))}
+        </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input type="date" value={form.date} onChange={e => f("date", e.target.value)}
             style={{ ...inpS, flex: "0 0 auto", fontSize: 11 }} />
           <select value={form.category} onChange={e => f("category", e.target.value)}
             style={{ ...inpS, flex: "1 1 140px", fontSize: 11 }}>
-            {EXT_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+            {(form.type === "income" ? EXT_INC_CATS : EXT_CATS).map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <input placeholder="Izoh (ixtiyoriy)" value={form.description} onChange={e => f("description", e.target.value)}
             style={{ ...inpS, flex: "2 1 200px", fontSize: 11 }}
@@ -120,7 +139,7 @@ function ExternalExpenses({ user, addNotif }) {
       {/* List */}
       <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
         {filtered.length === 0
-          ? <div style={{ color: T.muted, textAlign: "center", padding: 40, fontSize: 12 }}>Xarajat yo'q</div>
+          ? <div style={{ color: T.muted, textAlign: "center", padding: 40, fontSize: 12 }}>Yozuv yo'q</div>
           : filtered.map(item => (
             <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: `1px solid ${T.border}` }}>
               {editId === item.id ? (
@@ -141,11 +160,19 @@ function ExternalExpenses({ user, addNotif }) {
               ) : (
                 <>
                   <span style={{ fontSize: 10, color: T.muted, minWidth: 80 }}>{item.date}</span>
+                  <span style={{ fontSize: 8, fontWeight: 800, minWidth: 46, textAlign: "center",
+                    color: isInc(item) ? T.green : T.red,
+                    background: `${isInc(item) ? T.green : T.red}18`,
+                    border: `1px solid ${isInc(item) ? T.green : T.red}44`,
+                    borderRadius: 4, padding: "2px 5px" }}>{isInc(item) ? "KIRIM" : "CHIQIM"}</span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: T.accent, minWidth: 110 }}>{item.category}</span>
                   <span style={{ fontSize: 11, color: T.muted, flex: 1 }}>{item.description || "—"}</span>
                   {item.recurring && <span style={{ fontSize: 9, background: `${T.accent}22`, color: T.accent, borderRadius: 10, padding: "1px 7px", fontWeight: 700 }}>oylik</span>}
-                  <span style={{ fontSize: 13, fontWeight: 800, color: T.red, minWidth: 120, textAlign: "right" }}>-{fmtMs(item.amount)} so'm</span>
-                  <button onClick={() => { setEditId(item.id); setEditVal({ date: item.date, category: item.category, description: item.description, amount: item.amount }); }}
+                  <span style={{ fontSize: 13, fontWeight: 800, minWidth: 120, textAlign: "right",
+                    color: isInc(item) ? T.green : T.red }}>
+                    {isInc(item) ? "+" : "-"}{fmtMs(item.amount)} so'm
+                  </span>
+                  <button onClick={() => { setEditId(item.id); setEditVal({ date: item.date, category: item.category, description: item.description, amount: item.amount, type: item.type || 'expense' }); }}
                     style={{ padding: "4px 10px", borderRadius: 6, background: `${T.accent}15`, color: T.accent, border: `1px solid ${T.accent}33`, cursor: "pointer", fontSize: 10 }}>✏️</button>
                   <button onClick={() => del(item.id)}
                     style={{ padding: "4px 10px", borderRadius: 6, background: `${T.red}15`, color: T.red, border: `1px solid ${T.red}33`, cursor: "pointer", fontSize: 10 }}>🗑</button>
@@ -156,7 +183,11 @@ function ExternalExpenses({ user, addNotif }) {
         {filtered.length > 0 && (
           <div style={{ display: "flex", justifyContent: "flex-end", padding: "10px 16px", borderTop: `1px solid ${T.border}` }}>
             <span style={{ fontSize: 11, color: T.muted, marginRight: 10 }}>Jami:</span>
-            <span style={{ fontSize: 16, fontWeight: 900, color: T.red }}>-{fmtMs(total)} so'm</span>
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.green, marginRight: 12 }}>+{fmtMs(totalInc)}</span>
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.red, marginRight: 12 }}>-{fmtMs(total)}</span>
+            <span style={{ fontSize: 16, fontWeight: 900, color: (totalInc-total) >= 0 ? T.green : T.red }}>
+              {fmtMs(totalInc - total)} so'm
+            </span>
           </div>
         )}
       </div>
@@ -265,14 +296,17 @@ function FinanceDashboard({ txns, leads, extExps }) {
   const filtTxns = txns.filter(t => inRange(t.date));
   const filtExt  = extExps.filter(e => inRange(e.date));
 
-  const income  = filtTxns.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const txnIncome = filtTxns.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount||0), 0);
   // KPI is treated as the client's own expense, NOT company salary — so it is
   // excluded from the salary bucket and falls into clientExp (Mijoz) instead.
   const salaries = filtTxns.filter(t => t.type === "expense" &&
     ["Oylik maosh","Avans","Bonus","Jarima","Maosh"].includes(t.cat)).reduce((s, t) => s + t.amount, 0);
   const clientExp = filtTxns.filter(t => t.type === "expense" &&
     !["Oylik maosh","Avans","Bonus","Jarima","Maosh"].includes(t.cat)).reduce((s, t) => s + t.amount, 0);
-  const extTotal  = filtExt.reduce((s, e) => s + Number(e.amount), 0);
+  // External rows carry a type: income adds to revenue, expense to costs.
+  const extTotal   = filtExt.filter(e => e.type !== "income").reduce((s, e) => s + Number(e.amount), 0);
+  const extIncome  = filtExt.filter(e => e.type === "income").reduce((s, e) => s + Number(e.amount), 0);
+  const income    = txnIncome + extIncome;
   const totalExp  = salaries + clientExp + extTotal;
   const profit    = income - totalExp;
   // Only DONE (Jo'nab ketdi / Viza Oldi) leads count as confirmed profit —
@@ -395,7 +429,7 @@ function BarChart({ txns, extExps, T }) {
     const inc = txns.filter(t => t.type==="income" && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
     const sal = txns.filter(t => t.type==="expense" && SALARY_CATS.includes(t.cat) && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
     const cl  = txns.filter(t => t.type==="expense" && !SALARY_CATS.includes(t.cat) && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
-    const ext = extExps.filter(e => e.date?.startsWith(key)).reduce((s,e)=>s+Number(e.amount),0);
+    const ext = extExps.filter(e => e.date?.startsWith(key) && e.type !== "income").reduce((s,e)=>s+Number(e.amount),0);
     return { inc, exp: sal+cl+ext };
   }), [txns, extExps, months]);
 
@@ -663,7 +697,7 @@ function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNot
     { k: "clients",   l: "💼 Mijozlar Moliyasi" },
     { k: "kpi",       l: "🏆 KPI To'lovlar" },
     ...(canSalary ? [{ k: "salary", l: "👷 Xodim Xarajatlari" }] : []),
-    { k: "external",  l: "🏢 Tashqi Xarajatlar" },
+    { k: "external",  l: "🏢 Tashqi Kirim/Chiqim" },
     { k: "debts",     l: "⚠️ Qarzlar" },
   ];
 

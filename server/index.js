@@ -2244,10 +2244,11 @@ app.post("/api/external-expenses", auth, async (req, res) => {
   const { date, category, description, amount, recurring } = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO external_expenses (date, category, description, amount, recurring, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      `INSERT INTO external_expenses (date, category, description, amount, recurring, created_by, type)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
       [date||new Date().toISOString().slice(0,10), category, description||null,
-       amount||0, recurring||false, req.user.id],
+       amount||0, recurring||false, req.user.id,
+       req.body.type === 'income' ? 'income' : 'expense'],
     );
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -2257,9 +2258,10 @@ app.put("/api/external-expenses/:id", auth, async (req, res) => {
   const { date, category, description, amount, recurring } = req.body;
   try {
     const { rows } = await pool.query(
-      `UPDATE external_expenses SET date=$1, category=$2, description=$3, amount=$4, recurring=$5
+      `UPDATE external_expenses SET date=$1, category=$2, description=$3, amount=$4, recurring=$5, type=COALESCE($7,type)
        WHERE id=$6 RETURNING *`,
-      [date, category, description||null, amount||0, recurring||false, req.params.id],
+      [date, category, description||null, amount||0, recurring||false, req.params.id,
+       req.body.type === 'income' ? 'income' : req.body.type === 'expense' ? 'expense' : null],
     );
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -2681,6 +2683,8 @@ app.listen(PORT, async () => {
       status TEXT NOT NULL,
       logged_at TIMESTAMPTZ DEFAULT NOW()
     )`);
+    await pool.query(`ALTER TABLE external_expenses ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'expense'`);
+    await pool.query(`UPDATE external_expenses SET type='expense' WHERE type IS NULL`);
     await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS emp_id INTEGER`);
     await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS emp_name TEXT`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_txn_emp ON transactions(emp_id, date DESC)`);

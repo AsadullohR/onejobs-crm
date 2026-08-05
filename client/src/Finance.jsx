@@ -75,13 +75,14 @@ function Finance({
   const totalInc = txns
     .filter((t) => t.type === "income")
     .reduce((s, t) => s + t.amount, 0);
-  const extTotal = (extExps||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
+  const extTotal = (extExps||[]).filter(e=>e.type!=="income").reduce((s,e)=>s+Number(e.amount||0), 0);
+  const extIncome = (extExps||[]).filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount||0), 0);
   const totalExp = txns
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + t.amount, 0) + extTotal;
   const tasdFoyda = leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
   const staffExp = txns.filter(t=>t.type==="expense"&&!t.leadId).reduce((s,t)=>s+t.amount,0);
-  const sofFoyda = tasdFoyda - extTotal - staffExp;
+  const sofFoyda = tasdFoyda + extIncome - extTotal - staffExp;
   // Lead IDs that have at least one transaction (income or expense)
   const leadsWithTxn = new Set(txns.filter((t) => t.leadId).map((t) => t.leadId));
   const visLeads = leads
