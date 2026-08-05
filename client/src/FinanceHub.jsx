@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useT } from "./theme.js";
-import { DONE } from "./constants.js";
+import { DONE, isPayrollTxn } from "./constants.js";
 import { uid, fmtMs, fmtD, inp, I } from "./helpers.jsx";
 import { Finance } from "./Finance.jsx";
 import { SalaryPage } from "./SalaryPage.jsx";
@@ -310,12 +310,11 @@ function FinanceDashboard({ txns, leads, extExps }) {
   const filtExt  = extExps.filter(e => inRange(e.date));
 
   const txnIncome = filtTxns.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount||0), 0);
-  // KPI is treated as the client's own expense, NOT company salary — so it is
-  // excluded from the salary bucket and falls into clientExp (Mijoz) instead.
-  const salaries = filtTxns.filter(t => t.type === "expense" &&
-    ["Oylik maosh","Avans","Bonus","Jarima","Maosh"].includes(t.cat)).reduce((s, t) => s + t.amount, 0);
-  const clientExp = filtTxns.filter(t => t.type === "expense" &&
-    !["Oylik maosh","Avans","Bonus","Jarima","Maosh"].includes(t.cat)).reduce((s, t) => s + t.amount, 0);
+  // Same payroll rule as the Salary page (shared helper), so "Maosh" here and
+  // "Xodim Xarajatlari" there always report the same figure. The two filters
+  // stay complementary, so no expense is dropped or double-counted.
+  const salaries = filtTxns.filter(isPayrollTxn).reduce((s, t) => s + Number(t.amount||0), 0);
+  const clientExp = filtTxns.filter(t => t.type === "expense" && !isPayrollTxn(t)).reduce((s, t) => s + Number(t.amount||0), 0);
   // External rows carry a type: income adds to revenue, expense to costs.
   const extTotal   = filtExt.filter(e => e.type !== "income").reduce((s, e) => s + Number(e.amount), 0);
   const extIncome  = filtExt.filter(e => e.type === "income").reduce((s, e) => s + Number(e.amount), 0);
@@ -445,13 +444,11 @@ function BarChart({ txns, extExps, T }) {
     });
   }, []);
 
-  // KPI excluded — it is a client expense, not company salary (see above).
-  const SALARY_CATS = ["Oylik maosh","Avans","Bonus","Jarima","Maosh"];
   const data = useMemo(() => months.map(({ key }) => {
     const inc = txns.filter(t => t.type==="income" && t.date?.startsWith(key)).reduce((s,t)=>s+Number(t.amount||0),0)
       + extExps.filter(e => e.date?.startsWith(key) && e.type === "income").reduce((s,e)=>s+Number(e.amount||0),0);
-    const sal = txns.filter(t => t.type==="expense" && SALARY_CATS.includes(t.cat) && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
-    const cl  = txns.filter(t => t.type==="expense" && !SALARY_CATS.includes(t.cat) && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
+    const sal = txns.filter(t => isPayrollTxn(t) && t.date?.startsWith(key)).reduce((s,t)=>s+Number(t.amount||0),0);
+    const cl  = txns.filter(t => t.type==="expense" && !isPayrollTxn(t) && t.date?.startsWith(key)).reduce((s,t)=>s+Number(t.amount||0),0);
     const ext = extExps.filter(e => e.date?.startsWith(key) && e.type !== "income").reduce((s,e)=>s+Number(e.amount),0);
     return { inc, exp: sal+cl+ext };
   }), [txns, extExps, months]);

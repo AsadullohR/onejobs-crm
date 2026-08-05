@@ -107,9 +107,23 @@ const INIT_VISA = [
   {id:3,country:"Turkiya",  flag:"🇹🇷",type:"Ish visa",duration:"15-30 kun",docs:["Zagranpassport","Çalışma İzni","Mehnat shartnomasi","Sug'urta"],notes:"Vizasiz 30 kun."},
 ];
 
+// ─── PAYROLL CLASSIFICATION ───────────────────────────────────────────────────
+// ONE definition of "is this expense company payroll?", shared by the Salary
+// page and the finance dashboard so the two screens can never disagree.
+// Rules: never tied to a client lead (that excludes client-side costs), and
+// either explicitly attached to an employee or carrying a real salary reason.
+// "Boshqa" is a catch-all, so an unattached "Boshqa" expense (rent, marketing)
+// is NOT payroll until someone assigns it to an employee.
+const SALARY_CATS = ["Oylik maosh", "Maosh", "Avans", "Bonus", "KPI", "Jarima", "Boshqa"];
+const SALARY_CATS_STRICT = SALARY_CATS.filter(c => c !== "Boshqa");
+const isPayrollTxn = (t) =>
+  t.type === "expense" && !t.leadId &&
+  ((t.empId || t.empName) ? SALARY_CATS.includes(t.cat) : SALARY_CATS_STRICT.includes(t.cat));
+
 export {
 STAGES, DONE, LOST, gS,
 INIT_LEADS, INIT_TASKS, INIT_TXN,
 INIT_CFG, INIT_TEAM, INIT_ROLES, INIT_VISA,
-RAW_LEADS, FIN_MAP
+RAW_LEADS, FIN_MAP,
+SALARY_CATS, isPayrollTxn
 };

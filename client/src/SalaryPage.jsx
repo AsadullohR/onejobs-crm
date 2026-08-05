@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useT } from "./theme.js";
 import { uid, fmtMs, inp, I, Av, fmtD } from "./helpers.jsx";
 import { txnAPI } from "./api.js";
+import { isPayrollTxn } from "./constants.js";
 
 // ─── SALARY PAGE ─────────────────────────────────────────────────────────────
 function SalaryPage({team, txns, setTxns, user}) {
@@ -28,11 +29,7 @@ function SalaryPage({team, txns, setTxns, user}) {
   //    reason. "Boshqa" is a catch-all, so a general company expense (rent,
   //    marketing) recorded as "Boshqa" with nobody attached is NOT payroll —
   //    it only counts once someone assigns it to an employee.
-  const SAL_STRICT=SAL_CATS.filter(c=>c!=="Boshqa");
-  const hasEmp=t=>!!(t.empId||t.empName);
-  const allSal=txns.filter(t=>t.type==="expense"&&!t.leadId&&(
-    hasEmp(t) ? (SAL_CATS.includes(t.cat)||t.cat==="Maosh")
-              : (SAL_STRICT.includes(t.cat)||t.cat==="Maosh")));
+  const allSal=txns.filter(isPayrollTxn);
   const monthSal=selMonth?allSal.filter(t=>t.date?.startsWith(selMonth)):allSal;
   const thisMonthTotal=monthSal.reduce((s,t)=>s+Number(t.amount||0),0);
   const allTimeTotal=allSal.reduce((s,t)=>s+Number(t.amount||0),0);
