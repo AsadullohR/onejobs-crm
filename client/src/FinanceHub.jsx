@@ -17,7 +17,7 @@ function ExternalExpenses({ user, addNotif }) {
   const inpS = inp(T);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0,10), category: "Ofis ijara", description: "", amount: "", recurring: false, type: "expense" });
+  const [form, setForm] = useState({ date: new Date().toISOString().slice(0,10), category: "Ofis ijara", description: "", amount: "", recurring: false, type: "expense", paymentMethod: "cash" });
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
   const [filterCat, setFilterCat] = useState("all");
@@ -125,6 +125,15 @@ function ExternalExpenses({ user, addNotif }) {
           <input type="number" placeholder="Miqdor (so'm)" value={form.amount} onChange={e => f("amount", e.target.value)}
             style={{ ...inpS, flex: "0 0 160px", fontSize: 11, textAlign: "right" }}
             onKeyDown={e => e.key === "Enter" && add()} />
+          <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+            {[["cash", "💵 Naqd"], ["bank", "🏦 Bank"]].map(([k, lb]) => (
+              <button key={k} onClick={() => f("paymentMethod", k)}
+                style={{ padding: "5px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  border: `1px solid ${form.paymentMethod === k ? T.accent : T.border}`,
+                  background: form.paymentMethod === k ? `${T.accent}18` : "transparent",
+                  color: form.paymentMethod === k ? T.accent : T.muted }}>{lb}</button>
+            ))}
+          </div>
           <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: T.muted, cursor: "pointer" }}>
             <input type="checkbox" checked={form.recurring} onChange={e => f("recurring", e.target.checked)} />
             Oylik
@@ -167,12 +176,16 @@ function ExternalExpenses({ user, addNotif }) {
                     borderRadius: 4, padding: "2px 5px" }}>{isInc(item) ? "KIRIM" : "CHIQIM"}</span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: T.accent, minWidth: 110 }}>{item.category}</span>
                   <span style={{ fontSize: 11, color: T.muted, flex: 1 }}>{item.description || "—"}</span>
+                  <span style={{ fontSize: 9, color: T.muted, background: T.card2, border: `1px solid ${T.border}`,
+                    borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap" }}>
+                    {(item.paymentMethod || item.payment_method) === "bank" ? "🏦 Bank" : "💵 Naqd"}
+                  </span>
                   {item.recurring && <span style={{ fontSize: 9, background: `${T.accent}22`, color: T.accent, borderRadius: 10, padding: "1px 7px", fontWeight: 700 }}>oylik</span>}
                   <span style={{ fontSize: 13, fontWeight: 800, minWidth: 120, textAlign: "right",
                     color: isInc(item) ? T.green : T.red }}>
                     {isInc(item) ? "+" : "-"}{fmtMs(item.amount)} so'm
                   </span>
-                  <button onClick={() => { setEditId(item.id); setEditVal({ date: item.date, category: item.category, description: item.description, amount: item.amount, type: item.type || 'expense' }); }}
+                  <button onClick={() => { setEditId(item.id); setEditVal({ date: item.date, category: item.category, description: item.description, amount: item.amount, type: item.type || 'expense', paymentMethod: item.paymentMethod || item.payment_method || 'cash' }); }}
                     style={{ padding: "4px 10px", borderRadius: 6, background: `${T.accent}15`, color: T.accent, border: `1px solid ${T.accent}33`, cursor: "pointer", fontSize: 10 }}>✏️</button>
                   <button onClick={() => del(item.id)}
                     style={{ padding: "4px 10px", borderRadius: 6, background: `${T.red}15`, color: T.red, border: `1px solid ${T.red}33`, cursor: "pointer", fontSize: 10 }}>🗑</button>
@@ -321,10 +334,19 @@ function FinanceDashboard({ txns, leads, extExps }) {
     { k: "custom",  l: "Sana" },
   ];
 
-  const cashIncome = filtTxns.filter(t=>t.type==="income"&&(t.paymentMethod||t.payment_method)==="cash").reduce((s,t)=>s+t.amount,0);
-  const bankIncome = filtTxns.filter(t=>t.type==="income"&&(t.paymentMethod||t.payment_method)==="bank").reduce((s,t)=>s+t.amount,0);
-  const cashExp = filtTxns.filter(t=>t.type==="expense"&&(t.paymentMethod||t.payment_method)==="cash").reduce((s,t)=>s+t.amount,0);
-  const bankExp = filtTxns.filter(t=>t.type==="expense"&&(t.paymentMethod||t.payment_method)==="bank").reduce((s,t)=>s+t.amount,0);
+  // Cash/bank must span BOTH ledgers — client transactions and external rows —
+  // otherwise rent paid from the bank never leaves the bank balance.
+  const pm = r => (r.paymentMethod || r.payment_method) === "bank" ? "bank" : "cash";
+  const sumTxn = (type, method) => filtTxns
+    .filter(t => t.type === type && pm(t) === method)
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+  const sumExt = (type, method) => filtExt
+    .filter(e => (e.type === "income" ? "income" : "expense") === type && pm(e) === method)
+    .reduce((s, e) => s + Number(e.amount || 0), 0);
+  const cashIncome = sumTxn("income", "cash") + sumExt("income", "cash");
+  const bankIncome = sumTxn("income", "bank") + sumExt("income", "bank");
+  const cashExp    = sumTxn("expense", "cash") + sumExt("expense", "cash");
+  const bankExp    = sumTxn("expense", "bank") + sumExt("expense", "bank");
   const cashBalance = cashIncome - cashExp;
   const bankBalance = bankIncome - bankExp;
 

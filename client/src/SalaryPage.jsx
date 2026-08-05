@@ -51,7 +51,8 @@ function SalaryPage({team, txns, setTxns, user}) {
     const emp=team.find(t=>t.id===empId);
     const payload={leadId:null,empId,empName:emp?.name||"",type:"expense",
       category:r.cat||"Oylik maosh",description:r.desc||r.cat||"Oylik maosh",
-      amount:Number(r.amount),date:r.date||selMonth+"-01",createdBy:user.id};
+      amount:Number(r.amount),date:r.date||selMonth+"-01",createdBy:user.id,
+      paymentMethod:r.paymentMethod||"cash"};
     try {
       const saved=await txnAPI.create(payload);
       // Fall back to what we sent: if the API build in front of us is older and
@@ -229,6 +230,9 @@ function SalaryPage({team, txns, setTxns, user}) {
                     style={{...inpS,width:120,padding:"4px 8px",fontSize:11,textAlign:"right"}}
                     onKeyDown={e=>{if(e.key==="Enter")saveEdit(x.id);}}/>
                 : <span style={{fontSize:11,color:T.muted,minWidth:100,textAlign:"right"}}>{x.amount.toLocaleString()}</span>}
+              <span style={{fontSize:9,color:T.muted,flexShrink:0,whiteSpace:"nowrap"}}>
+                {(x.paymentMethod||x.payment_method)==="bank"?"🏦":"💵"}
+              </span>
               <span style={{fontSize:10,color:T.muted,minWidth:82,textAlign:"center",flexShrink:0}}>{x.date}</span>
               <span style={{fontSize:12,fontWeight:800,color:T.red,minWidth:100,textAlign:"right",flexShrink:0}}>-{fmtMs(x.amount)} so'm</span>
               {editId===x.id
@@ -257,6 +261,11 @@ function SalaryPage({team, txns, setTxns, user}) {
               onKeyDown={e=>e.key==="Enter"&&addTxn(t.id)}/>
             <input type="date" value={nr.date||selMonth+"-01"} onChange={e=>setNewRow(p=>({...p,[t.id]:{...nr,date:e.target.value}}))}
               style={{...inpS,width:135,padding:"5px 9px",fontSize:11,flexShrink:0}}/>
+            <select value={nr.paymentMethod||"cash"} onChange={e=>setNewRow(p=>({...p,[t.id]:{...nr,paymentMethod:e.target.value}}))}
+              style={{...inpS,width:95,padding:"5px 6px",fontSize:10,flexShrink:0}}>
+              <option value="cash">💵 Naqd</option>
+              <option value="bank">🏦 Bank</option>
+            </select>
             <input type="number" value={nr.amount||""} onChange={e=>setNewRow(p=>({...p,[t.id]:{...nr,amount:e.target.value}}))}
               placeholder="Miqdor"
               style={{...inpS,width:120,padding:"5px 9px",fontSize:11,textAlign:"right",flexShrink:0}}
