@@ -351,7 +351,7 @@ function FinanceDashboard({ txns, leads, extExps }) {
   const bankBalance = bankIncome - bankExp;
 
   const cards = [
-    { ic: "📥", lb: "OLINGAN TO'LOVLAR",     val: fmtMs(income) + " so'm",      c: T.green,  sub: "Mijozlardan qabul qilingan pul" },
+    { ic: "📥", lb: "OLINGAN TO'LOVLAR",     val: fmtMs(income) + " so'm",      c: T.green,  sub: "Mijozlar + tashqi kirim" },
     { ic: "💰", lb: "UMUMIY TASDIQLANGAN FOYDA", val: fmtMs(outstanding) + " so'm", c: T.yellow, sub: "Barcha vaqt: Jo'nab ketdi holatidagi sof foyda (filtrga bog'liq emas)" },
     { ic: "⚖️", lb: "JORIY BALANS HISOBI",   val: fmtMs(profit) + " so'm",      c: profit >= 0 ? T.green : T.red, sub: "Kirim − Barcha xarajatlar (joriy P&L)" },
     { ic: "📤", lb: "XARAJAT JAMI",          val: fmtMs(totalExp) + " so'm",    c: T.red,    sub: `Maosh ${fmtMs(salaries)} · Mijoz ${fmtMs(clientExp)} · Tashqi ${fmtMs(extTotal)}` },
@@ -448,7 +448,8 @@ function BarChart({ txns, extExps, T }) {
   // KPI excluded — it is a client expense, not company salary (see above).
   const SALARY_CATS = ["Oylik maosh","Avans","Bonus","Jarima","Maosh"];
   const data = useMemo(() => months.map(({ key }) => {
-    const inc = txns.filter(t => t.type==="income" && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
+    const inc = txns.filter(t => t.type==="income" && t.date?.startsWith(key)).reduce((s,t)=>s+Number(t.amount||0),0)
+      + extExps.filter(e => e.date?.startsWith(key) && e.type === "income").reduce((s,e)=>s+Number(e.amount||0),0);
     const sal = txns.filter(t => t.type==="expense" && SALARY_CATS.includes(t.cat) && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
     const cl  = txns.filter(t => t.type==="expense" && !SALARY_CATS.includes(t.cat) && t.date?.startsWith(key)).reduce((s,t)=>s+t.amount,0);
     const ext = extExps.filter(e => e.date?.startsWith(key) && e.type !== "income").reduce((s,e)=>s+Number(e.amount),0);

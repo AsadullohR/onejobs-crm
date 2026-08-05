@@ -72,14 +72,16 @@ function Finance({
       .reduce((s, t) => s + t.amount, 0),
     txns: txns.filter((t) => t.leadId === id),
   });
-  const totalInc = txns
-    .filter((t) => t.type === "income")
-    .reduce((s, t) => s + t.amount, 0);
   const extTotal = (extExps||[]).filter(e=>e.type!=="income").reduce((s,e)=>s+Number(e.amount||0), 0);
   const extIncome = (extExps||[]).filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount||0), 0);
+  // Must mirror totalExp, which includes external costs — otherwise Balans
+  // subtracts external expenses while ignoring external income.
+  const totalInc = txns
+    .filter((t) => t.type === "income")
+    .reduce((s, t) => s + Number(t.amount||0), 0) + extIncome;
   const totalExp = txns
     .filter((t) => t.type === "expense")
-    .reduce((s, t) => s + t.amount, 0) + extTotal;
+    .reduce((s, t) => s + Number(t.amount||0), 0) + extTotal;
   const tasdFoyda = leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
   const staffExp = txns.filter(t=>t.type==="expense"&&!t.leadId).reduce((s,t)=>s+t.amount,0);
   const sofFoyda = tasdFoyda + extIncome - extTotal - staffExp;
@@ -2109,12 +2111,28 @@ function Finance({
         else if (repRange === "year") from = `${now.getFullYear()}-01-01`;
         else if (repRange === "custom") { from = repFrom; to = repTo || to; }
         const inRep = (d) => (!from || d >= from) && (!to || d <= to);
-        const rows = txns.filter((t) => t.date && inRep(t.date))
+        // A report headed "Moliyaviy hisobot" must cover BOTH ledgers, or the
+        // office rent and any non-client income silently vanish from it.
+        const extRows = (extExps || [])
+          .filter((e) => e.date && inRep(e.date))
+          .map((e) => ({
+            id: "ext-" + e.id,
+            date: e.date,
+            type: e.type === "income" ? "income" : "expense",
+            cat: e.category || "Tashqi",
+            desc: e.description || "",
+            leadId: null,
+            amount: Number(e.amount || 0),
+            paymentMethod: e.paymentMethod || e.payment_method || "cash",
+            _ext: true,
+          }));
+        const rows = [...txns.filter((t) => t.date && inRep(t.date)), ...extRows]
           .sort((a, b) => (a.date < b.date ? 1 : -1));
-        const inc = rows.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
-        const exp = rows.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+        const inc = rows.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount || 0), 0);
+        const exp = rows.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount || 0), 0);
         const bal = inc - exp;
-        const leadName = (id) => leads.find((l) => l.id === id)?.name || (id ? id : "–");
+        const leadName = (id, row) =>
+          row?._ext ? "🏢 Tashqi" : leads.find((l) => l.id === id)?.name || (id ? id : "–");
         const exportPDF = () => {
           const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
           const nf = (n) => Number(n).toLocaleString("uz-UZ");
@@ -2124,7 +2142,7 @@ function Finance({
             <td class="${t.type === "income" ? "inc" : "exp"}">${t.type === "income" ? "Kirim" : "Chiqim"}</td>
             <td>${esc(t.cat || "–")}</td>
             <td>${esc(t.desc || "–")}</td>
-            <td>${esc(leadName(t.leadId) + (t.empName ? " / " + t.empName : ""))}</td>
+            <td>${esc(leadName(t.leadId, t) + (t.empName ? " / " + t.empName : ""))}</td>
             <td class="num ${t.type === "income" ? "inc" : "exp"}">${t.type === "income" ? "+" : "-"}${nf(t.amount)}</td>
           </tr>`).join("");
           const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Moliyaviy hisobot ${from || ""} — ${to}</title>
@@ -2231,7 +2249,7 @@ function Finance({
                         </td>
                         <td style={{ padding: "7px 10px", color: T.text }}>{t.cat || "–"}</td>
                         <td style={{ padding: "7px 10px", color: T.muted, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.desc || "–"}</td>
-                        <td style={{ padding: "7px 10px", color: T.text }}>{leadName(t.leadId)}{t.empName ? ` / ${t.empName}` : ""}</td>
+                        <td style={{ padding: "7px 10px", color: T.text }}>{leadName(t.leadId, t)}{t.empName ? ` / ${t.empName}` : ""}</td>
                         <td style={{ padding: "7px 10px", textAlign: "right", fontWeight: 800, whiteSpace: "nowrap", color: t.type === "income" ? T.green : T.red }}>
                           {t.type === "income" ? "+" : "-"}{fmtMs(t.amount)}
                         </td>
