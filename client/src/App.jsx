@@ -552,6 +552,8 @@ const deleteLead = useCallback(async (id) => {
               const tE=txns.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
               const tExtExp=extExps.filter(e=>e.type!=="income").reduce((s,e)=>s+Number(e.amount||0),0);
               const tExtInc=extExps.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount||0),0);
+              const tExtIncConf=extExps.filter(e=>e.type==="income"&&e.source==="confirmed")
+                .reduce((s,e)=>s+Number(e.amount||0),0);
               const tI=tIt+tExtInc;
               const totalE=tE+tExtExp;
               const tasdFoyda=leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
@@ -559,7 +561,7 @@ const deleteLead = useCallback(async (id) => {
               // pot. Which expenses count is now an explicit per-row choice.
               const confSpend=[...txns,...extExps].filter(isConfirmedSpend)
                 .reduce((s,r)=>s+Number(r.amount||0),0);
-              const sofFoyda=tasdFoyda+tExtInc-confSpend;
+              const sofFoyda=tasdFoyda+tExtIncConf-confSpend;
               const stats=[
                 {l:"Kirim",v:`+${fmtMs(tI)}`,c:T.green,bg:`${T.green}14`},
                 {l:"Chiqim",v:`-${fmtMs(totalE)}`,c:T.red,bg:`${T.red}14`},

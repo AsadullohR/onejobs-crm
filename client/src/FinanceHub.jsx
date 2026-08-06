@@ -133,13 +133,12 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
           <input type="number" placeholder="Miqdor (so'm)" value={form.amount} onChange={e => f("amount", e.target.value)}
             style={{ ...inpS, flex: "0 0 160px", fontSize: 11, textAlign: "right" }}
             onKeyDown={e => e.key === "Enter" && add()} />
-          {form.type === "expense" && (
-            <select value={form.source} onChange={e => f("source", e.target.value)}
-              title="Qaysi hisobdan" style={{ ...inpS, width: 120, fontSize: 10, flexShrink: 0 }}>
-              <option value="balance">⚖️ Balansdan</option>
-              <option value="confirmed">💰 Tasdiqlangandan</option>
-            </select>
-          )}
+          <select value={form.source} onChange={e => f("source", e.target.value)}
+            title={form.type === "income" ? "Qaysi hisobga tushadi" : "Qaysi hisobdan chiqadi"}
+            style={{ ...inpS, width: 130, fontSize: 10, flexShrink: 0 }}>
+            <option value="balance">{form.type === "income" ? "⚖️ Balansga" : "⚖️ Balansdan"}</option>
+            <option value="confirmed">{form.type === "income" ? "💰 Tasdiqlanganga" : "💰 Tasdiqlangandan"}</option>
+          </select>
           <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
             {[["cash", "💵 Naqd"], ["bank", "🏦 Bank"]].map(([k, lb]) => (
               <button key={k} onClick={() => f("paymentMethod", k)}
@@ -185,14 +184,12 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
                     <option value="cash">💵 Naqd</option>
                     <option value="bank">🏦 Bank</option>
                   </select>
-                  {(editVal.type ?? item.type) !== "income" && (
-                    <select value={editVal.source ?? item.source ?? "balance"}
-                      onChange={e => setEditVal(p => ({ ...p, source: e.target.value }))}
-                      title="Qaysi hisobdan" style={{ ...inpS, width: 112, fontSize: 10, flexShrink: 0 }}>
-                      <option value="balance">⚖️ Balansdan</option>
-                      <option value="confirmed">💰 Tasdiq.</option>
-                    </select>
-                  )}
+                  <select value={editVal.source ?? item.source ?? "balance"}
+                    onChange={e => setEditVal(p => ({ ...p, source: e.target.value }))}
+                    title="Qaysi hisob" style={{ ...inpS, width: 112, fontSize: 10, flexShrink: 0 }}>
+                    <option value="balance">⚖️ Balans</option>
+                    <option value="confirmed">💰 Tasdiq.</option>
+                  </select>
                   <button onClick={() => saveEdit(item.id)} style={{ padding: "4px 11px", borderRadius: 5, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontSize: 10, fontWeight: 700 }}>✓</button>
                   <button onClick={() => { setEditId(null); setEditVal({}); }} style={{ padding: "4px 9px", borderRadius: 5, background: T.card2, color: T.muted, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 10 }}>✕</button>
                 </>
@@ -216,7 +213,7 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
                     })()}
                   </span>
                   {item.source === "confirmed" && (
-                    <span title="Tasdiqlangan foydadan to'langan"
+                    <span title={isInc(item) ? "Tasdiqlangan foydaga qo'shilgan" : "Tasdiqlangan foydadan to'langan"}
                       style={{ fontSize: 9, background: `${T.yellow}22`, color: T.yellow, borderRadius: 4,
                         padding: "1px 6px", fontWeight: 700, whiteSpace: "nowrap" }}>💰 Tasdiq.</span>
                   )}

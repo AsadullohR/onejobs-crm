@@ -74,6 +74,10 @@ function Finance({
   });
   const extTotal = (extExps||[]).filter(e=>e.type!=="income").reduce((s,e)=>s+Number(e.amount||0), 0);
   const extIncome = (extExps||[]).filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount||0), 0);
+  // Only external income explicitly booked to profit lifts Sof Foyda; client
+  // income is already represented inside Tasdiqlangan.
+  const extIncomeConf = (extExps||[]).filter(e=>e.type==="income"&&e.source==="confirmed")
+    .reduce((s,e)=>s+Number(e.amount||0), 0);
   // Must mirror totalExp, which includes external costs — otherwise Balans
   // subtracts external expenses while ignoring external income.
   const totalInc = txns
@@ -85,7 +89,7 @@ function Finance({
   const tasdFoyda = leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
   const confSpend = [...txns, ...(extExps||[])].filter(isConfirmedSpend)
     .reduce((s, r) => s + Number(r.amount || 0), 0);
-  const sofFoyda = tasdFoyda + extIncome - confSpend;
+  const sofFoyda = tasdFoyda + extIncomeConf - confSpend;
   // Lead IDs that have at least one transaction (income or expense)
   const leadsWithTxn = new Set(txns.filter((t) => t.leadId).map((t) => t.leadId));
   const visLeads = leads
