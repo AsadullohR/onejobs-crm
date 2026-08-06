@@ -178,7 +178,12 @@ function ExternalExpenses({ user, addNotif }) {
                   <span style={{ fontSize: 11, color: T.muted, flex: 1 }}>{item.description || "—"}</span>
                   <span style={{ fontSize: 9, color: T.muted, background: T.card2, border: `1px solid ${T.border}`,
                     borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap" }}>
-                    {(item.paymentMethod || item.payment_method) === "bank" ? "🏦 Bank" : "💵 Naqd"}
+                    {/* Show "?" when the field is absent entirely (server not yet
+                        carrying payment_method) rather than silently claiming cash. */}
+                    {(() => {
+                      const m = item.paymentMethod || item.payment_method;
+                      return m === "bank" ? "🏦 Bank" : m === "cash" ? "💵 Naqd" : "❔ —";
+                    })()}
                   </span>
                   {item.recurring && <span style={{ fontSize: 9, background: `${T.accent}22`, color: T.accent, borderRadius: 10, padding: "1px 7px", fontWeight: 700 }}>oylik</span>}
                   <span style={{ fontSize: 13, fontWeight: 800, minWidth: 120, textAlign: "right",
