@@ -116,6 +116,11 @@ const INIT_VISA = [
 // is NOT payroll until someone assigns it to an employee.
 const SALARY_CATS = ["Oylik maosh", "Maosh", "Avans", "Bonus", "KPI", "Jarima", "Boshqa"];
 const SALARY_CATS_STRICT = SALARY_CATS.filter(c => c !== "Boshqa");
+// An expense paid out of realised profit (Tasdiqlangan) rather than general
+// funds. Works for both ledgers — transactions and external rows both carry
+// type + source. Default 'balance' means it only affects Balans.
+const isConfirmedSpend = (r) => r.type === "expense" && r.source === "confirmed";
+
 const isPayrollTxn = (t) =>
   t.type === "expense" && !t.leadId &&
   ((t.empId || t.empName) ? SALARY_CATS.includes(t.cat) : SALARY_CATS_STRICT.includes(t.cat));
@@ -125,5 +130,5 @@ STAGES, DONE, LOST, gS,
 INIT_LEADS, INIT_TASKS, INIT_TXN,
 INIT_CFG, INIT_TEAM, INIT_ROLES, INIT_VISA,
 RAW_LEADS, FIN_MAP,
-SALARY_CATS, isPayrollTxn
+SALARY_CATS, isPayrollTxn, isConfirmedSpend
 };

@@ -788,8 +788,8 @@ app.post("/api/transactions", auth, async (req, res) => {
   const t = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO transactions (lead_id, date, type, category, description, amount, currency, receipt_url, payment_method, created_by, emp_id, emp_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      `INSERT INTO transactions (lead_id, date, type, category, description, amount, currency, receipt_url, payment_method, created_by, emp_id, emp_name, source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
       [
         t.leadId || null,
         t.date || new Date().toISOString().slice(0, 10),
@@ -803,6 +803,7 @@ app.post("/api/transactions", auth, async (req, res) => {
         req.user.id,
         t.empId || null,
         t.empName || null,
+        t.source === 'confirmed' ? 'confirmed' : 'balance',
       ],
     );
     res.json(rows[0]);
@@ -816,7 +817,7 @@ app.put("/api/transactions/:id", auth, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `UPDATE transactions SET lead_id=$1,date=$2,type=$3,category=$4,description=$5,amount=$6,receipt_url=$7,payment_method=$8,
-              emp_id=COALESCE($10, emp_id), emp_name=COALESCE($11, emp_name)
+              emp_id=COALESCE($10, emp_id), emp_name=COALESCE($11, emp_name), source=COALESCE($12, source)
        WHERE id=$9 RETURNING *`,
       [
         t.leadId || null,
@@ -830,6 +831,9 @@ app.put("/api/transactions/:id", auth, async (req, res) => {
         req.params.id,
         t.empId || null,
         t.empName || null,
+        // null => COALESCE keeps the stored value. Callers that don't send a
+        // source (client finance edit, assign-to-employee) must not reset it.
+        t.source === 'confirmed' ? 'confirmed' : t.source === 'balance' ? 'balance' : null,
       ],
     );
     res.json(rows[0]);
@@ -2244,12 +2248,13 @@ app.post("/api/external-expenses", auth, async (req, res) => {
   const { date, category, description, amount, recurring } = req.body;
   try {
     const { rows } = await pool.query(
-      `INSERT INTO external_expenses (date, category, description, amount, recurring, created_by, type, payment_method)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      `INSERT INTO external_expenses (date, category, description, amount, recurring, created_by, type, payment_method, source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [date||new Date().toISOString().slice(0,10), category, description||null,
        amount||0, recurring||false, req.user.id,
        req.body.type === 'income' ? 'income' : 'expense',
-       req.body.paymentMethod === 'bank' ? 'bank' : 'cash'],
+       req.body.paymentMethod === 'bank' ? 'bank' : 'cash',
+       req.body.source === 'confirmed' ? 'confirmed' : 'balance'],
     );
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -2259,11 +2264,12 @@ app.put("/api/external-expenses/:id", auth, async (req, res) => {
   const { date, category, description, amount, recurring } = req.body;
   try {
     const { rows } = await pool.query(
-      `UPDATE external_expenses SET date=$1, category=$2, description=$3, amount=$4, recurring=$5, type=COALESCE($7,type), payment_method=COALESCE($8,payment_method)
+      `UPDATE external_expenses SET date=$1, category=$2, description=$3, amount=$4, recurring=$5, type=COALESCE($7,type), payment_method=COALESCE($8,payment_method), source=COALESCE($9,source)
        WHERE id=$6 RETURNING *`,
       [date, category, description||null, amount||0, recurring||false, req.params.id,
        req.body.type === 'income' ? 'income' : req.body.type === 'expense' ? 'expense' : null,
-       req.body.paymentMethod === 'bank' ? 'bank' : req.body.paymentMethod === 'cash' ? 'cash' : null],
+       req.body.paymentMethod === 'bank' ? 'bank' : req.body.paymentMethod === 'cash' ? 'cash' : null,
+       req.body.source === 'confirmed' ? 'confirmed' : req.body.source === 'balance' ? 'balance' : null],
     );
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -2687,6 +2693,10 @@ app.listen(PORT, async () => {
     )`);
     await pool.query(`ALTER TABLE external_expenses ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'expense'`);
     await pool.query(`ALTER TABLE external_expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'cash'`);
+    // Which pot the money came out of: 'balance' (general funds) or
+    // 'confirmed' (Tasdiqlangan — realised profit). Only expenses use it.
+    await pool.query(`ALTER TABLE external_expenses ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'balance'`);
+    await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'balance'`);
     await pool.query(`UPDATE external_expenses SET type='expense' WHERE type IS NULL`);
     await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS emp_id INTEGER`);
     await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS emp_name TEXT`);

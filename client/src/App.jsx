@@ -6,7 +6,7 @@ function useIsMobile() {
 }
 import { ThemeCtx, mkT, useT } from "./theme.js";
 import {
-STAGES, DONE, LOST, gS,
+STAGES, DONE, LOST, gS, isConfirmedSpend,
 INIT_LEADS, INIT_TASKS, INIT_TXN,
 INIT_CFG, INIT_TEAM, INIT_ROLES
 } from "./constants.js";
@@ -406,6 +406,7 @@ const deleteLead = useCallback(async (id) => {
           amount:Number(t.amount)||0, date:t.date?.slice(0,10)||"",
           empId:t.emp_id||null, empName:t.emp_name||"", by:t.created_by,
           paymentMethod:t.payment_method||'cash',
+          source:t.source||'balance',
         })));
         if(extExpsRes?.length) setExtExps(extExpsRes);
         if(debtsRes?.length) setDebts(debtsRes);
@@ -554,8 +555,11 @@ const deleteLead = useCallback(async (id) => {
               const tI=tIt+tExtInc;
               const totalE=tE+tExtExp;
               const tasdFoyda=leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
-              const staffExp=txns.filter(t=>t.type==="expense"&&!t.leadId).reduce((s,t)=>s+Number(t.amount||0),0);
-              const sofFoyda=tasdFoyda+tExtInc-tExtExp-staffExp;
+              // Sof Foyda = realised profit + other income − what was spent OUT of that
+              // pot. Which expenses count is now an explicit per-row choice.
+              const confSpend=[...txns,...extExps].filter(isConfirmedSpend)
+                .reduce((s,r)=>s+Number(r.amount||0),0);
+              const sofFoyda=tasdFoyda+tExtInc-confSpend;
               const stats=[
                 {l:"Kirim",v:`+${fmtMs(tI)}`,c:T.green,bg:`${T.green}14`},
                 {l:"Chiqim",v:`-${fmtMs(totalE)}`,c:T.red,bg:`${T.red}14`},

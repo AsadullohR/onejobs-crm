@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useT } from "./theme.js";
-import { DONE, LOST } from "./constants.js";
+import { DONE, LOST, isConfirmedSpend } from "./constants.js";
 import { txnAPI, leadsAPI, debtsAPI } from "./api.js";
 import {
   uid,
@@ -83,8 +83,9 @@ function Finance({
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + Number(t.amount||0), 0) + extTotal;
   const tasdFoyda = leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
-  const staffExp = txns.filter(t=>t.type==="expense"&&!t.leadId).reduce((s,t)=>s+t.amount,0);
-  const sofFoyda = tasdFoyda + extIncome - extTotal - staffExp;
+  const confSpend = [...txns, ...(extExps||[])].filter(isConfirmedSpend)
+    .reduce((s, r) => s + Number(r.amount || 0), 0);
+  const sofFoyda = tasdFoyda + extIncome - confSpend;
   // Lead IDs that have at least one transaction (income or expense)
   const leadsWithTxn = new Set(txns.filter((t) => t.leadId).map((t) => t.leadId));
   const visLeads = leads
@@ -170,7 +171,7 @@ function Finance({
     const cats = type === "income"
       ? (config?.txnInc || ["Asosiy kirim", "XBA", "Shartnoma", "Boshqa"])
       : (config?.txnExp || ["Xizmat", "Transport", "Hujjat", "Maosh", "Boshqa"]);
-    setBulkForm({ type, cat: cats[0] || "", amount: "", desc: "", date: new Date().toISOString().slice(0, 10) });
+    setBulkForm({ type, cat: cats[0] || "", amount: "", desc: "", date: new Date().toISOString().slice(0, 10), source: "balance" });
   };
 
   // B — apply one income/expense to every selected client
@@ -187,6 +188,7 @@ function Finance({
           leadId, date: bulkForm.date, type: bulkForm.type,
           category: bulkForm.cat || "", description: bulkForm.desc || "",
           amount: amt, paymentMethod: "cash",
+          source: bulkForm.type === "expense" ? (bulkForm.source || "balance") : "balance",
         });
         created.push({
           id: String(saved.id), leadId: saved.lead_id, type: saved.type,
@@ -258,6 +260,7 @@ function Finance({
       amount: "",
       receipt: null,
       paymentMethod: 'cash',
+      source: 'balance',
     });
 
     setModal("form");
@@ -272,6 +275,7 @@ function Finance({
       description: form.desc || "",
       amount: Number(form.amount),
       paymentMethod: form.paymentMethod || 'cash',
+      source: form.type === "expense" ? (form.source || 'balance') : 'balance',
     };
     try {
       const isEdit = txns.some((t) => t.id === form.id);
@@ -1893,6 +1897,23 @@ function Finance({
                   ))}
                 </div>
               </div>
+              {form.type === "expense" && (
+                <div style={{marginBottom:10}}>
+                  <label style={labS}>Qaysi hisobdan?</label>
+                  <div style={{display:"flex",gap:6,marginTop:4}}>
+                    {[["balance","⚖️ Balansdan"],["confirmed","💰 Tasdiqlangandan"]].map(([k,lb])=>(
+                      <button key={k} onClick={()=>setForm(p=>({...p,source:k}))}
+                        style={{flex:1,padding:"7px",borderRadius:7,fontFamily:"inherit",cursor:"pointer",fontSize:12,fontWeight:600,
+                          border:`1px solid ${(form.source||'balance')===k?T.accent:T.border}`,
+                          background:(form.source||'balance')===k?`${T.accent}18`:"transparent",
+                          color:(form.source||'balance')===k?T.accent:T.muted}}>{lb}</button>
+                    ))}
+                  </div>
+                  <div style={{fontSize:9,color:T.muted,marginTop:4}}>
+                    "Tasdiqlangandan" tanlansa, bu xarajat Sof Foydani ham kamaytiradi.
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
               <button onClick={() => setModal(null)} style={{ padding: "6px 14px", borderRadius: 6, background: T.card2, color: T.text, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 11 }}>Bekor</button>

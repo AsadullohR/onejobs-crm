@@ -16,7 +16,7 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
   const T = useT();
   const inpS = inp(T);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0,10), category: "Ofis ijara", description: "", amount: "", recurring: false, type: "expense", paymentMethod: "cash" });
+  const [form, setForm] = useState({ date: new Date().toISOString().slice(0,10), category: "Ofis ijara", description: "", amount: "", recurring: false, type: "expense", paymentMethod: "cash", source: "balance" });
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
   const [filterCat, setFilterCat] = useState("all");
@@ -126,6 +126,13 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
           <input type="number" placeholder="Miqdor (so'm)" value={form.amount} onChange={e => f("amount", e.target.value)}
             style={{ ...inpS, flex: "0 0 160px", fontSize: 11, textAlign: "right" }}
             onKeyDown={e => e.key === "Enter" && add()} />
+          {form.type === "expense" && (
+            <select value={form.source} onChange={e => f("source", e.target.value)}
+              title="Qaysi hisobdan" style={{ ...inpS, width: 120, fontSize: 10, flexShrink: 0 }}>
+              <option value="balance">⚖️ Balansdan</option>
+              <option value="confirmed">💰 Tasdiqlangandan</option>
+            </select>
+          )}
           <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
             {[["cash", "💵 Naqd"], ["bank", "🏦 Bank"]].map(([k, lb]) => (
               <button key={k} onClick={() => f("paymentMethod", k)}
@@ -186,6 +193,11 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
                       return m === "bank" ? "🏦 Bank" : m === "cash" ? "💵 Naqd" : "❔ —";
                     })()}
                   </span>
+                  {item.source === "confirmed" && (
+                    <span title="Tasdiqlangan foydadan to'langan"
+                      style={{ fontSize: 9, background: `${T.yellow}22`, color: T.yellow, borderRadius: 4,
+                        padding: "1px 6px", fontWeight: 700, whiteSpace: "nowrap" }}>💰 Tasdiq.</span>
+                  )}
                   {item.recurring && <span style={{ fontSize: 9, background: `${T.accent}22`, color: T.accent, borderRadius: 10, padding: "1px 7px", fontWeight: 700 }}>oylik</span>}
                   <span style={{ fontSize: 13, fontWeight: 800, minWidth: 120, textAlign: "right",
                     color: isInc(item) ? T.green : T.red }}>
