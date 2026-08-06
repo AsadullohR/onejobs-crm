@@ -60,7 +60,14 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
 
   const saveEdit = async (id) => {
     try {
-      const saved = await extExpAPI.update(id, { ...items.find(i => i.id === id), ...editVal, amount: Number(editVal.amount) });
+      const cur = items.find(i => i.id === id) || {};
+      const saved = await extExpAPI.update(id, {
+        ...cur, ...editVal,
+        amount: Number(editVal.amount ?? cur.amount) || 0,
+        paymentMethod: editVal.paymentMethod ?? cur.paymentMethod ?? cur.payment_method ?? "cash",
+        source: editVal.source ?? cur.source ?? "balance",
+        type: editVal.type ?? cur.type ?? "expense",
+      });
       setItems?.(p => p.map(i => i.id === id ? saved : i));
       setEditId(null); setEditVal({});
     } catch (e) { alert("Saqlashda xatolik: " + e.message); }
@@ -165,12 +172,27 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
                     style={{ ...inpS, width: 130, fontSize: 11 }} />
                   <select value={editVal.category ?? item.category} onChange={e => setEditVal(p => ({ ...p, category: e.target.value }))}
                     style={{ ...inpS, flex: 1, fontSize: 11 }}>
-                    {EXT_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                    {((editVal.type ?? item.type) === "income" ? EXT_INC_CATS : EXT_CATS)
+                      .map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <input value={editVal.description ?? item.description ?? ""} onChange={e => setEditVal(p => ({ ...p, description: e.target.value }))}
                     style={{ ...inpS, flex: 2, fontSize: 11 }} />
                   <input type="number" value={editVal.amount ?? item.amount} onChange={e => setEditVal(p => ({ ...p, amount: e.target.value }))}
                     style={{ ...inpS, width: 130, fontSize: 11, textAlign: "right" }} />
+                  <select value={editVal.paymentMethod ?? item.paymentMethod ?? item.payment_method ?? "cash"}
+                    onChange={e => setEditVal(p => ({ ...p, paymentMethod: e.target.value }))}
+                    title="To'lov usuli" style={{ ...inpS, width: 96, fontSize: 10, flexShrink: 0 }}>
+                    <option value="cash">💵 Naqd</option>
+                    <option value="bank">🏦 Bank</option>
+                  </select>
+                  {(editVal.type ?? item.type) !== "income" && (
+                    <select value={editVal.source ?? item.source ?? "balance"}
+                      onChange={e => setEditVal(p => ({ ...p, source: e.target.value }))}
+                      title="Qaysi hisobdan" style={{ ...inpS, width: 112, fontSize: 10, flexShrink: 0 }}>
+                      <option value="balance">⚖️ Balansdan</option>
+                      <option value="confirmed">💰 Tasdiq.</option>
+                    </select>
+                  )}
                   <button onClick={() => saveEdit(item.id)} style={{ padding: "4px 11px", borderRadius: 5, background: T.accent, color: "#fff", border: "none", cursor: "pointer", fontSize: 10, fontWeight: 700 }}>✓</button>
                   <button onClick={() => { setEditId(null); setEditVal({}); }} style={{ padding: "4px 9px", borderRadius: 5, background: T.card2, color: T.muted, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 10 }}>✕</button>
                 </>
