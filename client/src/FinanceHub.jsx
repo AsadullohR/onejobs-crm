@@ -12,10 +12,9 @@ const EXT_CATS = ["Ofis ijara", "Kommunal", "Marketing", "Reklama", "Transport",
 // Income that isn't tied to a client (consulting, referral fees, rent received…)
 const EXT_INC_CATS = ["Qo'shimcha xizmat", "Konsalting", "Hamkorlik", "Qaytarilgan mablag'", "Investitsiya", "Boshqa"];
 
-function ExternalExpenses({ user, addNotif }) {
+function ExternalExpenses({ user, addNotif, items = [], setItems }) {
   const T = useT();
   const inpS = inp(T);
-  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ date: new Date().toISOString().slice(0,10), category: "Ofis ijara", description: "", amount: "", recurring: false, type: "expense", paymentMethod: "cash" });
   const [editId, setEditId] = useState(null);
@@ -25,8 +24,10 @@ function ExternalExpenses({ user, addNotif }) {
   const f = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   useEffect(() => {
-    extExpAPI.getAll().then(r => { setItems(r); setLoading(false); }).catch(() => setLoading(false));
-  }, []);
+    extExpAPI.getAll()
+      .then(r => { setItems?.(r || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [setItems]);
 
   const filtered = useMemo(() => items.filter(i => {
     const monthMatch = filterMonth ? i.date?.startsWith(filterMonth) : true;
@@ -43,7 +44,7 @@ function ExternalExpenses({ user, addNotif }) {
     if (!form.amount || Number(form.amount) <= 0) return;
     try {
       const saved = await extExpAPI.create({ ...form, amount: Number(form.amount) });
-      setItems(p => [saved, ...p]);
+      setItems?.(p => [saved, ...p]);
       setForm(p => ({ ...p, description: "", amount: "", recurring: false }));
       addNotif(`${form.type === "income" ? "💰 Kirim" : "💸 Xarajat"} qo'shildi: ${saved.category}`);
     } catch (e) { alert(e.message); }
@@ -53,14 +54,14 @@ function ExternalExpenses({ user, addNotif }) {
     if (!confirm("O'chirilsinmi?")) return;
     try {
       await extExpAPI.delete(id);
-      setItems(p => p.filter(i => i.id !== id));
+      setItems?.(p => p.filter(i => i.id !== id));
     } catch (e) { alert("O'chirishda xatolik: " + e.message); }
   };
 
   const saveEdit = async (id) => {
     try {
       const saved = await extExpAPI.update(id, { ...items.find(i => i.id === id), ...editVal, amount: Number(editVal.amount) });
-      setItems(p => p.map(i => i.id === id ? saved : i));
+      setItems?.(p => p.map(i => i.id === id ? saved : i));
       setEditId(null); setEditVal({});
     } catch (e) { alert("Saqlashda xatolik: " + e.message); }
   };
@@ -761,7 +762,7 @@ function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNot
           <SalaryPage team={team} txns={txns} setTxns={setTxns} user={user} />
         )}
         {tab === "external" && (
-          <ExternalExpenses user={user} addNotif={addNotif} />
+          <ExternalExpenses user={user} addNotif={addNotif} items={extExps} setItems={setExtExps} />
         )}
         {tab === "debts" && (
           <DebtsPage debts={debts} setDebts={setDebts} user={user} leads={leads} />
