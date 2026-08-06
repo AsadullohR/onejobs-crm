@@ -270,7 +270,10 @@ function Finance({
     setModal("form");
   };
   const save = async () => {
-    if (!form.amount || Number(form.amount) <= 0) return;
+    if (!form.amount || Number(form.amount) <= 0) {
+      alert("Summani kiriting (0 dan katta).");
+      return;
+    }
     const payload = {
       leadId: form.leadId || null,
       date: form.date || new Date().toISOString().slice(0, 10),

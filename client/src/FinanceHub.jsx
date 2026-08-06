@@ -41,7 +41,11 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
   const allTotal = items.filter(i => !isInc(i)).reduce((s, i) => s + Number(i.amount), 0);
 
   const add = async () => {
-    if (!form.amount || Number(form.amount) <= 0) return;
+    // Was a silent return — indistinguishable from a broken save.
+    if (!form.amount || Number(form.amount) <= 0) {
+      alert("Miqdorni kiriting (0 dan katta).");
+      return;
+    }
     try {
       const saved = await extExpAPI.create({ ...form, amount: Number(form.amount) });
       setItems?.(p => [saved, ...p]);

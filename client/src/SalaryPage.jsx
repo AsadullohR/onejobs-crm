@@ -44,7 +44,7 @@ function SalaryPage({team, txns, setTxns, user}) {
 
   const addTxn=async(empId)=>{
     const r=newRow[empId]||{};
-    if(!r.amount||Number(r.amount)<=0)return;
+    if(!r.amount||Number(r.amount)<=0){alert("Miqdorni kiriting (0 dan katta).");return;}
     const emp=team.find(t=>t.id===empId);
     const payload={leadId:null,empId,empName:emp?.name||"",type:"expense",
       category:r.cat||"Oylik maosh",description:r.desc||r.cat||"Oylik maosh",
