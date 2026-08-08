@@ -134,6 +134,7 @@ function Finance({
     contractDate: l.shartnomaSana || null,
     interviewDate: l.officeSuhbat || null,
     interviewScheduled: l.suhbatBelgilangan || null,
+    visaDate: l.vizaSana || null,
   });
 
   const markTugagan = async (lead) => {

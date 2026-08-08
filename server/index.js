@@ -330,7 +330,7 @@ app.get("/api/leads", auth, async (req, res) => {
         l.kpi_sales, l.kpi_consult, l.kpi_docs,
         l.xba_date, l.q1_date, l.q2_date, l.q3_date,
         l.total_income, l.total_expense, l.net_balance, l.sof_foyda,
-        l.last_contact, l.contract_date, l.interview_date, l.interview_scheduled, l.dest,
+        l.last_contact, l.contract_date, l.interview_date, l.interview_scheduled, l.visa_date, l.dest,
         COALESCE((SELECT MAX(sl.logged_at) FROM status_log sl WHERE sl.lead_id = l.id AND sl.status = l.status), l.updated_at, l.created_at) AS status_since,
         l.quality, l.quality_note, l.created_at, l.updated_at,
         u_s.name as owner_sales_name, u_s.avatar as owner_sales_av, u_s.color as owner_sales_color,
@@ -486,9 +486,9 @@ app.post("/api/leads", auth, async (req, res) => {
         kpi_sales, kpi_consult, kpi_docs, cv, docs, history,
         last_contact, contract_date, interview_date, dest, sof_foyda, quality, quality_note,
         xba_date, q1_date, q2_date, q3_date,
-        xba_receipt, q1_receipt, q2_receipt, q3_receipt, branch, interview_scheduled)
+        xba_receipt, q1_receipt, q2_receipt, q3_receipt, branch, interview_scheduled, visa_date)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-        COALESCE($41, (SELECT branch FROM users WHERE id=$42)), $43)
+        COALESCE($41, (SELECT branch FROM users WHERE id=$42)), $43, $44)
       ON CONFLICT (id) DO UPDATE SET
         name=$2, phone=$3, telegram=$4, status=$5, country=$6, sector=$7, position=$8, source=$9, gender=$10,
         comment=$11, note=$12, owner_sales=$13, owner_consult=$14, owner_docs=$15, q1=$16, q2=$17, q3=$18, xba=$19,
@@ -499,6 +499,7 @@ app.post("/api/leads", auth, async (req, res) => {
         xba_receipt=$37, q1_receipt=$38, q2_receipt=$39, q3_receipt=$40,
         branch=COALESCE($41, leads.branch),
         interview_scheduled=$43,
+        visa_date=$44,
         updated_at=NOW()
       RETURNING *`,
       [
@@ -545,6 +546,7 @@ app.post("/api/leads", auth, async (req, res) => {
         l.branch || null,
         req.user.id,
         l.interviewScheduled || null,
+        l.visaDate || null,
       ],
     );
     const saved = rows[0];
@@ -2684,6 +2686,7 @@ app.listen(PORT, async () => {
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS q1_date DATE`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS q2_date DATE`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS q3_date DATE`);
+    await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS visa_date DATE`);
     await pool.query(`CREATE TABLE IF NOT EXISTS status_log (
       id SERIAL PRIMARY KEY,
       lead_id TEXT,

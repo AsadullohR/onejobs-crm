@@ -229,6 +229,7 @@ const [form,setForm]=useState({
               </div>
               <div><label style={labS}>🏢 Suhbatga kelgan sana</label><input type="date" value={form.officeSuhbat||""} onChange={e=>f("officeSuhbat",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
               <div><label style={labS}>📄 Shartnoma qilgan sana</label><input type="date" value={form.shartnomaSana||""} onChange={e=>f("shartnomaSana",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
+              <div><label style={labS}>✈️ Viza olingan sana</label><input type="date" value={form.vizaSana||""} onChange={e=>f("vizaSana",e.target.value)} disabled={!canEdit&&!isNew} style={inpS}/></div>
             </div>
           </div>
         </div>}
