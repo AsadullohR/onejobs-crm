@@ -45,6 +45,7 @@ function Finance({
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showTxnReport, setShowTxnReport] = useState(false);
   const [repRange, setRepRange] = useState("month"); // month | year | all | custom
+  const [repSrc, setRepSrc] = useState("all"); // all | import | manual
   const [repFrom, setRepFrom] = useState("");
   const [repTo, setRepTo] = useState("");
   const [showImport, setShowImport] = useState(false);
@@ -2155,7 +2156,10 @@ function Finance({
             paymentMethod: e.paymentMethod || e.payment_method || "cash",
             _ext: true,
           }));
+        const isImported = (t) =>
+          /import/i.test(t.desc || "") || /import/i.test(t.cat || "");
         const rows = [...txns.filter((t) => t.date && inRep(t.date)), ...extRows]
+          .filter((t) => repSrc === "all" ? true : repSrc === "import" ? isImported(t) : !isImported(t))
           .sort((a, b) => (a.date < b.date ? 1 : -1));
         const inc = rows.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount || 0), 0);
         const exp = rows.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount || 0), 0);
@@ -2165,7 +2169,8 @@ function Finance({
         const exportPDF = () => {
           const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
           const nf = (n) => Number(n).toLocaleString("uz-UZ");
-          const rangeLbl = { month: "Bu oy", year: "Bu yil", all: "Hammasi", custom: "Tanlangan" }[repRange];
+          const rangeLbl = ({ month: "Bu oy", year: "Bu yil", all: "Hammasi", custom: "Tanlangan" }[repRange])
+            + (repSrc === "import" ? " · faqat import" : repSrc === "manual" ? " · importsiz" : "");
           const body = rows.map((t) => `<tr>
             <td>${t.date}</td>
             <td class="${t.type === "income" ? "inc" : "exp"}">${t.type === "income" ? "Kirim" : "Chiqim"}</td>
@@ -2240,6 +2245,14 @@ function Finance({
                     {l}
                   </button>
                 ))}
+                <span style={{ width: 1, alignSelf: "stretch", background: T.border, margin: "0 4px" }} />
+                {[["all", "Barchasi"], ["import", "📥 Faqat import"], ["manual", "✍️ Importsiz"]].map(([k, l]) => (
+                  <button key={k} onClick={() => setRepSrc(k)}
+                    style={{ padding: "6px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                      border: `1px solid ${repSrc === k ? T.accent : T.border}`, background: repSrc === k ? T.accent : T.card, color: repSrc === k ? "#fff" : T.muted }}>
+                    {l}
+                  </button>
+                ))}
                 {repRange === "custom" && (
                   <>
                     <input type="date" value={repFrom} onChange={(e) => setRepFrom(e.target.value)} style={{ ...inp(T), width: "auto", fontSize: 11 }} />
@@ -2257,6 +2270,7 @@ function Finance({
               </div>
               <div style={{ fontSize: 10, color: T.muted, marginBottom: 10 }}>
                 {rows.length} ta tranzaksiya · {from || "boshidan"} — {to}
+                {repSrc !== "all" && (repSrc === "import" ? " · faqat Notion import" : " · importsiz")}
               </div>
 
               {/* Transaction list */}
