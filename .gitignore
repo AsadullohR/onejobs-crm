@@ -4,3 +4,4 @@ server/.env
 client/.env
 dist
 build
+.gstack/
