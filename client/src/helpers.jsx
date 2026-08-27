@@ -14,6 +14,51 @@ const isSoon = d => { if(!d) return false; const s=String(d).slice(0,10), t=_tod
 const fmtD = d => { try{return new Date(d).toLocaleDateString("uz-UZ",{day:"2-digit",month:"short"});}catch{return d||"–";} };
 const fmtM = n => { const v=Number(n); return (!v||isNaN(v))?'0':v.toLocaleString('ru-RU'); };
 const fmtMs = n => { const v=Number(n); return (!v||isNaN(v))?'0':v.toLocaleString('ru-RU'); };
+// ─── MONEY INPUT ─────────────────────────────────────────────────────────────
+// Soum amounts run to 8-9 digits, and an unformatted <input type="number">
+// makes "18000000" impossible to read at a glance -- a mistyped zero is a
+// 10x error on a real payment. Group the digits as they are typed, using the
+// same ru-RU spacing every displayed figure already uses.
+const digitsOnly = s => String(s ?? "").replace(/\D/g, "");
+const groupDigits = s => {
+  const d = digitsOnly(s).replace(/^0+(?=\d)/, "");
+  return d ? Number(d).toLocaleString("ru-RU") : "";
+};
+
+// The parent keeps the plain digit string ("1000000"), so every existing
+// Number(form.amount) call keeps working; only the display is grouped.
+function MoneyInput({ value, onChange, style, ...rest }) {
+  const ref = useRef(null);
+  const onInput = (e) => {
+    const el = e.target;
+    // Count digits left of the caret so it can be restored at the same logical
+    // spot after regrouping shifts the separators around.
+    const before = digitsOnly(el.value.slice(0, el.selectionStart)).length;
+    const digits = digitsOnly(el.value);
+    onChange(digits);
+    requestAnimationFrame(() => {
+      const node = ref.current;
+      if (!node) return;
+      const text = groupDigits(digits);
+      let i = 0, seen = 0;
+      while (i < text.length && seen < before) { if (/\d/.test(text[i])) seen++; i++; }
+      try { node.setSelectionRange(i, i); } catch { /* not focused */ }
+    });
+  };
+  return (
+    <input
+      ref={ref}
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      value={groupDigits(value)}
+      onChange={onInput}
+      style={style}
+      {...rest}
+    />
+  );
+}
+
 const uid = () => Date.now()+Math.floor(Math.random()*1000);
 const dateRange = (d, range) => {
   const n = new Date(); const dt = new Date(d);
@@ -113,4 +158,4 @@ function SearchSelect({items,value,onChange,placeholder}) {
 function inp(T) { return {width:"100%",padding:"8px 10px",borderRadius:7,border:`1px solid ${T.border}`,background:T.inp,color:T.text,fontSize:12,outline:"none",boxSizing:"border-box"}; }
 function lab(T) { return {fontSize:10,fontWeight:600,color:T.muted,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:"0.05em"}; }
 
-export { uid, fmtM, fmtMs, fmtD, isOD, isSoon, dateRange, inp, lab, gS, I, Pill, Av, Modal, SearchSelect };
+export { uid, fmtM, fmtMs, fmtD, isOD, isSoon, dateRange, inp, lab, gS, I, Pill, Av, Modal, SearchSelect, MoneyInput, groupDigits, digitsOnly };

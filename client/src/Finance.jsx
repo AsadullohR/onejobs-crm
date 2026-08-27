@@ -16,6 +16,7 @@ import {
   Av,
   Modal,
   SearchSelect,
+  MoneyInput,
 } from "./helpers.jsx";
 
 // ─── FINANCE ─────────────────────────────────────────────────────────────────
@@ -1898,7 +1899,7 @@ function Finance({
               </div>
               <div>
                 <label style={labS}>Summa (so'm) *</label>
-                <input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} style={{ ...inpS, textAlign: "right", fontSize: 16, fontWeight: 800 }} placeholder="0" onKeyDown={e => e.key === "Enter" && save()} />
+                <MoneyInput value={form.amount} onChange={v => setForm(p => ({ ...p, amount: v }))} style={{ ...inpS, textAlign: "right", fontSize: 16, fontWeight: 800 }} placeholder="0" onKeyDown={e => e.key === "Enter" && save()} />
               </div>
               <div style={{marginBottom:10}}>
                 <label style={labS}>To'lov usuli</label>
@@ -1978,7 +1979,7 @@ function Finance({
               </div>
               <div>
                 <label style={labS}>Summa (so'm) — har bir mijozga *</label>
-                <input type="number" value={bulkForm.amount} onChange={e => setBulkForm(p => ({ ...p, amount: e.target.value }))} style={{ ...inpS, textAlign: "right", fontSize: 16, fontWeight: 800 }} placeholder="0" onKeyDown={e => e.key === "Enter" && !bulkBusy && saveBulkTxn()} autoFocus />
+                <MoneyInput value={bulkForm.amount} onChange={v => setBulkForm(p => ({ ...p, amount: v }))} style={{ ...inpS, textAlign: "right", fontSize: 16, fontWeight: 800 }} placeholder="0" onKeyDown={e => e.key === "Enter" && !bulkBusy && saveBulkTxn()} autoFocus />
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
@@ -2034,12 +2035,11 @@ function Finance({
               >
                 <div>
                   <label style={labS}>Summa (so'm) *</label>
-                  <input
-                    type="number"
+                  <MoneyInput
                     value={debtForm.amt}
-                    onChange={(e) => df("amt", e.target.value)}
+                    onChange={(v) => df("amt", v)}
                     style={inpS}
-                    placeholder="1000000"
+                    placeholder="1 000 000"
                   />
                 </div>
                 <div>

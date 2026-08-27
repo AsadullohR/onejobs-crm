@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useT } from "./theme.js";
 import { DONE, isPayrollTxn, calcTasdiqlangan } from "./constants.js";
-import { uid, fmtMs, fmtD, inp, I } from "./helpers.jsx";
+import { uid, fmtMs, fmtD, inp, I, MoneyInput } from "./helpers.jsx";
 import { Finance } from "./Finance.jsx";
 import { SalaryPage } from "./SalaryPage.jsx";
 import { DebtsPage } from "./DebtsPage.jsx";
@@ -134,7 +134,7 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
           <input placeholder="Izoh (ixtiyoriy)" value={form.description} onChange={e => f("description", e.target.value)}
             style={{ ...inpS, flex: "2 1 200px", fontSize: 11 }}
             onKeyDown={e => e.key === "Enter" && add()} />
-          <input type="number" placeholder="Miqdor (so'm)" value={form.amount} onChange={e => f("amount", e.target.value)}
+          <MoneyInput placeholder="Miqdor (so'm)" value={form.amount} onChange={v => f("amount", v)}
             style={{ ...inpS, flex: "0 0 160px", fontSize: 11, textAlign: "right" }}
             onKeyDown={e => e.key === "Enter" && add()} />
           <select value={form.source} onChange={e => f("source", e.target.value)}
@@ -180,7 +180,7 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
                   </select>
                   <input value={editVal.description ?? item.description ?? ""} onChange={e => setEditVal(p => ({ ...p, description: e.target.value }))}
                     style={{ ...inpS, flex: 2, fontSize: 11 }} />
-                  <input type="number" value={editVal.amount ?? item.amount} onChange={e => setEditVal(p => ({ ...p, amount: e.target.value }))}
+                  <MoneyInput value={editVal.amount ?? item.amount} onChange={v => setEditVal(p => ({ ...p, amount: v }))}
                     style={{ ...inpS, width: 130, fontSize: 11, textAlign: "right" }} />
                   <select value={editVal.paymentMethod ?? item.paymentMethod ?? item.payment_method ?? "cash"}
                     onChange={e => setEditVal(p => ({ ...p, paymentMethod: e.target.value }))}

@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useT } from "./theme.js";
 import { STAGES, DONE, LOST, gS } from "./constants.js";
-import { uid, fmtMs, fmtD, isOD, isSoon, inp, lab, I, Av } from "./helpers.jsx";
+import { uid, fmtMs, fmtD, isOD, isSoon, inp, lab, I, Av, MoneyInput } from "./helpers.jsx";
 import { txnAPI, tasksAPI } from "./api.js";
 
 // ─── SEARCHABLE CLIENT PICKER ─────────────────────────────────────────────────
@@ -247,7 +247,7 @@ export function MobileFinance({ txns, setTxns, leads, extExps, user, config, add
               </div>
               <div>
                 <label style={labS}>Summa (so'm) *</label>
-                <input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))}
+                <MoneyInput value={form.amount} onChange={v => setForm(p => ({ ...p, amount: v }))}
                   style={{ ...inpS, height: 44, textAlign: "right", fontSize: 16, fontWeight: 800 }} placeholder="0" />
               </div>
               <div>

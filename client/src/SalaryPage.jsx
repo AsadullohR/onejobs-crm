@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useT } from "./theme.js";
-import { uid, fmtMs, inp, I, Av, fmtD } from "./helpers.jsx";
+import { uid, fmtMs, inp, I, Av, fmtD, MoneyInput } from "./helpers.jsx";
 import { txnAPI } from "./api.js";
 import { isPayrollTxn } from "./constants.js";
 
@@ -222,8 +222,8 @@ function SalaryPage({team, txns, setTxns, user}) {
                     onKeyDown={e=>{if(e.key==="Enter")saveEdit(x.id);if(e.key==="Escape"){setEditId(null);setEditVal({});}}}/>
                 : <span style={{flex:1,fontSize:11,color:T.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.desc||"—"}</span>}
               {editId===x.id
-                ? <input type="number" value={editVal.amount??x.amount}
-                    onChange={e=>setEditVal(p=>({...p,amount:e.target.value}))}
+                ? <MoneyInput value={editVal.amount??x.amount}
+                    onChange={v=>setEditVal(p=>({...p,amount:v}))}
                     style={{...inpS,width:120,padding:"4px 8px",fontSize:11,textAlign:"right"}}
                     onKeyDown={e=>{if(e.key==="Enter")saveEdit(x.id);}}/>
                 : <span style={{fontSize:11,color:T.muted,minWidth:100,textAlign:"right"}}>{x.amount.toLocaleString()}</span>}
@@ -270,7 +270,7 @@ function SalaryPage({team, txns, setTxns, user}) {
               <option value="cash">💵 Naqd</option>
               <option value="bank">🏦 Bank</option>
             </select>
-            <input type="number" value={nr.amount||""} onChange={e=>setNewRow(p=>({...p,[t.id]:{...nr,amount:e.target.value}}))}
+            <MoneyInput value={nr.amount||""} onChange={v=>setNewRow(p=>({...p,[t.id]:{...nr,amount:v}}))}
               placeholder="Miqdor"
               style={{...inpS,width:120,padding:"5px 9px",fontSize:11,textAlign:"right",flexShrink:0}}
               onKeyDown={e=>e.key==="Enter"&&addTxn(t.id)}/>
