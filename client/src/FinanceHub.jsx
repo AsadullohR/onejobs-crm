@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useT } from "./theme.js";
-import { DONE, isPayrollTxn } from "./constants.js";
+import { DONE, isPayrollTxn, calcTasdiqlangan } from "./constants.js";
 import { uid, fmtMs, fmtD, inp, I } from "./helpers.jsx";
 import { Finance } from "./Finance.jsx";
 import { SalaryPage } from "./SalaryPage.jsx";
@@ -362,9 +362,10 @@ function FinanceDashboard({ txns, leads, extExps }) {
   const income    = txnIncome + extIncome;
   const totalExp  = salaries + clientExp + extTotal;
   const profit    = income - totalExp;
-  // Only DONE (Jo'nab ketdi / Viza Oldi) leads count as confirmed profit —
-  // matches the topbar "Tasdiqlangan" and this card's own subtitle.
-  const outstanding = leads.filter(l => DONE.includes(l.status) && l.sofFoyda).reduce((s, l) => s + Number(l.sofFoyda || 0), 0);
+  // Confirmed profit comes from the shared calculator so this card, the topbar
+  // and Finance always agree. Only an explicit Tugagan click counts — reaching
+  // a departure status no longer confirms anything on its own.
+  const outstanding = calcTasdiqlangan(leads, txns, extExps);
 
   const RANGES = [
     { k: "week",    l: "Hafta" },

@@ -329,7 +329,7 @@ app.get("/api/leads", auth, async (req, res) => {
         l.q1_receipt, l.q2_receipt, l.q3_receipt, l.xba_receipt,
         l.kpi_sales, l.kpi_consult, l.kpi_docs,
         l.xba_date, l.q1_date, l.q2_date, l.q3_date,
-        l.total_income, l.total_expense, l.net_balance, l.sof_foyda,
+        l.total_income, l.total_expense, l.net_balance, l.sof_foyda, l.profit_confirmed,
         l.last_contact, l.contract_date, l.interview_date, l.interview_scheduled, l.visa_date, l.dest,
         COALESCE((SELECT MAX(sl.logged_at) FROM status_log sl WHERE sl.lead_id = l.id AND sl.status = l.status), l.updated_at, l.created_at) AS status_since,
         l.quality, l.quality_note, l.created_at, l.updated_at,
@@ -486,9 +486,9 @@ app.post("/api/leads", auth, async (req, res) => {
         kpi_sales, kpi_consult, kpi_docs, cv, docs, history,
         last_contact, contract_date, interview_date, dest, sof_foyda, quality, quality_note,
         xba_date, q1_date, q2_date, q3_date,
-        xba_receipt, q1_receipt, q2_receipt, q3_receipt, branch, interview_scheduled, visa_date)
+        xba_receipt, q1_receipt, q2_receipt, q3_receipt, branch, interview_scheduled, visa_date, profit_confirmed)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-        COALESCE($41, (SELECT branch FROM users WHERE id=$42)), $43, $44)
+        COALESCE($41, (SELECT branch FROM users WHERE id=$42)), $43, $44, $45)
       ON CONFLICT (id) DO UPDATE SET
         name=$2, phone=$3, telegram=$4, status=$5, country=$6, sector=$7, position=$8, source=$9, gender=$10,
         comment=$11, note=$12, owner_sales=$13, owner_consult=$14, owner_docs=$15, q1=$16, q2=$17, q3=$18, xba=$19,
@@ -500,6 +500,9 @@ app.post("/api/leads", auth, async (req, res) => {
         branch=COALESCE($41, leads.branch),
         interview_scheduled=$43,
         visa_date=$44,
+        -- COALESCE, not assign: a partial save (pipeline drag, bulk action)
+        -- must never silently un-confirm realised profit.
+        profit_confirmed=COALESCE($45, leads.profit_confirmed),
         updated_at=NOW()
       RETURNING *`,
       [
@@ -547,6 +550,9 @@ app.post("/api/leads", auth, async (req, res) => {
         req.user.id,
         l.interviewScheduled || null,
         l.visaDate || null,
+        // Tri-state on purpose: undefined leaves the flag alone (COALESCE
+        // above), true confirms, false un-confirms.
+        l.profitConfirmed === undefined ? null : !!l.profitConfirmed,
       ],
     );
     const saved = rows[0];
@@ -2687,6 +2693,28 @@ app.listen(PORT, async () => {
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS q2_date DATE`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS q3_date DATE`);
     await pool.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS visa_date DATE`);
+    // Explicit "this profit is realised" flag. Tasdiqlangan used to key off
+    // status IN (Viza Oldi, Jo'nab ketdi) AND sof_foyda IS NOT NULL, but the
+    // import route pre-fills sof_foyda from net balance — so imported clients
+    // joined Tasdiqlangan the moment they reached a departure status, with
+    // nobody clicking anything. Now only an explicit Tugagan click counts.
+    //
+    // Backfilled ONCE, guarded on the column not already existing, so today's
+    // total is preserved on rollout and a later un-confirm is never undone by
+    // the next restart.
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name='leads' AND column_name='profit_confirmed'
+        ) THEN
+          ALTER TABLE leads ADD COLUMN profit_confirmed BOOLEAN DEFAULT FALSE;
+          UPDATE leads SET profit_confirmed = TRUE
+            WHERE sof_foyda IS NOT NULL
+              AND status IN ('Jo''nab ketdi', 'Viza Oldi');
+        END IF;
+      END $$;`);
     await pool.query(`CREATE TABLE IF NOT EXISTS status_log (
       id SERIAL PRIMARY KEY,
       lead_id TEXT,

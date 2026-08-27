@@ -125,10 +125,65 @@ const isPayrollTxn = (t) =>
   t.type === "expense" && !t.leadId &&
   ((t.empId || t.empName) ? SALARY_CATS.includes(t.cat) : SALARY_CATS_STRICT.includes(t.cat));
 
+// Income booked straight into realised profit instead of only lifting Balans.
+// Mirrors isConfirmedSpend. Works for both ledgers (transactions + external).
+const isConfirmedIncome = (r) => r.type === "income" && r.source === "confirmed";
+
+// ─── TASDIQLANGAN / SOF FOYDA ────────────────────────────────────────────────
+// Single source of truth for realised profit. Finance, FinanceHub and the
+// dashboard all call this — they drifted apart three separate times when each
+// screen computed its own version.
+//
+// Tasdiqlangan is made of exactly three things, and NOTHING is implicit:
+//   1. Leads whose profit was explicitly confirmed (profitConfirmed flag).
+//      Reaching "Viza Oldi"/"Jo'nab ketdi" is NOT enough — a human clicks
+//      Tugagan. Imported leads arrive with sof_foyda pre-filled, so keying off
+//      status alone silently pulled them in.
+//   2. Income rows explicitly booked to Tasdiqlangan (source === 'confirmed'),
+//      whether attached to a client or not.
+//   3. Minus expenses paid out of Tasdiqlangan.
+//
+// (1) and (2) are additive and cannot double-count: sof_foyda is a snapshot
+// locked at confirm time, and confirmSnapshotProfit() below excludes income
+// that was already booked to Tasdiqlangan before the snapshot was taken.
+const confirmedLeadProfit = (leads = []) =>
+  leads.filter(l => l.profitConfirmed).reduce((s, l) => s + Number(l.sofFoyda || 0), 0);
+
+const confirmedIncome = (...ledgers) =>
+  ledgers.flat().filter(isConfirmedIncome).reduce((s, r) => s + Number(r.amount || 0), 0);
+
+const confirmedSpend = (...ledgers) =>
+  ledgers.flat().filter(isConfirmedSpend).reduce((s, r) => s + Number(r.amount || 0), 0);
+
+// Tasdiqlangan (gross realised profit): confirmed leads + confirmed income.
+// Adding income to an already-confirmed client raises it — 400 confirmed plus
+// a new 500 booked to Tasdiqlangan reads 900.
+const calcTasdiqlangan = (leads = [], txns = [], extExps = []) =>
+  confirmedLeadProfit(leads) + confirmedIncome(txns, extExps);
+
+// Sof Foyda (net): Tasdiqlangan minus whatever was spent out of that pot.
+const calcSofFoyda = (leads = [], txns = [], extExps = []) =>
+  calcTasdiqlangan(leads, txns, extExps) - confirmedSpend(txns, extExps);
+
+// Profit to lock in when Tugagan is clicked. Income already booked directly to
+// Tasdiqlangan is excluded — it is counted on its own, so including it in the
+// snapshot too would count it twice.
+const confirmSnapshotProfit = (leadTxns = []) => {
+  const inc = leadTxns
+    .filter(t => t.type === "income" && !isConfirmedIncome(t))
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+  const exp = leadTxns
+    .filter(t => t.type === "expense")
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+  return inc - exp;
+};
+
 export {
 STAGES, DONE, LOST, gS,
 INIT_LEADS, INIT_TASKS, INIT_TXN,
 INIT_CFG, INIT_TEAM, INIT_ROLES, INIT_VISA,
 RAW_LEADS, FIN_MAP,
-SALARY_CATS, isPayrollTxn, isConfirmedSpend
+SALARY_CATS, isPayrollTxn, isConfirmedSpend, isConfirmedIncome,
+confirmedLeadProfit, confirmedIncome, confirmedSpend,
+calcTasdiqlangan, calcSofFoyda, confirmSnapshotProfit
 };

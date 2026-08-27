@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useT } from "./theme.js";
-import { DONE, LOST, isConfirmedSpend } from "./constants.js";
+import { DONE, LOST, isConfirmedSpend, calcTasdiqlangan, calcSofFoyda,
+         confirmSnapshotProfit } from "./constants.js";
 import { txnAPI, leadsAPI, debtsAPI } from "./api.js";
 import {
   uid,
@@ -75,10 +76,6 @@ function Finance({
   });
   const extTotal = (extExps||[]).filter(e=>e.type!=="income").reduce((s,e)=>s+Number(e.amount||0), 0);
   const extIncome = (extExps||[]).filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount||0), 0);
-  // Only external income explicitly booked to profit lifts Sof Foyda; client
-  // income is already represented inside Tasdiqlangan.
-  const extIncomeConf = (extExps||[]).filter(e=>e.type==="income"&&e.source==="confirmed")
-    .reduce((s,e)=>s+Number(e.amount||0), 0);
   // Must mirror totalExp, which includes external costs — otherwise Balans
   // subtracts external expenses while ignoring external income.
   const totalInc = txns
@@ -87,10 +84,10 @@ function Finance({
   const totalExp = txns
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + Number(t.amount||0), 0) + extTotal;
-  const tasdFoyda = leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
+  const tasdFoyda = calcTasdiqlangan(leads, txns, extExps);
   const confSpend = [...txns, ...(extExps||[])].filter(isConfirmedSpend)
     .reduce((s, r) => s + Number(r.amount || 0), 0);
-  const sofFoyda = tasdFoyda + extIncomeConf - confSpend;
+  const sofFoyda = calcSofFoyda(leads, txns, extExps);
   // Lead IDs that have at least one transaction (income or expense)
   const leadsWithTxn = new Set(txns.filter((t) => t.leadId).map((t) => t.leadId));
   const visLeads = leads
@@ -140,9 +137,11 @@ function Finance({
 
   const markTugagan = async (lead) => {
     const cf = lf(lead.id);
-    const netProfit = cf.inc - cf.exp;
+    // Income already booked straight to Tasdiqlangan is counted on its own, so
+    // it must stay out of the locked snapshot or it lands in the total twice.
+    const netProfit = confirmSnapshotProfit(cf.txns);
     if (!window.confirm(`"${lead.name}" uchun Tugagan belgilansinmi?\nTasdiqlangan foyda: ${fmtM(netProfit)} so'm`)) return;
-    const updated = { ...lead, status: "Jo'nab ketdi", sofFoyda: netProfit };
+    const updated = { ...lead, status: "Jo'nab ketdi", sofFoyda: netProfit, profitConfirmed: true };
     setLeads(prev => prev.map(l => l.id === lead.id ? updated : l));
     try {
       await leadsAPI.save(leadSavePayload(updated));
@@ -154,7 +153,7 @@ function Finance({
 
   const markQaytarish = async (lead) => {
     if (!window.confirm(`"${lead.name}" ni faol holatga qaytarasizmi?\nTasdiqlangan foyda o'chadi.`)) return;
-    const updated = { ...lead, status: "Shartnoma qildi", sofFoyda: null };
+    const updated = { ...lead, status: "Shartnoma qildi", sofFoyda: null, profitConfirmed: false };
     setLeads(prev => prev.map(l => l.id === lead.id ? updated : l));
     try {
       await leadsAPI.save(leadSavePayload(updated));
@@ -226,7 +225,8 @@ function Finance({
       const lead = leads.find((l) => l.id === id);
       if (!lead) continue;
       const cf = lf(id);
-      const updated = { ...lead, status: "Jo'nab ketdi", sofFoyda: cf.inc - cf.exp };
+      const updated = { ...lead, status: "Jo'nab ketdi",
+        sofFoyda: confirmSnapshotProfit(cf.txns), profitConfirmed: true };
       try {
         await leadsAPI.save(leadSavePayload(updated));
         updates.push(updated);
@@ -1094,7 +1094,7 @@ function Finance({
                   </span>
                   {/* Locked confirmed profit — only for departed clients;
                       in-progress rows already show live balance above. */}
-                  {DONE.includes(l.status) && l.sofFoyda && (
+                  {l.profitConfirmed && l.sofFoyda && (
                     <span style={{ fontSize: 7, color: T.yellow }}>
                       💰{fmtMs(l.sofFoyda)}
                     </span>
@@ -1234,7 +1234,7 @@ function Finance({
                   </button>
                 )}
                 {(() => {
-                  const sof = DONE.includes(cur.status) ? (cur.sofFoyda ?? (cf.inc - cf.exp)) : (cf.inc - cf.exp);
+                  const sof = cur.profitConfirmed ? (cur.sofFoyda ?? (cf.inc - cf.exp)) : (cf.inc - cf.exp);
                   return sof ? (
                   <span
                     style={{
@@ -1246,7 +1246,7 @@ function Finance({
                       fontSize: 10,
                       fontWeight: 700,
                     }}
-                    title={DONE.includes(cur.status) ? "Tasdiqlangan sof foyda" : "Kutilayotgan foyda (Kirim − Chiqim)"}
+                    title={cur.profitConfirmed ? "Tasdiqlangan sof foyda" : "Kutilayotgan foyda (Kirim − Chiqim)"}
                   >
                     💰{fmtMs(sof)}
                   </span>
@@ -1272,7 +1272,7 @@ function Finance({
                 ],
                 // Departed (Tugagan) clients: locked confirmed profit.
                 // In-progress: live net = Kirim − Chiqim (expected profit).
-                ["💰 Sof Foyda", DONE.includes(cur.status) ? (cur.sofFoyda ?? (cf.inc - cf.exp)) : (cf.inc - cf.exp), T.yellow],
+                ["💰 Sof Foyda", cur.profitConfirmed ? (cur.sofFoyda ?? (cf.inc - cf.exp)) : (cf.inc - cf.exp), T.yellow],
               ].map(([lb, val, c]) => (
                 <div
                   key={lb}
@@ -1906,23 +1906,28 @@ function Finance({
                   ))}
                 </div>
               </div>
-              {form.type === "expense" && (
-                <div style={{marginBottom:10}}>
-                  <label style={labS}>Qaysi hisobdan?</label>
-                  <div style={{display:"flex",gap:6,marginTop:4}}>
-                    {[["balance","⚖️ Balansdan"],["confirmed","💰 Tasdiqlangandan"]].map(([k,lb])=>(
-                      <button key={k} onClick={()=>setForm(p=>({...p,source:k}))}
-                        style={{flex:1,padding:"7px",borderRadius:7,fontFamily:"inherit",cursor:"pointer",fontSize:12,fontWeight:600,
-                          border:`1px solid ${(form.source||'balance')===k?T.accent:T.border}`,
-                          background:(form.source||'balance')===k?`${T.accent}18`:"transparent",
-                          color:(form.source||'balance')===k?T.accent:T.muted}}>{lb}</button>
-                    ))}
-                  </div>
-                  <div style={{fontSize:9,color:T.muted,marginTop:4}}>
-                    "Tasdiqlangandan" tanlansa, bu xarajat Sof Foydani ham kamaytiradi.
-                  </div>
+              {/* Both directions carry the same axis: an expense chooses which
+                  pot it leaves, an income chooses which pot it enters. */}
+              <div style={{marginBottom:10}}>
+                <label style={labS}>{form.type === "expense" ? "Qaysi hisobdan?" : "Qaysi hisobga?"}</label>
+                <div style={{display:"flex",gap:6,marginTop:4}}>
+                  {(form.type === "expense"
+                    ? [["balance","⚖️ Balansdan"],["confirmed","💰 Tasdiqlangandan"]]
+                    : [["balance","⚖️ Balansga"],["confirmed","💰 Tasdiqlanganga"]]
+                  ).map(([k,lb])=>(
+                    <button key={k} onClick={()=>setForm(p=>({...p,source:k}))}
+                      style={{flex:1,padding:"7px",borderRadius:7,fontFamily:"inherit",cursor:"pointer",fontSize:12,fontWeight:600,
+                        border:`1px solid ${(form.source||'balance')===k?T.accent:T.border}`,
+                        background:(form.source||'balance')===k?`${T.accent}18`:"transparent",
+                        color:(form.source||'balance')===k?T.accent:T.muted}}>{lb}</button>
+                  ))}
                 </div>
-              )}
+                <div style={{fontSize:9,color:T.muted,marginTop:4}}>
+                  {form.type === "expense"
+                    ? '"Tasdiqlangandan" tanlansa, bu xarajat Sof Foydani ham kamaytiradi.'
+                    : '"Tasdiqlanganga" tanlansa, bu kirim Tasdiqlangan va Sof Foydani oshiradi — mijoz tanlanmasa ham.'}
+                </div>
+              </div>
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 14 }}>
               <button onClick={() => setModal(null)} style={{ padding: "6px 14px", borderRadius: 6, background: T.card2, color: T.text, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 11 }}>Bekor</button>

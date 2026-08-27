@@ -7,6 +7,7 @@ function useIsMobile() {
 import { ThemeCtx, mkT, useT } from "./theme.js";
 import {
 STAGES, DONE, LOST, gS, isConfirmedSpend,
+calcTasdiqlangan, calcSofFoyda,
 INIT_LEADS, INIT_TASKS, INIT_TXN,
 INIT_CFG, INIT_TEAM, INIT_ROLES
 } from "./constants.js";
@@ -141,7 +142,8 @@ const mapLead = useCallback(l => ({
   q2Date:l.q2_date?(v=>v instanceof Date?v:new Date(v))(l.q2_date).toISOString().slice(0,10):null,
   q3Date:l.q3_date?(v=>v instanceof Date?v:new Date(v))(l.q3_date).toISOString().slice(0,10):null,
   xbaReceipt:l.xba_receipt||null, q1Receipt:l.q1_receipt||null, q2Receipt:l.q2_receipt||null, q3Receipt:l.q3_receipt||null,
-  sofFoyda:l.sof_foyda||null, docs:l.docs||{}, cv:l.cv||{}, history:l.history||[],
+  sofFoyda:l.sof_foyda||null, profitConfirmed:!!l.profit_confirmed,
+  docs:l.docs||{}, cv:l.cv||{}, history:l.history||[],
   createdAt:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.created_at),
   lastCall:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.last_contact),
   shartnomaSana:(v=>v?(v instanceof Date?v:new Date(v)).toISOString().slice(0,10):"")(l.contract_date),
@@ -554,16 +556,12 @@ const deleteLead = useCallback(async (id) => {
               const tE=txns.filter(t=>t.type==="expense").reduce((s,t)=>s+Number(t.amount||0),0);
               const tExtExp=extExps.filter(e=>e.type!=="income").reduce((s,e)=>s+Number(e.amount||0),0);
               const tExtInc=extExps.filter(e=>e.type==="income").reduce((s,e)=>s+Number(e.amount||0),0);
-              const tExtIncConf=extExps.filter(e=>e.type==="income"&&e.source==="confirmed")
-                .reduce((s,e)=>s+Number(e.amount||0),0);
               const tI=tIt+tExtInc;
               const totalE=tE+tExtExp;
-              const tasdFoyda=leads.filter(l=>DONE.includes(l.status)&&l.sofFoyda).reduce((s,l)=>s+Number(l.sofFoyda||0),0);
-              // Sof Foyda = realised profit + other income − what was spent OUT of that
-              // pot. Which expenses count is now an explicit per-row choice.
-              const confSpend=[...txns,...extExps].filter(isConfirmedSpend)
-                .reduce((s,r)=>s+Number(r.amount||0),0);
-              const sofFoyda=tasdFoyda+tExtIncConf-confSpend;
+              // Both figures come from the shared calculator in constants.js —
+              // Finance, FinanceHub and this header must never disagree.
+              const tasdFoyda=calcTasdiqlangan(leads,txns,extExps);
+              const sofFoyda=calcSofFoyda(leads,txns,extExps);
               const stats=[
                 {l:"Kirim",v:`+${fmtMs(tI)}`,c:T.green,bg:`${T.green}14`},
                 {l:"Chiqim",v:`-${fmtMs(totalE)}`,c:T.red,bg:`${T.red}14`},
