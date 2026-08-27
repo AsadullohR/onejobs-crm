@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useT } from "./theme.js";
-import { DONE, LOST } from "./constants.js";
+import { DONE, LOST, isBackwardMove, stagesLost } from "./constants.js";
 import { isOD, inp, I, Pill, Av, fmtD, dateRange } from "./helpers.jsx";
 import { leadsAPI } from "./api.js";
 
@@ -294,6 +294,20 @@ function Pipeline({
     setDragLeadId(null);
     setDragLeadOver(null);
     if (!moving.length) return;
+    // Dragging left across the board rolls people back through stages they
+    // already cleared — and now drags their vacancy candidate rows with them.
+    const backward = moving.filter(m => isBackwardMove(m.status, stageKey));
+    if (backward.length) {
+      const names = backward.slice(0, 8).map(m => `  • ${m.name} (${m.status})`).join("\n");
+      const one = backward.length === 1;
+      if (!confirm(
+        `⚠️ ORQAGA QAYTARISH\n\n` +
+        (one
+          ? `${backward[0].name}\n${backward[0].status}  →  ${stageKey}\n\nBu ${stagesLost(backward[0].status, stageKey)} ta bosqich orqaga qaytarish.`
+          : `${backward.length} ta mijoz "${stageKey}" holatiga ORQAGA qaytariladi:\n\n` + names +
+            (backward.length > 8 ? `\n  … va yana ${backward.length - 8} ta` : ``)) +
+        `\n\nVakansiyadagi nomzod holati ham shu holatga qaytariladi.\n\nDavom etilsinmi?`)) return;
+    }
     const prevStatus = Object.fromEntries(moving.map(m => [m.id, m.status]));
     setLeads(p => p.map(l => prevStatus[l.id] !== undefined ? { ...l, status: stageKey, statusSince: new Date().toISOString() } : l));
     setSelectedIds(new Set());

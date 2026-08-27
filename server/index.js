@@ -441,6 +441,10 @@ app.put("/api/leads/:id/status", auth, async (req, res) => {
       pool.query(`INSERT INTO notifications (user_id, message, type, created_at) VALUES ($1,$2,'xba_payment',NOW())`,
         [owner, `💰 XBA To'lov! ${rows[0].name} to'lov qildi! 🎉`]).catch(() => {});
     }
+    // Pipeline drag lands here, not on the full upsert — without this the
+    // lead->candidate half of the sync never fired for the most common move.
+    syncCandidatesFromLead(req.params.id, status)
+      .catch(e => console.warn("lead->cand sync (status):", e.message));
     res.json({ ok: true, status });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

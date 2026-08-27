@@ -4,7 +4,7 @@ import { useLang } from "./i18n.jsx";
 import { inp, lab, I, Modal, SearchSelect, Av, fmtMs } from "./helpers.jsx";
 import { vacanciesAPI, candidatesAPI, leadsAPI } from "./api.js";
 import { CandidateProfile, normCandStatus } from "./EmployerPortal.jsx";
-import { STAGES } from "./constants.js";
+import { STAGES, isBackwardMove, stagesLost } from "./constants.js";
 // ─── STATUS CONFIG ────────────────────────────────────────────────────────────
 const V_STATUS = {
   active: { label: "Active", c: "#16a34a", bg: "#dcfce7" },
@@ -399,6 +399,18 @@ function VacancyDetail({
 
   const updateCandStatus = async (cId, newStatus) => {
     const cand = candidates.find(c => c.id === cId);
+    // The linked client moves with the candidate, so a backward step here
+    // rolls a real client back through stages they already cleared.
+    if (cand && isBackwardMove(cand.status, newStatus)) {
+      const n = stagesLost(cand.status, newStatus);
+      if (!confirm(
+        `\u26a0\ufe0f ORQAGA QAYTARISH\n\n` +
+        `${cand.leadName || cand.name}\n` +
+        `${cand.status}  \u2192  ${newStatus}\n\n` +
+        `Bu ${n} ta bosqich orqaga qaytarish.` +
+        (cand.leadId ? `\nMijozning pipeline holati ham shu holatga o‘zgaradi.` : ``) +
+        `\n\nDavom etilsinmi?`)) return;
+    }
     try {
       await candidatesAPI.update(cId, { ...cand, status: newStatus });
       setCandidates(p => p.map(c => c.id === cId ? { ...c, status: newStatus } : c));
@@ -413,6 +425,16 @@ function VacancyDetail({
   const bulkChangeStatus = async () => {
     const ids = [...candSel];
     if (!ids.length || !bulkStatus) return;
+    // Warn loudly and specifically: a bulk move can roll dozens of clients back.
+    const backward = candidates.filter(c => candSel.has(c.id) && isBackwardMove(c.status, bulkStatus));
+    if (backward.length) {
+      const names = backward.slice(0, 8).map(c => `  \u2022 ${c.leadName || c.name} (${c.status})`).join("\n");
+      if (!confirm(
+        `\u26a0\ufe0f ORQAGA QAYTARISH\n\n` +
+        `Tanlangan ${ids.length} tadan ${backward.length} tasi "${bulkStatus}" holatiga ORQAGA qaytariladi:\n\n` +
+        names + (backward.length > 8 ? `\n  \u2026 va yana ${backward.length - 8} ta` : ``) +
+        `\n\nUlarning mijoz kartalari ham shu holatga qaytariladi.\n\nDavom etilsinmi?`)) return;
+    }
     if (!confirm(`${ids.length} ta nomzod "${bulkStatus}" holatiga o‘tkazilsinmi?\nBog‘langan mijozlarning pipeline holati ham o‘zgaradi.`)) return;
     setBulkBusy(true);
     try {

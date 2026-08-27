@@ -125,6 +125,26 @@ const isPayrollTxn = (t) =>
   t.type === "expense" && !t.leadId &&
   ((t.empId || t.empName) ? SALARY_CATS.includes(t.cat) : SALARY_CATS_STRICT.includes(t.cat));
 
+// ─── BACKWARD MOVE DETECTION ─────────────────────────────────────────────────
+// Candidate and lead statuses are linked, so one careless edit can drag someone
+// from "Hujjatlar Jonatildi" back to "Ishga qabul qilindi". A plain index
+// comparison over STAGES would be wrong: the rejection stages sit at the end of
+// the array, so "Hujjat -> Rad etildi" would read as forward progress and
+// "Rad etildi -> Hujjat" (a revival) as backward. Only the positive ladder is
+// ordered; rejections and parks are outside it and never warn.
+const PARKED_STAGES = ["Keyinchalik"];
+const PROGRESS_STAGES = STAGES.map(s => s.key)
+  .filter(k => !LOST.includes(k) && !PARKED_STAGES.includes(k));
+const progressIndex = (s) => PROGRESS_STAGES.indexOf(s);
+
+const isBackwardMove = (from, to) => {
+  const a = progressIndex(from), b = progressIndex(to);
+  return a >= 0 && b >= 0 && b < a;
+};
+// How many stages the move gives up — used to make the warning concrete.
+const stagesLost = (from, to) =>
+  isBackwardMove(from, to) ? progressIndex(from) - progressIndex(to) : 0;
+
 // Income booked straight into realised profit instead of only lifting Balans.
 // Mirrors isConfirmedSpend. Works for both ledgers (transactions + external).
 const isConfirmedIncome = (r) => r.type === "income" && r.source === "confirmed";
@@ -185,5 +205,6 @@ INIT_CFG, INIT_TEAM, INIT_ROLES, INIT_VISA,
 RAW_LEADS, FIN_MAP,
 SALARY_CATS, isPayrollTxn, isConfirmedSpend, isConfirmedIncome,
 confirmedLeadProfit, confirmedIncome, confirmedSpend,
-calcTasdiqlangan, calcSofFoyda, confirmSnapshotProfit
+calcTasdiqlangan, calcSofFoyda, confirmSnapshotProfit,
+PROGRESS_STAGES, isBackwardMove, stagesLost
 };
