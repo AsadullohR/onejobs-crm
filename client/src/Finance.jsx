@@ -193,13 +193,14 @@ function Finance({
           leadId, date: bulkForm.date, type: bulkForm.type,
           category: bulkForm.cat || "", description: bulkForm.desc || "",
           amount: amt, paymentMethod: "cash",
-          source: bulkForm.type === "expense" ? (bulkForm.source || "balance") : "balance",
+          source: bulkForm.source || "balance",
         });
         created.push({
           id: String(saved.id), leadId: saved.lead_id, type: saved.type,
           cat: saved.category || "", desc: saved.description || "",
           amount: Number(saved.amount), date: saved.date?.slice(0, 10) || bulkForm.date,
           by: saved.created_by, paymentMethod: "cash",
+          source: saved.source || bulkForm.source || "balance",
         });
       } catch (e) { fail++; }
     }
@@ -284,7 +285,10 @@ function Finance({
       description: form.desc || "",
       amount: Number(form.amount),
       paymentMethod: form.paymentMethod || 'cash',
-      source: form.type === "expense" ? (form.source || 'balance') : 'balance',
+      // Both directions carry the choice: an expense picks which pot it leaves,
+      // an income picks which pot it enters. This used to force income to
+      // 'balance', which silently discarded the user's "Tasdiqlanganga" pick.
+      source: form.source || 'balance',
     };
     try {
       const isEdit = txns.some((t) => t.id === form.id);
@@ -300,6 +304,9 @@ function Finance({
           cat: saved.category || "", desc: saved.description || "",
           amount: Number(saved.amount), date: saved.date?.slice(0, 10) || payload.date,
           by: saved.created_by, paymentMethod: payload.paymentMethod || 'cash',
+          // Without this the row sits in state with no source and Tasdiqlangan
+          // ignores it until the next reload.
+          source: saved.source || payload.source || 'balance',
         }]);
       }
       setModal(null);
