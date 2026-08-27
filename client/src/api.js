@@ -155,6 +155,14 @@ export const statsAPI = {
     const q = p.toString();
     return req("GET", `/api/stats/timing${q ? "?" + q : ""}`);
   },
+  docsSent: (from, to, status) => {
+    const p = new URLSearchParams();
+    if (from) p.set("from", from);
+    if (to) p.set("to", to);
+    if (status) p.set("status", status);
+    const q = p.toString();
+    return req("GET", `/api/stats/docs-sent${q ? "?" + q : ""}`);
+  },
   kpi: (from, to) => {
     const p = new URLSearchParams();
     if (from) p.set("from", from);

@@ -1366,6 +1366,56 @@ const SHARTNOMA_STATUSES = ["Shartnoma qildi", "XBA To'lov qildi", "CV Topshiril
 // "Came to office" evidence: reached the office-interview stage or anything after it
 const CAME_STATUSES = ["Suhbat", ...SHARTNOMA_STATUSES, ...DOCS_STATUSES, "Taklifnoma keldi", "Vizaga Topshirildi", "Viza Oldi", "Viza Rad Etildi", "Jo'nab ketdi"];
 
+// ─── DOCUMENTS SENT ANALYSIS ────────────────────────────────────────────────
+// "How many documents went out this week / this month / in a custom range."
+// Driven by status_log, so it reports when a lead actually ENTERED the status
+// rather than who happens to sit in it now. A lead that re-enters the same
+// status is counted once per range (MIN per lead), otherwise a correction
+// would inflate the day's total.
+app.get("/api/stats/docs-sent", auth, async (req, res) => {
+  if (["partner", "employer"].includes(req.user.role))
+    return res.status(403).json({ error: "Forbidden" });
+  const now = new Date();
+  const from = req.query.from || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const to = req.query.to || now.toISOString().slice(0, 10);
+  // Any pipeline stage may be measured; documents sent is just the default.
+  const status = req.query.status || "Hujjatlar Jonatildi";
+  const P = [from, to, status];
+  const EV = `WITH ev AS (
+      SELECT lead_id, MIN(logged_at) t FROM status_log
+      WHERE status = $3 AND logged_at::date BETWEEN $1::date AND $2::date
+      GROUP BY lead_id)`;
+  try {
+    const [total, series, byUser, byCountry, rows] = await Promise.all([
+      pool.query(`${EV} SELECT COUNT(*)::int n FROM ev`, P),
+      pool.query(`${EV} SELECT t::date d, COUNT(*)::int n FROM ev GROUP BY 1 ORDER BY 1`, P),
+      pool.query(`${EV}
+        SELECT COALESCE(u.name, 'Biriktirilmagan') name, COUNT(*)::int n
+        FROM ev JOIN leads l ON l.id = ev.lead_id
+        LEFT JOIN users u ON u.id = l.owner_docs
+        GROUP BY 1 ORDER BY n DESC`, P),
+      pool.query(`${EV}
+        SELECT COALESCE(NULLIF(l.country,''), '—') country, COUNT(*)::int n
+        FROM ev JOIN leads l ON l.id = ev.lead_id
+        GROUP BY 1 ORDER BY n DESC LIMIT 12`, P),
+      pool.query(`${EV}
+        SELECT l.id, l.name, l.country, l.status, ev.t::date sent_date,
+               COALESCE(u.name,'—') owner
+        FROM ev JOIN leads l ON l.id = ev.lead_id
+        LEFT JOIN users u ON u.id = l.owner_docs
+        ORDER BY ev.t DESC LIMIT 500`, P),
+    ]);
+    res.json({
+      from, to, status,
+      total: total.rows[0]?.n || 0,
+      series: series.rows,
+      byUser: byUser.rows,
+      byCountry: byCountry.rows,
+      rows: rows.rows,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get("/api/stats/kpi", auth, async (req, res) => {
   if (["partner", "employer"].includes(req.user.role))
     return res.status(403).json({ error: "Forbidden" });

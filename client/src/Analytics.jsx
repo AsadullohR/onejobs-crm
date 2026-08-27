@@ -11,6 +11,183 @@ const DEFAULT_BONUS_CFG = {
   callFixed: 1000000, callPerSale: 100000, callPlan: 500000, callTime: 500000,
 };
 
+// ─── DOCUMENTS SENT TAB ──────────────────────────────────────────────────────
+// Counts leads ENTERING a document milestone in a range (from status_log), not
+// leads currently sitting in it — so a week's number stays correct after people
+// move on to the next stage.
+const DOC_MILESTONES = [
+  "Hujjatlar Jonatildi",
+  "Hujjatlar Jonatilishga Tayyor",
+  "Hujjatlar Tayyorlanmoqda",
+  "Elchixonaga Hujjatlar Tayyor",
+  "Vizaga Topshirildi",
+  "Viza Oldi",
+];
+
+const ymd = d => {
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+// Monday-start week, matching how the office talks about "this week".
+const rangeFor = (key) => {
+  const now = new Date();
+  if (key === "week") {
+    const s = new Date(now);
+    s.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    return [ymd(s), ymd(now)];
+  }
+  if (key === "month") return [ymd(new Date(now.getFullYear(), now.getMonth(), 1)), ymd(now)];
+  if (key === "prevMonth") {
+    const s = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return [ymd(s), ymd(new Date(now.getFullYear(), now.getMonth(), 0))];
+  }
+  return [ymd(new Date(now.getFullYear(), now.getMonth(), 1)), ymd(now)];
+};
+
+function DocsSentTab({ T }) {
+  const inpS = inp(T);
+  const [rangeKey, setRangeKey] = useState("month");
+  const [status, setStatus] = useState(DOC_MILESTONES[0]);
+  const [custom, setCustom] = useState(() => rangeFor("month"));
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const [from, to] = rangeKey === "custom" ? custom : rangeFor(rangeKey);
+
+  useEffect(() => {
+    let dead = false;
+    setBusy(true); setErr("");
+    statsAPI.docsSent(from, to, status)
+      .then(d => { if (!dead) setData(d); })
+      .catch(e => { if (!dead) setErr(e.message || "Xato"); })
+      .finally(() => { if (!dead) setBusy(false); });
+    return () => { dead = true; };
+  }, [from, to, status]);
+
+  const maxN = Math.max(1, ...((data?.series) || []).map(r => r.n));
+  const days = data?.series?.length || 0;
+  const avgPerDay = days ? (data.total / days) : 0;
+
+  const card = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 14 };
+  const RANGES = [["week", "Bu hafta"], ["month", "Bu oy"], ["prevMonth", "O'tgan oy"], ["custom", "Sana tanlash"]];
+
+  return <div>
+    {/* Controls */}
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 0, background: T.card2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 3 }}>
+        {RANGES.map(([k, l]) => (
+          <button key={k} onClick={() => setRangeKey(k)}
+            style={{ padding: "6px 13px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 11, fontFamily: "inherit",
+              background: rangeKey === k ? T.accent : "transparent", color: rangeKey === k ? "#fff" : T.muted, fontWeight: rangeKey === k ? 700 : 400 }}>{l}</button>
+        ))}
+      </div>
+      {rangeKey === "custom" && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="date" value={custom[0]} onChange={e => setCustom(([, b]) => [e.target.value, b])} style={{ ...inpS, width: 150 }} />
+          <span style={{ color: T.muted, fontSize: 12 }}>—</span>
+          <input type="date" value={custom[1]} onChange={e => setCustom(([a]) => [a, e.target.value])} style={{ ...inpS, width: 150 }} />
+        </div>
+      )}
+      <select value={status} onChange={e => setStatus(e.target.value)} style={{ ...inpS, width: 250 }}>
+        {DOC_MILESTONES.map(s => <option key={s} value={s}>{s}</option>)}
+      </select>
+      <span style={{ fontSize: 11, color: T.muted }}>{from} → {to}</span>
+    </div>
+
+    {err && <div style={{ ...card, borderColor: T.red, color: T.red, marginBottom: 12 }}>⚠️ {err}</div>}
+    {busy && !data && <div style={{ ...card, color: T.muted }}>Yuklanmoqda…</div>}
+
+    {data && <>
+      {/* Summary */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 14 }}>
+        {[["📄 Jami", data.total, T.accent],
+          ["📅 Kunlik o'rtacha", avgPerDay.toFixed(1), "#0891b2"],
+          ["🗓️ Faol kunlar", days, "#7c3aed"],
+          ["🏆 Eng ko'p kun", Math.max(0, ...(data.series || []).map(r => r.n)), "#16a34a"]
+        ].map(([l, v, c]) => (
+          <div key={l} style={{ ...card, borderLeft: `3px solid ${c}` }}>
+            <div style={{ fontSize: 10, color: T.muted, marginBottom: 4 }}>{l}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: c }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {data.total === 0 && (
+        <div style={{ ...card, color: T.muted, textAlign: "center", padding: 30 }}>
+          Bu davrda "{status}" bosqichiga o'tgan mijoz yo'q.
+        </div>
+      )}
+
+      {data.total > 0 && <>
+        {/* Daily chart */}
+        <div style={{ ...card, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 12, color: T.text }}>Kunlik taqsimot</div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 130, overflowX: "auto", paddingBottom: 4 }}>
+            {data.series.map(r => (
+              <div key={r.d} title={`${String(r.d).slice(0, 10)} — ${r.n} ta`}
+                style={{ flex: "1 0 18px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                <div style={{ fontSize: 9, color: T.muted }}>{r.n}</div>
+                <div style={{ width: "100%", height: `${(r.n / maxN) * 90}px`, minHeight: 3, background: T.accent, borderRadius: "3px 3px 0 0" }} />
+                <div style={{ fontSize: 8, color: T.muted, whiteSpace: "nowrap" }}>{String(r.d).slice(8, 10)}.{String(r.d).slice(5, 7)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Breakdowns */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 12, marginBottom: 14 }}>
+          {[["👤 Hujjatchi bo'yicha", data.byUser, "name"], ["🌍 Davlat bo'yicha", data.byCountry, "country"]].map(([title, list, field]) => (
+            <div key={title} style={card}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 10, color: T.text }}>{title}</div>
+              {(list || []).length === 0 && <div style={{ fontSize: 11, color: T.muted }}>Ma'lumot yo'q</div>}
+              {(list || []).map(r => (
+                <div key={r[field]} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, color: T.text, width: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r[field]}</div>
+                  <div style={{ flex: 1, height: 8, background: T.card2, borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ width: `${(r.n / Math.max(1, list[0].n)) * 100}%`, height: "100%", background: T.accent }} />
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.text, width: 28, textAlign: "right" }}>{r.n}</div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* Detail list */}
+        <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, padding: 12, borderBottom: `1px solid ${T.border}`, color: T.text }}>
+            Ro'yxat ({data.rows.length})
+          </div>
+          <div style={{ maxHeight: 420, overflowY: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ background: T.card2, position: "sticky", top: 0 }}>
+                  {["Sana", "ID", "Ism", "Davlat", "Hujjatchi", "Hozirgi holat"].map(h => (
+                    <th key={h} style={{ textAlign: "left", padding: "7px 10px", color: T.muted, fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map(r => (
+                  <tr key={r.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                    <td style={{ padding: "7px 10px", color: T.muted, whiteSpace: "nowrap" }}>{String(r.sent_date).slice(0, 10)}</td>
+                    <td style={{ padding: "7px 10px", color: T.muted }}>{r.id}</td>
+                    <td style={{ padding: "7px 10px", color: T.text, fontWeight: 600 }}>{r.name}</td>
+                    <td style={{ padding: "7px 10px", color: T.muted }}>{r.country || "—"}</td>
+                    <td style={{ padding: "7px 10px", color: T.muted }}>{r.owner}</td>
+                    <td style={{ padding: "7px 10px", color: T.muted }}>{r.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>}
+    </>}
+  </div>;
+}
+
 // ─── ANALYTICS PAGE (Employee Productivity + Time Analysis) ─────────────────
 function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
   const T=useT();
@@ -303,13 +480,16 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
 
     {/* Tabs */}
     <div style={{display:"flex",gap:0,marginBottom:16,background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:3,width:"fit-content"}}>
-      {[["productivity","👔 Xodimlar Samaradorligi"],["time","⏱️ Vaqt Tahlili"],["kpi","🎯 KPI Nazorat"],...(roles[user?.role]?.canSalary?[["salary","💰 Maosh Tahlili"]]:[])] .map(([k,l])=>(
+      {[["productivity","👔 Xodimlar Samaradorligi"],["time","⏱️ Vaqt Tahlili"],["docs","📄 Hujjat Jo'natish"],["kpi","🎯 KPI Nazorat"],...(roles[user?.role]?.canSalary?[["salary","💰 Maosh Tahlili"]]:[])] .map(([k,l])=>(
         <button key={k} onClick={()=>setTab(k)} style={{padding:"7px 16px",borderRadius:6,border:"none",background:tab===k?T.accent:"transparent",color:tab===k?"#fff":T.muted,cursor:"pointer",fontSize:11,fontWeight:tab===k?700:400}}>{l}</button>
       ))}
     </div>
 
     {/* ══════ KPI NAZORAT ══════════════════════════════════════════════════════ */}
     {tab==="kpi"&&<KpiTab team={team} T={T} periodStart={periodStart} canEditCfg={user?.role==="admin"}/>}
+
+    {/* ══════ HUJJAT JO'NATISH ═════════════════════════════════════════════════ */}
+    {tab==="docs"&&<DocsSentTab T={T}/>}
 
     {/* ══════ TAB 1: PRODUCTIVITY ══════════════════════════════════════════════ */}
     {tab==="productivity"&&<div>
