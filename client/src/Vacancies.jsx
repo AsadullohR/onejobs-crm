@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { useT } from "./theme.js";
 import { useLang } from "./i18n.jsx";
-import { inp, lab, I, Modal, SearchSelect, Av } from "./helpers.jsx";
+import { inp, lab, I, Modal, SearchSelect, Av, fmtMs } from "./helpers.jsx";
 import { vacanciesAPI, candidatesAPI, leadsAPI } from "./api.js";
 import { CandidateProfile, normCandStatus } from "./EmployerPortal.jsx";
+import { STAGES } from "./constants.js";
 // ─── STATUS CONFIG ────────────────────────────────────────────────────────────
 const V_STATUS = {
   active: { label: "Active", c: "#16a34a", bg: "#dcfce7" },
@@ -13,28 +14,20 @@ const V_STATUS = {
   filled: { label: "Filled", c: "#9333ea", bg: "#f3e8ff" },
 };
 
-const CAND_STATUS = {
-  added:              { label: "Добавен кандидат",          c: "#3b82f6" },
-  interview:          { label: "За интервю",                 c: "#d97706" },
-  approved_final:     { label: "Одобрен финално",           c: "#16a34a" },
-  rejected_final:     { label: "Отказан финально",          c: "#dc2626" },
-  reserve:            { label: "Резерва",                    c: "#6b7280" },
-  rejected_recruiter: { label: "Отказан от Рекрутер",       c: "#ea580c" },
-  approved_client:    { label: "Одобрен от Клиент",         c: "#9333ea" },
-  docs_prep:          { label: "Подготовка на документи",   c: "#0891b2" },
-  filed_migration:    { label: "Filed with Migration / A3", c: "#7c3aed" },
-  permit_received:    { label: "Permit received",           c: "#059669" },
-  scheduled_visa:     { label: "Scheduled for visa",        c: "#b45309" },
-  visa_docs_sent:     { label: "Visa documents sent",       c: "#0369a1" },
-  submitted_embassy:  { label: "Submitted at the embassy",  c: "#1d4ed8" },
-  visa_received:      { label: "Visa received ✅",           c: "#15803d" },
-};
+// Candidate statuses ARE the pipeline stages now - one vocabulary for the same
+// person, whether you look at them in Pipeline or inside a vacancy.
+const CAND_STATUS = (() => {
+  const m = {};
+  STAGES.forEach(st => { m[st.key] = { label: st.label, c: st.c }; });
+  return m;
+})();
 
 // Mirrors the server's FILLED_STATUSES: the seat is taken from final approval
-// onwards. 'hired'/'approved' are legacy values from the older enum.
-const FILLED_CAND_STATUSES = ["approved_final","approved_client","docs_prep","filed_migration",
-  "permit_received","scheduled_visa","visa_docs_sent","submitted_embassy","visa_received",
-  "hired","approved"];
+// onwards, through docs, permit and visa, until departure.
+const FILLED_CAND_STATUSES = ["Ishga qabul qilindi","1 - Qism To'landi",
+  "Hujjatlar Tayyorlanmoqda","Hujjatlar Jonatilishga Tayyor","Hujjatlar Jonatildi",
+  "Ish shartnomasi keldi","Ish shartnomasi imzolandi","Taklifnoma keldi",
+  "Elchixonaga Hujjatlar Tayyor","Vizaga Topshirildi","Viza Oldi","Jo'nab ketdi"];
 
 const CONTRACT_TYPES = [
   "erpr3",
@@ -328,6 +321,17 @@ function VacancyDetail({
   const [candLoading, setCandLoading] = useState(false);
   const [candModal, setCandModal] = useState(false);
   const [selCandProfile, setSelCandProfile] = useState(null);
+  // Multi-select for group status changes.
+  const [candSel, setCandSel] = useState(() => new Set());
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  // Client money is staff-only; the server withholds it from everyone else.
+  const canSeeMoney = ["admin", "manager", "finance_manager"].includes(user.role);
+  const toggleCand = (id) => setCandSel(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
 
   const saveCandidateProfile = async (cForm, lForm) => {
     if (!selCandProfile) return;
@@ -340,7 +344,7 @@ function VacancyDetail({
       setLeads?.(p => p.map(l => l.id === leadId ? { ...l, ...lForm, position: updatedLead.position, cv: updatedLead.cv } : l));
     }
   };
-  const [candForm, setCandForm] = useState({ leadId: "", status: "added", note: "" });
+  const [candForm, setCandForm] = useState({ leadId: "", status: "", note: "" });
   const cf = (k, val) => setCandForm((p) => ({ ...p, [k]: val }));
 
   // Partner access management
@@ -375,7 +379,8 @@ function VacancyDetail({
         lead_id: candForm.leadId,
         name: lead?.name || "Unknown",
         phone: lead?.phone || "",
-        status: candForm.status || "added",
+        // Empty lets the server adopt the client's current pipeline stage.
+        status: candForm.status || "",
         note: candForm.note || "",
       });
       // POST returns the raw DB row (snake_case, no lead join), while the list
@@ -388,16 +393,37 @@ function VacancyDetail({
       else setCandidates(p => [{ ...saved, id: String(saved.id), leadId: saved.lead_id,
         leadName: lead?.name || saved.name, leadPhone: lead?.phone || saved.phone }, ...p]);
       setCandModal(false);
-      setCandForm({ leadId: "", status: "added", note: "" });
+      setCandForm({ leadId: "", status: "", note: "" });
     } catch (err) { alert("Xato: " + err.message); }
   };
 
   const updateCandStatus = async (cId, newStatus) => {
     const cand = candidates.find(c => c.id === cId);
     try {
-      const saved = await candidatesAPI.update(cId, { ...cand, status: newStatus });
+      await candidatesAPI.update(cId, { ...cand, status: newStatus });
       setCandidates(p => p.map(c => c.id === cId ? { ...c, status: newStatus } : c));
+      // The server mirrors this onto the linked client; reflect it locally too
+      // so Pipeline does not show a stale stage until the next reload.
+      if (cand && cand.leadId)
+        setLeads && setLeads(p => p.map(l => l.id === cand.leadId ? { ...l, status: newStatus } : l));
     } catch (err) { alert("Xato: " + err.message); }
+  };
+
+  // Group status change across every ticked candidate.
+  const bulkChangeStatus = async () => {
+    const ids = [...candSel];
+    if (!ids.length || !bulkStatus) return;
+    if (!confirm(`${ids.length} ta nomzod "${bulkStatus}" holatiga o‘tkazilsinmi?\nBog‘langan mijozlarning pipeline holati ham o‘zgaradi.`)) return;
+    setBulkBusy(true);
+    try {
+      await candidatesAPI.bulkStatus(ids, bulkStatus);
+      const leadIds = candidates.filter(c => candSel.has(c.id) && c.leadId).map(c => c.leadId);
+      setCandidates(p => p.map(c => candSel.has(c.id) ? { ...c, status: bulkStatus } : c));
+      setLeads && setLeads(p => p.map(l => leadIds.includes(l.id) ? { ...l, status: bulkStatus } : l));
+      setCandSel(new Set());
+      setBulkStatus("");
+    } catch (err) { alert("Xato: " + err.message); }
+    setBulkBusy(false);
   };
 
   const removeCandidate = async (cId) => {
@@ -1026,6 +1052,36 @@ function VacancyDetail({
                     Jami {candLoading ? "…" : candidates.length} ta nomzod
                   </div>
                 </div>
+                {/* Group status change - the project-first workflow moves people
+                    in batches, not one at a time. */}
+                {canEdit && candSel.size > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+                    background: `${T.accent}12`, border: `1px solid ${T.accent}55`,
+                    borderRadius: 8, padding: "7px 11px" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: T.accent }}>
+                      {candSel.size} ta tanlandi
+                    </span>
+                    <select value={bulkStatus} onChange={e => setBulkStatus(e.target.value)}
+                      style={{ ...inpS, width: 210, padding: "5px 8px", fontSize: 11 }}>
+                      <option value="">Yangi holatni tanlang…</option>
+                      {STAGES.map(st => <option key={st.key} value={st.key}>{st.label}</option>)}
+                    </select>
+                    <button onClick={bulkChangeStatus} disabled={!bulkStatus || bulkBusy}
+                      style={{ padding: "6px 12px", borderRadius: 7, border: "none", fontFamily: "inherit",
+                        background: bulkStatus && !bulkBusy ? T.accent : T.border,
+                        color: bulkStatus && !bulkBusy ? "#fff" : T.muted,
+                        fontWeight: 700, fontSize: 11,
+                        cursor: bulkStatus && !bulkBusy ? "pointer" : "not-allowed" }}>
+                      {bulkBusy ? "…" : "O'zgartirish"}
+                    </button>
+                    <button onClick={() => setCandSel(new Set())}
+                      style={{ padding: "6px 10px", borderRadius: 7, border: `1px solid ${T.border}`,
+                        background: "transparent", color: T.muted, fontSize: 11,
+                        cursor: "pointer", fontFamily: "inherit" }}>
+                      Bekor
+                    </button>
+                  </div>
+                )}
                 <button
                   onClick={() => setCandModal(true)}
                   style={{
@@ -1076,12 +1132,21 @@ function VacancyDetail({
                   >
                     <thead>
                       <tr style={{ background: T.card2 }}>
+                        {canEdit && (
+                          <th style={{ padding: "10px 8px", width: 32, borderBottom: `1px solid ${T.border}` }}>
+                            <input type="checkbox"
+                              checked={candidates.length > 0 && candSel.size === candidates.length}
+                              onChange={e => setCandSel(e.target.checked ? new Set(candidates.map(c => c.id)) : new Set())}
+                              style={{ cursor: "pointer" }} />
+                          </th>
+                        )}
                         {[
                           "Candidate",
                           "Company",
                           "Working position",
                           "Added by agent",
                           "Status",
+                          ...(canSeeMoney ? ["Balans"] : []),
                           "Actions",
                         ].map((h) => (
                           <th
@@ -1106,15 +1171,21 @@ function VacancyDetail({
                       {candidates.map((c, i) => {
                         const lead = leads.find((l) => l.id === c.leadId);
                         const cs =
-                          CAND_STATUS[normCandStatus(c.status)] || CAND_STATUS.added;
+                          CAND_STATUS[normCandStatus(c.status)] || CAND_STATUS['Yangi'];
                         return (
                           <tr
                             key={c.id}
                             style={{
                               borderBottom: `1px solid ${T.border}`,
-                              background: i % 2 === 0 ? T.card : T.card2,
+                              background: candSel.has(c.id) ? `${T.accent}14` : (i % 2 === 0 ? T.card : T.card2),
                             }}
                           >
+                            {canEdit && (
+                              <td style={{ padding: "10px 8px" }}>
+                                <input type="checkbox" checked={candSel.has(c.id)}
+                                  onChange={() => toggleCand(c.id)} style={{ cursor: "pointer" }} />
+                              </td>
+                            )}
                             <td
                               style={{
                                 padding: "10px 12px",
@@ -1203,6 +1274,22 @@ function VacancyDetail({
                                 </span>
                               )}
                             </td>
+                            {canSeeMoney && (
+                              <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                                {!c.leadId ? <span style={{ color: T.muted }}>-</span> : (() => {
+                                  const inc = c.totalIncome != null ? c.totalIncome : (lead && lead.totalIncome) || 0;
+                                  const exp = c.totalExpense != null ? c.totalExpense : (lead && lead.totalExpense) || 0;
+                                  const bal = c.netBalance != null ? c.netBalance : inc - exp;
+                                  return (
+                                    <span title={"Kirim " + fmtMs(inc) + " / Chiqim " + fmtMs(exp)}
+                                      style={{ fontWeight: 700, color: bal > 0 ? "#16a34a" : bal < 0 ? T.red : T.muted }}>
+                                      {fmtMs(bal)}
+                                      {c.profitConfirmed && <span title="Tasdiqlangan foyda" style={{ marginLeft: 4 }}>*</span>}
+                                    </span>
+                                  );
+                                })()}
+                              </td>
+                            )}
                             <td style={{ padding: "10px 12px", display: "flex", gap: 10, alignItems: "center" }}>
                               <button
                                 onClick={() => setSelCandProfile(c)}
@@ -1463,7 +1550,7 @@ function PartnerVacanciesView({ user, leads, vacancies, T }) {
         leadId: candForm.leadId,
         leadName: lead?.name||"",
         addedByName: user.name,
-        status: "added",
+        status: "",
         note: candForm.note||"",
       });
       setCandidates(p=>[...p,saved]);
@@ -1501,7 +1588,7 @@ function PartnerVacanciesView({ user, leads, vacancies, T }) {
       <div style={{fontSize:12,fontWeight:700,color:T.text,marginBottom:10}}>Mening yuborishlarim</div>
       {myCands.length===0&&<div style={{color:T.muted,fontSize:12,padding:20}}>Hali nomzod yuborilmagan</div>}
       {myCands.map(c=>{
-        const cs=CAND_STATUS[normCandStatus(c.status)]||CAND_STATUS.added;
+        const cs=CAND_STATUS[normCandStatus(c.status)]||CAND_STATUS['Yangi'];
         const lead=leads.find(l=>l.id===c.leadId);
         return <div key={c.id} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:8,padding:"10px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>

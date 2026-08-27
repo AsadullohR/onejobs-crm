@@ -2,46 +2,49 @@ import { useState, useEffect } from "react";
 import { useT } from "./theme.js";
 import { useLang, vTitle } from "./i18n.jsx";
 import { fmtMs, inp, lab, I } from "./helpers.jsx";
+import { STAGES } from "./constants.js";
 import { vacanciesAPI, candidatesAPI, employerAPI, leadDocsAPI } from "./api.js";
 
 // ─── CANDIDATE STATUS MAP ─────────────────────────────────────────────────────
-const CAND_STATUS_KEYS = ["added","interview","approved_final","rejected_final","reserve","rejected_recruiter","approved_client","docs_prep","filed_migration","permit_received","scheduled_visa","visa_docs_sent","submitted_embassy","visa_received"];
+// Candidates and leads share ONE vocabulary now: the pipeline stages. Vacancy
+// work is the primary workflow, so a candidate's status IS the client's status.
+const CAND_STATUS_KEYS = STAGES.map(s => s.key);
 
-function candStatusMap(t) {
-  return {
-    added:              { label: t("cand_added"),              c: "#3b82f6" },
-    interview:          { label: t("cand_interview"),          c: "#d97706" },
-    approved_final:     { label: t("cand_approved_final"),     c: "#16a34a" },
-    rejected_final:     { label: t("cand_rejected_final"),     c: "#dc2626" },
-    reserve:            { label: t("cand_reserve"),            c: "#6b7280" },
-    rejected_recruiter: { label: t("cand_rejected_recruiter"), c: "#ea580c" },
-    approved_client:    { label: t("cand_approved_client"),    c: "#9333ea" },
-    docs_prep:          { label: t("cand_docs_prep"),          c: "#0891b2" },
-    filed_migration:    { label: t("cand_filed_migration"),    c: "#7c3aed" },
-    permit_received:    { label: t("cand_permit_received"),    c: "#059669" },
-    scheduled_visa:     { label: t("cand_scheduled_visa"),     c: "#b45309" },
-    visa_docs_sent:     { label: t("cand_visa_docs_sent"),     c: "#0369a1" },
-    submitted_embassy:  { label: t("cand_submitted_embassy"),  c: "#1d4ed8" },
-    visa_received:      { label: t("cand_visa_received"),      c: "#15803d" },
-    submitted:          { label: t("cand_added"),              c: "#3b82f6" },
-    applied:            { label: t("cand_added"),              c: "#3b82f6" },
-  };
+function candStatusMap() {
+  // Colour + label come straight from STAGES so a stage added to the pipeline
+  // shows up here automatically, already styled.
+  const m = {};
+  STAGES.forEach(st => { m[st.key] = { label: st.label, c: st.c }; });
+  // Legacy rows that predate the migration still render sensibly.
+  Object.entries(LEGACY_STATUS_ALIAS).forEach(([old, stage]) => {
+    if (!m[old] && m[stage]) m[old] = m[stage];
+  });
+  return m;
 }
 
 // Old/legacy DB status values (pre-dating the current pipeline enum) collapsed
 // onto their closest current key, so filters and badges bucket them correctly
 // instead of silently falling outside every filter option.
 const LEGACY_STATUS_ALIAS = {
-  applied: "added", submitted: "added",
-  screening: "interview",
-  offer: "approved_final",
-  hired: "approved_client",
-  rejected: "rejected_final",
+  added: "Yangi", applied: "Yangi", submitted: "Yangi",
+  screening: "Boglanildi",
+  interview: "Suhbat",
+  approved_final: "Ishga qabul qilindi", approved_client: "Ishga qabul qilindi",
+  offer: "Ishga qabul qilindi", hired: "Ishga qabul qilindi", approved: "Ishga qabul qilindi",
+  rejected_final: "Rad etildi", rejected_recruiter: "Rad etildi", rejected: "Rad etildi",
+  reserve: "Keyinchalik",
+  docs_prep: "Hujjatlar Tayyorlanmoqda",
+  filed_migration: "Hujjatlar Jonatildi",
+  permit_received: "Taklifnoma keldi",
+  scheduled_visa: "Elchixonaga Hujjatlar Tayyor",
+  visa_docs_sent: "Elchixonaga Hujjatlar Tayyor",
+  submitted_embassy: "Vizaga Topshirildi",
+  visa_received: "Viza Oldi",
 };
 const normCandStatus = s => LEGACY_STATUS_ALIAS[s] || s;
 
 // Employers only make hiring decisions; internal pipeline stages are read-only.
-const EMPLOYER_STATUS_KEYS = ["added", "interview", "approved_client", "rejected_final", "reserve"];
+const EMPLOYER_STATUS_KEYS = ["Yangi", "Suhbat", "Ishga qabul qilindi", "Rad etildi", "Keyinchalik"];
 
 // Build a lead-shaped object from the enriched candidate row returned by
 // /api/vacancies/:id/candidates (employers no longer receive the lead list).
@@ -566,7 +569,7 @@ function WorkersTab({ t, T, team, userId }) {
 
   if (loading) return <div style={{ color: T.muted, textAlign: "center", padding: 40, fontSize: 12 }}>{t("loading")}</div>;
 
-  const CAND_STATUS_KEYS_ALL = ["all","added","interview","approved_final","rejected_final","reserve","rejected_recruiter","approved_client","docs_prep","filed_migration","permit_received","scheduled_visa","visa_docs_sent","submitted_embassy","visa_received"];
+  const CAND_STATUS_KEYS_ALL = ["all", ...CAND_STATUS_KEYS];
   const filtered = filter === "all" ? workers : workers.filter(w => normCandStatus(w.status) === filter);
 
   if (workers.length === 0) return (

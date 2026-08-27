@@ -13,8 +13,8 @@ import { InstallPrompt } from "./InstallPrompt.jsx";
 //  • Job ads   — card grid of vacancies shared with this partner
 // Read-only: partners see status of the candidates they referred.
 
-const APPROVED_SET = new Set(["approved_final", "approved_client", "visa_received", "permit_received"]);
-const PENDING_SET  = new Set(["added", "interview", "reserve"]);
+const APPROVED_SET = new Set(["Ishga qabul qilindi", "1 - Qism To'landi", "Taklifnoma keldi", "Viza Oldi", "Jo'nab ketdi"]);
+const PENDING_SET  = new Set(["Yangi", "Qilindi", "Boglanildi", "Onlayn Suhbat Uchun", "Onlayn Suhbat", "Suhbat", "Keyinchalik"]);
 const PAGE_SIZE = 10;
 
 const initials = name => (name || "?").split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();

@@ -602,6 +602,13 @@ app.post("/api/leads", auth, async (req, res) => {
       ).catch(() => {});
     }
 
+    // Mirror the pipeline move onto every vacancy this client is a candidate
+    // on, so project view and pipeline never show the same person differently.
+    if (newStatus && newStatus !== oldStatus) {
+      syncCandidatesFromLead(saved.id, newStatus)
+        .catch(e => console.warn("lead->cand sync:", e.message));
+    }
+
     res.json(saved);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1867,14 +1874,52 @@ app.post("/api/webhook/meta", async (req, res) => {
     console.error("Meta error:", err.message);
   }
 });
+// ─── PIPELINE STAGES (shared with the client's constants.js STAGES) ──────────
+// Candidates and leads use ONE vocabulary. Vacancy work is now the primary
+// workflow, so a candidate's status IS the client's pipeline status — keeping
+// two parallel enums meant the same person showed two different states.
+const PIPELINE_STAGES = [
+  "Yangi", "Qilindi", "Boglanildi", "Onlayn Suhbat Uchun", "Onlayn Suhbat", "Suhbat",
+  "Shartnoma qildi", "Hujjat", "XBA To'lov qildi", "CV Topshirildi",
+  "Interview ga qo'yildi", "Ishga qabul qilindi", "1 - Qism To'landi",
+  "Hujjatlar Tayyorlanmoqda", "Hujjatlar Jonatilishga Tayyor", "Hujjatlar Jonatildi",
+  "Ish shartnomasi keldi", "Ish shartnomasi imzolandi", "Taklifnoma keldi",
+  "Elchixonaga Hujjatlar Tayyor", "Vizaga Topshirildi", "Viza Oldi", "Jo'nab ketdi",
+  "Viza Rad Etildi", "Rad etildi", "Bekor qildi", "Keyinchalik", "Anchagacha ko'tarmadi",
+];
+const isPipelineStage = (s) => PIPELINE_STAGES.includes(s);
+
+// Old candidate enum -> pipeline stage. Applied as a one-off data migration on
+// boot AND kept as a read-time fallback for any straggler row.
+const CAND_LEGACY_TO_STAGE = {
+  added: "Yangi", applied: "Yangi", submitted: "Yangi",
+  screening: "Boglanildi",
+  interview: "Suhbat",
+  approved_final: "Ishga qabul qilindi", approved_client: "Ishga qabul qilindi",
+  offer: "Ishga qabul qilindi", hired: "Ishga qabul qilindi", approved: "Ishga qabul qilindi",
+  rejected_final: "Rad etildi", rejected_recruiter: "Rad etildi", rejected: "Rad etildi",
+  reserve: "Keyinchalik",
+  docs_prep: "Hujjatlar Tayyorlanmoqda",
+  filed_migration: "Hujjatlar Jonatildi",
+  permit_received: "Taklifnoma keldi",
+  scheduled_visa: "Elchixonaga Hujjatlar Tayyor",
+  visa_docs_sent: "Elchixonaga Hujjatlar Tayyor",
+  submitted_embassy: "Vizaga Topshirildi",
+  visa_received: "Viza Oldi",
+};
+const sqlList = (arr) => `(${arr.map(s => `'${s.replace(/'/g, "''")}'`).join(",")})`;
+
 // ─── VACANCIES ───────────────────────────────────────────────────────────────
 // A position counts as FILLED once the candidate has cleared final approval —
 // every later stage (docs, permit, visa) is that same person still occupying
-// the seat. 'hired'/'approved' are legacy values kept for older rows.
-const FILLED_STATUSES = `('approved_final','approved_client','docs_prep','filed_migration',
-  'permit_received','scheduled_visa','visa_docs_sent','submitted_embassy','visa_received',
-  'hired','approved','offer')`;
-const APPROVED_STATUSES = `('approved_final','approved_client','approved','offer')`;
+// the seat.
+const FILLED_STATUSES = sqlList([
+  "Ishga qabul qilindi", "1 - Qism To'landi", "Hujjatlar Tayyorlanmoqda",
+  "Hujjatlar Jonatilishga Tayyor", "Hujjatlar Jonatildi", "Ish shartnomasi keldi",
+  "Ish shartnomasi imzolandi", "Taklifnoma keldi", "Elchixonaga Hujjatlar Tayyor",
+  "Vizaga Topshirildi", "Viza Oldi", "Jo'nab ketdi",
+]);
+const APPROVED_STATUSES = sqlList(["Ishga qabul qilindi", "1 - Qism To'landi"]);
 
 const vacRow = (r) => ({
   id: r.id, title: r.title, company: r.company, country: r.country,
@@ -2153,11 +2198,14 @@ app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
   try {
     if (!(await canAccessVacancy(req.user, req.params.id)))
       return res.status(403).json({ error: "Forbidden" });
+    // Money is staff-only — employers and partners never see client finances.
+    const canSeeMoney = ["admin", "manager", "finance_manager"].includes(req.user.role);
     const { rows } = await pool.query(
       `SELECT c.*, l.name as lead_name, l.phone as lead_phone,
               l.country as lead_country, l.position as lead_position, l.sector as lead_sector,
               l.gender as lead_gender, l.status as lead_status, l.source as lead_source,
               l.comment as lead_comment, l.cv as lead_cv, l.docs as lead_docs,
+              l.total_income, l.total_expense, l.net_balance, l.sof_foyda, l.profit_confirmed,
               u.name as added_by_name
        FROM candidates c
        LEFT JOIN leads l ON l.id=c.lead_id
@@ -2166,6 +2214,13 @@ app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
       [req.params.id],
     );
     res.json(rows.map(r => ({
+      ...(canSeeMoney ? {
+        totalIncome: Number(r.total_income || 0),
+        totalExpense: Number(r.total_expense || 0),
+        netBalance: Number(r.net_balance || 0),
+        sofFoyda: r.sof_foyda == null ? null : Number(r.sof_foyda),
+        profitConfirmed: !!r.profit_confirmed,
+      } : {}),
       id: String(r.id), vacancyId: r.vacancy_id, leadId: r.lead_id,
       leadName: r.lead_name || r.name, leadPhone: r.lead_phone || r.phone,
       name: r.name, phone: r.phone, status: r.status, note: r.note,
@@ -2177,6 +2232,30 @@ app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── BULK CANDIDATE STATUS ──────────────────────────────────────────────────
+// One round trip for a multi-select status change, and one place where the
+// lead sync runs for each row.
+app.put("/api/candidates/bulk-status", auth, async (req, res) => {
+  const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+  const status = req.body.status;
+  if (!ids.length) return res.status(400).json({ error: "ids required" });
+  if (!isPipelineStage(status)) return res.status(400).json({ error: "Noto'g'ri status" });
+  if (["partner", "employer"].includes(req.user.role))
+    return res.status(403).json({ error: "Forbidden" });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE candidates SET status=$1, updated_at=NOW()
+       WHERE id = ANY($2::bigint[]) RETURNING id, lead_id`,
+      [status, ids.map(Number)],
+    );
+    for (const r of rows) {
+      try { await syncLeadFromCandidate(r.id, status, req.user.id); }
+      catch (e) { console.warn("bulk cand->lead sync:", e.message); }
+    }
+    res.json({ ok: true, updated: rows.length, status });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post("/api/candidates", auth, async (req, res) => {
   const b = req.body;
   // Support both snake_case (from Vacancies tab) and camelCase (from partner portal)
@@ -2184,11 +2263,19 @@ app.post("/api/candidates", auth, async (req, res) => {
   const lead_id = b.lead_id || b.leadId || null;
   const name = b.name || b.leadName || "Nomsiz";
   const phone = b.phone || b.leadPhone || null;
-  const status = b.status || "added";
+  let status = b.status || null;
   const note = b.note || null;
   const applied_at = b.applied_at || null;
   if (!vacancy_id) return res.status(400).json({ error: "vacancy_id required" });
   try {
+    // Attaching an existing client to a vacancy adopts their current pipeline
+    // stage — the two are one workflow, so a candidate must never start at
+    // "Yangi" for someone already at, say, "Hujjatlar Jonatildi".
+    if (!status && lead_id) {
+      const { rows: l } = await pool.query(`SELECT status FROM leads WHERE id=$1`, [lead_id]);
+      if (l[0]?.status) status = l[0].status;
+    }
+    status = status || "Yangi";
     const { rows } = await pool.query(
       `INSERT INTO candidates (vacancy_id, lead_id, name, phone, status, note, applied_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
@@ -2200,7 +2287,32 @@ app.post("/api/candidates", auth, async (req, res) => {
 
 // Statuses an employer is allowed to set — hiring decisions only,
 // never internal pipeline stages (docs, migration, visa).
-const EMPLOYER_ALLOWED_STATUSES = ["added", "interview", "approved_client", "rejected_final", "reserve"];
+const EMPLOYER_ALLOWED_STATUSES = ["Yangi", "Suhbat", "Ishga qabul qilindi", "Rad etildi", "Keyinchalik"];
+
+// ─── CANDIDATE <-> LEAD STATUS SYNC ─────────────────────────────────────────
+// The two are one workflow now, so a change on either side propagates to the
+// other. Both helpers write the far side only, never re-enter the near side,
+// so there is no ping-pong. Each is best-effort: a sync failure must not fail
+// the user's actual edit.
+async function syncLeadFromCandidate(candidateId, status, userId) {
+  if (!isPipelineStage(status)) return;
+  const { rows } = await pool.query(`SELECT lead_id FROM candidates WHERE id=$1`, [candidateId]);
+  const leadId = rows[0]?.lead_id;
+  if (!leadId) return;
+  const { rows: cur } = await pool.query(`SELECT status FROM leads WHERE id=$1`, [leadId]);
+  if (!cur[0] || cur[0].status === status) return;
+  await pool.query(`UPDATE leads SET status=$1, updated_at=NOW() WHERE id=$2`, [status, leadId]);
+  await pool.query(
+    `INSERT INTO status_log (lead_id, owner_id, status, logged_at) VALUES ($1,$2,$3,NOW())`,
+    [leadId, userId || null, status]);
+}
+
+async function syncCandidatesFromLead(leadId, status) {
+  if (!leadId || !isPipelineStage(status)) return;
+  await pool.query(
+    `UPDATE candidates SET status=$1, updated_at=NOW()
+     WHERE lead_id=$2 AND status IS DISTINCT FROM $1`, [status, leadId]);
+}
 
 app.put("/api/candidates/:id", auth, async (req, res) => {
   let { name, phone, status, note } = req.body;
@@ -2231,10 +2343,14 @@ app.put("/api/candidates/:id", auth, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: "Not found" });
     const cand = rows[0];
 
-    // 'approved'/'hired' are legacy values; current enum uses approved_client /
-    // approved_final. React to both so employer decisions always notify staff.
-    const isApproved = ["approved", "approved_client", "approved_final"].includes(status);
-    const isHired = ["hired"].includes(status);
+    // Push the change onto the linked client's pipeline (best-effort).
+    if (status) {
+      try { await syncLeadFromCandidate(req.params.id, status, req.user.id); }
+      catch (e) { console.warn("cand->lead sync:", e.message); }
+    }
+
+    const isApproved = ["Ishga qabul qilindi"].includes(status);
+    const isHired = ["Jo'nab ketdi"].includes(status);
     const isRejected = status === "rejected_final" && req.user.role === "employer";
     if (isApproved || isHired || isRejected) {
       const leadRes = await pool.query("SELECT * FROM leads WHERE id=$1", [cand.lead_id]).catch(()=>({rows:[]}));
@@ -2765,6 +2881,13 @@ app.listen(PORT, async () => {
               AND status IN ('Jo''nab ketdi', 'Viza Oldi');
         END IF;
       END $$;`);
+    // Candidate statuses moved onto the pipeline vocabulary. Idempotent: once
+    // converted no row matches a legacy key again, so this is a no-op on every
+    // later boot. Default changed too, or new rows land back on 'applied'.
+    for (const [legacy, stage] of Object.entries(CAND_LEGACY_TO_STAGE)) {
+      await pool.query(`UPDATE candidates SET status=$1 WHERE status=$2`, [stage, legacy]);
+    }
+    await pool.query(`ALTER TABLE candidates ALTER COLUMN status SET DEFAULT 'Yangi'`);
     await pool.query(`CREATE TABLE IF NOT EXISTS status_log (
       id SERIAL PRIMARY KEY,
       lead_id TEXT,
