@@ -207,26 +207,39 @@ CREATE TRIGGER tasks_updated_at BEFORE UPDATE ON tasks
 CREATE OR REPLACE FUNCTION recalc_lead_balance()
 RETURNS TRIGGER AS $$
 DECLARE
-  v_lead_id TEXT;
+  v_new TEXT;
+  v_old TEXT;
+  v_ids TEXT[];
+  v_id  TEXT;
   v_inc BIGINT;
   v_exp BIGINT;
 BEGIN
-  v_lead_id := COALESCE(NEW.lead_id, OLD.lead_id);
-  IF v_lead_id IS NULL THEN RETURN NEW; END IF;
+  -- NEW is unassigned on DELETE and OLD on INSERT, so read them per operation
+  -- rather than through COALESCE(NEW..., OLD...), which errors on DELETE.
+  IF TG_OP <> 'DELETE' THEN v_new := NEW.lead_id; END IF;
+  IF TG_OP <> 'INSERT' THEN v_old := OLD.lead_id; END IF;
 
-  SELECT
-    COALESCE(SUM(CASE WHEN type='income'  THEN amount ELSE 0 END), 0),
-    COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0)
-  INTO v_inc, v_exp
-  FROM transactions WHERE lead_id = v_lead_id;
+  -- Recompute BOTH sides. Moving a transaction from client A to client B used
+  -- to recompute only B, leaving A's cached balance overstated forever.
+  v_ids := ARRAY(SELECT DISTINCT x
+                   FROM unnest(ARRAY[v_new, v_old]) AS x
+                  WHERE x IS NOT NULL);
 
-  UPDATE leads SET
-    total_income  = v_inc,
-    total_expense = v_exp,
-    net_balance   = v_inc - v_exp
-  WHERE id = v_lead_id;
+  FOREACH v_id IN ARRAY v_ids LOOP
+    SELECT
+      COALESCE(SUM(CASE WHEN type='income'  THEN amount ELSE 0 END), 0),
+      COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0)
+    INTO v_inc, v_exp
+    FROM transactions WHERE lead_id = v_id;
 
-  RETURN NEW;
+    UPDATE leads SET
+      total_income  = v_inc,
+      total_expense = v_exp,
+      net_balance   = v_inc - v_exp
+    WHERE id = v_id;
+  END LOOP;
+
+  RETURN NULL;  -- AFTER trigger: the return value is ignored
 END;
 $$ LANGUAGE plpgsql;
 

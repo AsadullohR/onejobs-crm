@@ -2892,6 +2892,69 @@ app.listen(PORT, async () => {
       await pool.query(`UPDATE candidates SET status=$1 WHERE status=$2`, [stage, legacy]);
     }
     await pool.query(`ALTER TABLE candidates ALTER COLUMN status SET DEFAULT 'Yangi'`);
+
+    // Recalculate BOTH clients when a transaction moves between them. The
+    // original trigger used COALESCE(NEW.lead_id, OLD.lead_id), so a
+    // reassignment A -> B refreshed only B and left A's cached balance
+    // overstated permanently -- money that looked present on a client who no
+    // longer had the payment.
+    await pool.query(`CREATE OR REPLACE FUNCTION recalc_lead_balance()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_new TEXT;
+  v_old TEXT;
+  v_ids TEXT[];
+  v_id  TEXT;
+  v_inc BIGINT;
+  v_exp BIGINT;
+BEGIN
+  -- NEW is unassigned on DELETE and OLD on INSERT, so read them per operation
+  -- rather than through COALESCE(NEW..., OLD...), which errors on DELETE.
+  IF TG_OP <> 'DELETE' THEN v_new := NEW.lead_id; END IF;
+  IF TG_OP <> 'INSERT' THEN v_old := OLD.lead_id; END IF;
+
+  -- Recompute BOTH sides. Moving a transaction from client A to client B used
+  -- to recompute only B, leaving A's cached balance overstated forever.
+  v_ids := ARRAY(SELECT DISTINCT x
+                   FROM unnest(ARRAY[v_new, v_old]) AS x
+                  WHERE x IS NOT NULL);
+
+  FOREACH v_id IN ARRAY v_ids LOOP
+    SELECT
+      COALESCE(SUM(CASE WHEN type='income'  THEN amount ELSE 0 END), 0),
+      COALESCE(SUM(CASE WHEN type='expense' THEN amount ELSE 0 END), 0)
+    INTO v_inc, v_exp
+    FROM transactions WHERE lead_id = v_id;
+
+    UPDATE leads SET
+      total_income  = v_inc,
+      total_expense = v_exp,
+      net_balance   = v_inc - v_exp
+    WHERE id = v_id;
+  END LOOP;
+
+  RETURN NULL;  -- AFTER trigger: the return value is ignored
+END;
+$$ LANGUAGE plpgsql;`);
+
+    // Heal any lead whose cached balance drifted while that bug was live.
+    // Guarded by IS DISTINCT FROM so it only writes genuine mismatches.
+    await pool.query(`
+      UPDATE leads l SET
+        total_income  = COALESCE(t.inc, 0),
+        total_expense = COALESCE(t.exp, 0),
+        net_balance   = COALESCE(t.inc, 0) - COALESCE(t.exp, 0)
+      FROM (
+        SELECT l2.id,
+               SUM(CASE WHEN tr.type='income'  THEN tr.amount ELSE 0 END) inc,
+               SUM(CASE WHEN tr.type='expense' THEN tr.amount ELSE 0 END) exp
+          FROM leads l2 LEFT JOIN transactions tr ON tr.lead_id = l2.id
+         GROUP BY l2.id
+      ) t
+      WHERE t.id = l.id
+        AND (l.total_income  IS DISTINCT FROM COALESCE(t.inc, 0)
+          OR l.total_expense IS DISTINCT FROM COALESCE(t.exp, 0)
+          OR l.net_balance   IS DISTINCT FROM COALESCE(t.inc, 0) - COALESCE(t.exp, 0))`);
     await pool.query(`CREATE TABLE IF NOT EXISTS status_log (
       id SERIAL PRIMARY KEY,
       lead_id TEXT,
