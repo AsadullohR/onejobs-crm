@@ -206,6 +206,10 @@ const saveLead = useCallback(async f => {
         history:f.history,
 
         sofFoyda:f.sofFoyda || null,
+        // saveLead sends an explicit whitelist, so anything omitted here simply
+        // never reaches the server. Without this the drawer could not confirm
+        // (or un-confirm) realised profit at all.
+        profitConfirmed:f.profitConfirmed,
         quality:f.quality || null,
         qualityNote:f.qualityNote || null,
 

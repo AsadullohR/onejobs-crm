@@ -66,8 +66,11 @@ function DashboardKPI({ leads, tasks, user, team, txns, roles }) {
   const totalExp = filteredTxns
     .filter((t) => t.type === "expense")
     .reduce((s, t) => s + t.amount, 0);
+  // Must match Finance / FinanceHub / the topbar: only an explicit Tugagan
+  // click counts. This screen was left on the old "departed status + sof_foyda"
+  // rule, so it reported a different Tasdiqlangan than every other screen.
   const sofF = filteredLeads
-    .filter((l) => DONE.includes(l.status) && l.sofFoyda)
+    .filter((l) => l.profitConfirmed)
     .reduce((s, l) => s + Number(l.sofFoyda || 0), 0);
   // Funnel analytics with conversion %
   const funnelGroups = [
