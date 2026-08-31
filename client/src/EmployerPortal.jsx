@@ -569,7 +569,13 @@ function WorkersTab({ t, T, team, userId }) {
 
   if (loading) return <div style={{ color: T.muted, textAlign: "center", padding: 40, fontSize: 12 }}>{t("loading")}</div>;
 
-  const CAND_STATUS_KEYS_ALL = ["all", ...CAND_STATUS_KEYS];
+  // Candidates share the 28 pipeline stages now, so listing every stage gave 29
+  // filter chips with two dozen permanently reading (0). Show only stages that
+  // actually have someone in them, plus whatever is currently selected.
+  const presentKeys = CAND_STATUS_KEYS.filter(
+    k => workers.some(w => normCandStatus(w.status) === k));
+  const CAND_STATUS_KEYS_ALL = ["all", ...presentKeys,
+    ...(filter !== "all" && !presentKeys.includes(filter) ? [filter] : [])];
   const filtered = filter === "all" ? workers : workers.filter(w => normCandStatus(w.status) === filter);
 
   if (workers.length === 0) return (
