@@ -90,10 +90,13 @@ function LeadsList({leads, tasks, team, user, open, addLead, config, roles, setL
       }).filter(Boolean);
       const result = await leadsAPI.bulkImport(leadsToImport);
       setCsvResult(`✅ Import qilindi: ${result.inserted} yangi, ${result.updated} yangilandi`);
-      const fresh = await leadsAPI.getAll({ limit: 10000 });
-      setLeads(fresh.leads || fresh || []);
+      // Was: getAll({limit:10000}) piped straight into setLeads. Two bugs --
+      // it truncated the list once the table passed 10000 rows, and it stored
+      // RAW snake_case rows, so profitConfirmed/sofFoyda vanished and every
+      // finance total collapsed until the next full load. Reload instead: the
+      // app's own loader pages through everything and maps it properly.
       addNotif && addNotif(`📥 Import: ${result.inserted} yangi, ${result.updated} yangilandi`);
-      setTimeout(() => { setShowImport(false); setCsvTxt(""); setCsvResult(null); }, 2000);
+      setTimeout(() => { window.location.reload(); }, 2000);
     } catch (err) { setCsvResult("❌ Import xatosi: " + err.message); }
   };
 
