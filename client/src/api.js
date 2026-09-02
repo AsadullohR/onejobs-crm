@@ -77,6 +77,23 @@ export const leadsAPI = {
     const q = new URLSearchParams(params).toString();
     return req("GET", `/api/leads${q ? "?" + q : ""}`);
   },
+  // Every finance total is computed client-side from this list, so a partial
+  // fetch silently understates them. A fixed limit had already been outgrown:
+  // the server orders by created_at DESC, so the OLDEST leads fell outside the
+  // window -- exactly the departed clients whose profit is confirmed.
+  // Keep paging until we actually hold every row.
+  getAllPaged: async (limit = 2000) => {
+    const first = await req("GET", `/api/leads?limit=${limit}&page=1`);
+    const leads = first.leads || [];
+    const total = Number(first.total || leads.length);
+    for (let page = 2; leads.length < total; page++) {
+      const next = await req("GET", `/api/leads?limit=${limit}&page=${page}`);
+      const rows = next.leads || [];
+      if (!rows.length) break;
+      leads.push(...rows);
+    }
+    return { ...first, leads, total };
+  },
   get: (id) => req("GET", `/api/leads/${id}`),
   getNew: (since) => req("GET", `/api/leads/new?since=${encodeURIComponent(since)}`),
   statusLog: (id) => req("GET", `/api/leads/${id}/status-log`),

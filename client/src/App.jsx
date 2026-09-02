@@ -386,7 +386,7 @@ const deleteLead = useCallback(async (id) => {
       if(silent) setRefreshing(true); else setAppLoading(true);
       try {
         const [leadsRes, tasksRes, txnsRes, usersRes, notifsRes, extExpsRes, debtsRes, cfgRes, vacanciesRes, candidatesRes] = await Promise.all([
-          leadsAPI.getAll({ limit: 10000 }),
+          leadsAPI.getAllPaged(),
           tasksAPI.getAll(),
           txnAPI.getAll(),
           usersAPI.getAll(),
