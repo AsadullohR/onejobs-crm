@@ -669,7 +669,7 @@ const deleteLead = useCallback(async (id) => {
           {page==="tasks"      && isMobile && <MobileTasks tasks={tasks} setTasks={setTasks} leads={leads} user={user} team={team} roles={roles} addNotif={addNotif}/>}
           {page==="debts"     && <DebtsPage debts={debts} setDebts={setDebts} user={user} leads={leads}/>}
           {page==="docspipe"  && <DocsPipeline leads={leads} tasks={tasks} team={team} user={user} open={openLead} config={config} roles={roles} setLeads={setLeads}/>}
-          {page==="vacancies" && <Vacancies leads={visibleLeads} user={user} team={team} roles={roles} setLeads={setLeads}/>}
+          {page==="vacancies" && <Vacancies leads={visibleLeads} user={user} team={team} roles={roles} setLeads={setLeads} txns={txns} setTxns={setTxns}/>}
           {page==="visa"       && <Visa user={user} roles={roles} config={config} setConfig={setConfig}/>}
           {page==="education"  && <Education user={user} config={config} setConfig={setConfig}/>}
           {page==="attendance" && <Attendance user={user} config={config} setConfig={setConfig}/>}

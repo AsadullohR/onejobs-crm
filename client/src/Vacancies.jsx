@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useT } from "./theme.js";
 import { useLang } from "./i18n.jsx";
-import { inp, lab, I, Modal, SearchSelect, Av, fmtMs } from "./helpers.jsx";
-import { vacanciesAPI, candidatesAPI, leadsAPI } from "./api.js";
+import { inp, lab, I, Modal, SearchSelect, Av, fmtMs, MoneyInput } from "./helpers.jsx";
+import { vacanciesAPI, candidatesAPI, leadsAPI, txnAPI } from "./api.js";
 import { CandidateProfile, normCandStatus } from "./EmployerPortal.jsx";
 import { STAGES, isBackwardMove, stagesLost } from "./constants.js";
 // ─── STATUS CONFIG ────────────────────────────────────────────────────────────
@@ -305,6 +305,8 @@ function VacancyDetail({
   onDelete,
   T,
   setLeads,
+  txns = [],
+  setTxns,
 }) {
   const { t } = useLang();
   const [tab, setTab] = useState("info");
@@ -327,6 +329,88 @@ function VacancyDetail({
   const [bulkBusy, setBulkBusy] = useState(false);
   // Client money is staff-only; the server withholds it from everyone else.
   const canSeeMoney = ["admin", "manager", "finance_manager"].includes(user.role);
+  // Money entry straight from the vacancy: same fields as the client finance
+  // form, so a payment recorded here is indistinguishable from one recorded
+  // on the client's own card. `finMode` is "one" or "bulk".
+  const [finModal, setFinModal] = useState(null);   // {mode, cand} | null
+  const [finBusy, setFinBusy] = useState(false);
+  const [finForm, setFinForm] = useState({
+    type: "income", amount: "", cat: "", desc: "",
+    date: new Date().toISOString().slice(0, 10),
+    paymentMethod: "cash", source: "balance",
+  });
+  const openFin = (mode, cand = null) => {
+    setFinForm({
+      type: "income", amount: "", cat: "", desc: "",
+      date: new Date().toISOString().slice(0, 10),
+      paymentMethod: "cash", source: "balance",
+    });
+    setFinModal({ mode, cand });
+  };
+  const INC_CATS = ["XBA To'lov", "1-Qism", "2-Qism", "3-Qism", "Bonus", "Boshqa"];
+  const EXP_CATS = ["Elchixona", "VFS", "Sug'urta", "Bilet", "Hamkorga", "Boshqa"];
+
+  const saveFin = async () => {
+    const amt = Number(finForm.amount);
+    if (!amt || amt <= 0) { alert("Summani kiriting (0 dan katta)."); return; }
+    const targets = finModal.mode === "one"
+      ? [finModal.cand]
+      : candidates.filter(c => candSel.has(c.id));
+    const withLead = targets.filter(c => c && c.leadId);
+    if (!withLead.length) {
+      alert("Bu nomzod mijoz kartasiga bog'lanmagan — avval mijozni biriktiring.");
+      return;
+    }
+    setFinBusy(true);
+    const made = [];
+    let fail = 0;
+    for (const c of withLead) {
+      try {
+        const saved = await txnAPI.create({
+          leadId: c.leadId, date: finForm.date, type: finForm.type,
+          category: finForm.cat || "", description: finForm.desc || "",
+          amount: amt, paymentMethod: finForm.paymentMethod,
+          source: finForm.source || "balance",
+        });
+        made.push({
+          id: String(saved.id), leadId: saved.lead_id, type: saved.type,
+          cat: saved.category || "", desc: saved.description || "",
+          amount: Number(saved.amount),
+          date: (saved.date || finForm.date).slice(0, 10),
+          by: saved.created_by,
+          paymentMethod: saved.payment_method || finForm.paymentMethod,
+          source: saved.source || finForm.source || "balance",
+        });
+      } catch (e) { fail++; }
+    }
+    // Keep the app's shared ledger in step so Finance totals move immediately.
+    if (made.length) setTxns && setTxns(p => [...p, ...made]);
+    // Cached client balances changed server-side; mirror them locally too.
+    if (made.length && setLeads) {
+      const delta = {};
+      made.forEach(m => {
+        delta[m.leadId] = (delta[m.leadId] || 0) + (m.type === "income" ? m.amount : -m.amount);
+      });
+      setLeads(prev => prev.map(l => delta[l.id] === undefined ? l : {
+        ...l,
+        totalIncome: Number(l.totalIncome || 0) + made
+          .filter(m => m.leadId === l.id && m.type === "income")
+          .reduce((s, m) => s + m.amount, 0),
+        totalExpense: Number(l.totalExpense || 0) + made
+          .filter(m => m.leadId === l.id && m.type !== "income")
+          .reduce((s, m) => s + m.amount, 0),
+        netBalance: Number(l.netBalance || 0) + delta[l.id],
+      }));
+    }
+    setFinBusy(false);
+    setFinModal(null);
+    setCandSel(new Set());
+    const skipped = targets.length - withLead.length;
+    alert(`${made.length}/${targets.length} nomzodga ${finForm.type === "income" ? "kirim" : "chiqim"} qo'shildi`
+      + (fail ? `  (${fail} ta xato)` : "")
+      + (skipped ? `\n${skipped} tasi mijozga bog'lanmagan — o'tkazib yuborildi.` : ""));
+  };
+
   const toggleCand = (id) => setCandSel(prev => {
     const n = new Set(prev);
     if (n.has(id)) n.delete(id); else n.add(id);
@@ -458,6 +542,107 @@ function VacancyDetail({
     onSave(form);
     setEditing(false);
   };
+
+  const finTargets = finModal
+    ? (finModal.mode === "one" ? [finModal.cand] : candidates.filter(c => candSel.has(c.id)))
+    : [];
+  const finNoLead = finTargets.filter(c => c && !c.leadId).length;
+
+  const finModalEl = finModal && (
+    <Modal onClose={() => setFinModal(null)} width={460}>
+      <div style={{ padding: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 3 }}>
+          {finForm.type === "income" ? "Kirim qo'shish" : "Chiqim qo'shish"}
+        </div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 14 }}>
+          {finModal.mode === "one"
+            ? (finModal.cand?.leadName || finModal.cand?.name)
+            : `${finTargets.length} ta nomzodga birdaniga`}
+          {finNoLead > 0 && (
+            <span style={{ color: T.red }}> — {finNoLead} tasi mijozga bog'lanmagan</span>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+          {[["income", "Kirim"], ["expense", "Chiqim"]].map(([k, l]) => (
+            <button key={k} onClick={() => setFinForm(p => ({ ...p, type: k, cat: "" }))}
+              style={{ flex: 1, padding: "8px", borderRadius: 8, fontFamily: "inherit", cursor: "pointer",
+                fontSize: 12, fontWeight: 700,
+                border: `1px solid ${finForm.type === k ? (k === "income" ? "#16a34a" : T.red) : T.border}`,
+                background: finForm.type === k ? (k === "income" ? "#16a34a18" : `${T.red}18`) : "transparent",
+                color: finForm.type === k ? (k === "income" ? "#16a34a" : T.red) : T.muted }}>{l}</button>
+          ))}
+        </div>
+
+        <label style={labS}>Summa (so'm) *</label>
+        <MoneyInput value={finForm.amount} onChange={v => setFinForm(p => ({ ...p, amount: v }))}
+          style={{ ...inpS, textAlign: "right", fontSize: 16, fontWeight: 800 }} placeholder="0" />
+
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={labS}>Turi</label>
+            <select value={finForm.cat} onChange={e => setFinForm(p => ({ ...p, cat: e.target.value }))} style={inpS}>
+              <option value="">— tanlang —</option>
+              {(finForm.type === "income" ? INC_CATS : EXP_CATS).map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labS}>Sana</label>
+            <input type="date" value={finForm.date}
+              onChange={e => setFinForm(p => ({ ...p, date: e.target.value }))} style={inpS} />
+          </div>
+        </div>
+
+        <label style={{ ...labS, marginTop: 10 }}>Izoh</label>
+        <input value={finForm.desc} onChange={e => setFinForm(p => ({ ...p, desc: e.target.value }))}
+          style={inpS} placeholder="ixtiyoriy" />
+
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={labS}>To'lov usuli</label>
+            <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+              {[["cash", "Naqd"], ["bank", "Bank"]].map(([k, l]) => (
+                <button key={k} onClick={() => setFinForm(p => ({ ...p, paymentMethod: k }))}
+                  style={{ flex: 1, padding: "7px", borderRadius: 7, fontFamily: "inherit", cursor: "pointer",
+                    fontSize: 11, fontWeight: 600,
+                    border: `1px solid ${finForm.paymentMethod === k ? T.accent : T.border}`,
+                    background: finForm.paymentMethod === k ? `${T.accent}18` : "transparent",
+                    color: finForm.paymentMethod === k ? T.accent : T.muted }}>{l}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={labS}>{finForm.type === "income" ? "Qaysi hisobga?" : "Qaysi hisobdan?"}</label>
+            <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+              {[["balance", "Balans"], ["confirmed", "Tasdiq."]].map(([k, l]) => (
+                <button key={k} onClick={() => setFinForm(p => ({ ...p, source: k }))}
+                  style={{ flex: 1, padding: "7px", borderRadius: 7, fontFamily: "inherit", cursor: "pointer",
+                    fontSize: 11, fontWeight: 600,
+                    border: `1px solid ${finForm.source === k ? T.accent : T.border}`,
+                    background: finForm.source === k ? `${T.accent}18` : "transparent",
+                    color: finForm.source === k ? T.accent : T.muted }}>{l}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+          <button onClick={() => setFinModal(null)}
+            style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.border}`,
+              background: "transparent", color: T.muted, cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>
+            Bekor
+          </button>
+          <button onClick={saveFin} disabled={finBusy || !finForm.amount}
+            style={{ flex: 2, padding: "10px", borderRadius: 8, border: "none", fontFamily: "inherit",
+              background: finBusy || !finForm.amount ? T.border : T.accent,
+              color: finBusy || !finForm.amount ? T.muted : "#fff", fontWeight: 700, fontSize: 12,
+              cursor: finBusy || !finForm.amount ? "not-allowed" : "pointer" }}>
+            {finBusy ? "Saqlanmoqda…" : "Saqlash"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
 
   const leadOpts = leads.map((l) => ({
     value: l.id,
@@ -1096,6 +1281,12 @@ function VacancyDetail({
                         cursor: bulkStatus && !bulkBusy ? "pointer" : "not-allowed" }}>
                       {bulkBusy ? "…" : "O'zgartirish"}
                     </button>
+                    <button onClick={() => openFin("bulk")}
+                      style={{ padding: "6px 12px", borderRadius: 7, border: `1px solid #16a34a`,
+                        background: "#16a34a18", color: "#16a34a", fontWeight: 700, fontSize: 11,
+                        cursor: "pointer", fontFamily: "inherit" }}>
+                      Kirim / Chiqim
+                    </button>
                     <button onClick={() => setCandSel(new Set())}
                       style={{ padding: "6px 10px", borderRadius: 7, border: `1px solid ${T.border}`,
                         background: "transparent", color: T.muted, fontSize: 11,
@@ -1303,10 +1494,21 @@ function VacancyDetail({
                                   const exp = c.totalExpense != null ? c.totalExpense : (lead && lead.totalExpense) || 0;
                                   const bal = c.netBalance != null ? c.netBalance : inc - exp;
                                   return (
-                                    <span title={"Kirim " + fmtMs(inc) + " / Chiqim " + fmtMs(exp)}
-                                      style={{ fontWeight: 700, color: bal > 0 ? "#16a34a" : bal < 0 ? T.red : T.muted }}>
-                                      {fmtMs(bal)}
-                                      {c.profitConfirmed && <span title="Tasdiqlangan foyda" style={{ marginLeft: 4 }}>*</span>}
+                                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                      <span title={"Kirim " + fmtMs(inc) + " / Chiqim " + fmtMs(exp)}
+                                        style={{ fontWeight: 700, color: bal > 0 ? "#16a34a" : bal < 0 ? T.red : T.muted }}>
+                                        {fmtMs(bal)}
+                                        {c.profitConfirmed && <span title="Tasdiqlangan foyda" style={{ marginLeft: 4 }}>*</span>}
+                                      </span>
+                                      {canEdit && (
+                                        <button onClick={(e) => { e.stopPropagation(); openFin("one", c); }}
+                                          title="Kirim / chiqim qo'shish"
+                                          style={{ border: `1px solid ${T.border}`, background: "transparent",
+                                            color: T.muted, borderRadius: 6, cursor: "pointer",
+                                            fontSize: 11, lineHeight: 1, padding: "2px 6px", fontFamily: "inherit" }}>
+                                          +
+                                        </button>
+                                      )}
                                     </span>
                                   );
                                 })()}
@@ -1357,6 +1559,7 @@ function VacancyDetail({
       </div>
 
       {/* Candidate Profile Modal (editable for internal staff) */}
+      {finModalEl}
       {selCandProfile && (
         <CandidateProfile
           candidate={selCandProfile}
@@ -1649,7 +1852,7 @@ function PartnerVacanciesView({ user, leads, vacancies, T }) {
 }
 
 // ─── VACANCIES PAGE ───────────────────────────────────────────────────────────
-function Vacancies({ leads, user, team, roles, setLeads }) {
+function Vacancies({ leads, user, team, roles, setLeads, txns = [], setTxns }) {
   const T = useT();
   const perm = roles[user.role] || {};
   const canEdit = perm.canEdit || perm.canCfg || perm.canEditVacancy;
@@ -1670,7 +1873,9 @@ function Vacancies({ leads, user, team, roles, setLeads }) {
 
   // Filters
   const [search, setSearch] = useState("");
-  const [fStatus, setFStatus] = useState("all");
+  // Active is what the team works from day to day; "All" buried it behind
+  // filled and inactive postings.
+  const [fStatus, setFStatus] = useState("active");
   const [fCountry, setFCountry] = useState("");
   const [view, setView] = useState("grid"); // grid | list
 
@@ -2216,6 +2421,8 @@ function Vacancies({ leads, user, team, roles, setLeads }) {
           roles={roles}
           T={T}
           setLeads={setLeads}
+          txns={txns}
+          setTxns={setTxns}
           onClose={() => setSelected(null)}
           onSave={saveVacancy}
           onDelete={deleteVacancy}
