@@ -116,8 +116,16 @@ function StatCard({icon,label,value,sub,color}) {
     {sub&&<div style={{fontSize:10,color:T.muted,marginTop:2}}>{sub}</div>}
   </div>;
 }
-function Modal({children,onClose,width=480}) {
+function Modal({children,onClose,width=480,resizable=false,storageKey}) {
   const T=useT();
+  // A resized width is remembered per storageKey, so a wide table stays wide
+  // the next time it is opened instead of snapping back every visit.
+  const lsKey = storageKey ? `oj_modal_w_${storageKey}` : null;
+  const [w,setW]=useState(()=>{
+    if(!resizable||!lsKey) return width;
+    try{ const v=Number(localStorage.getItem(lsKey)); return v>=360?v:width; }catch{ return width; }
+  });
+  const dragRef=useRef(null);
   // Close on Escape key
   useEffect(()=>{
     if(!onClose) return;
@@ -125,9 +133,43 @@ function Modal({children,onClose,width=480}) {
     window.addEventListener("keydown",h);
     return ()=>window.removeEventListener("keydown",h);
   },[onClose]);
+  // Drag the right edge. Listeners live on window so the pointer can leave the
+  // handle mid-drag without the resize sticking.
+  useEffect(()=>{
+    if(!resizable) return;
+    const move=e=>{
+      const d=dragRef.current; if(!d) return;
+      // Doubled: the dialog is centred, so it grows from both sides at once.
+      const next=Math.max(360,Math.min(window.innerWidth-32,d.w+(e.clientX-d.x)*2));
+      setW(next);
+    };
+    const up=()=>{
+      if(!dragRef.current) return;
+      dragRef.current=null;
+      document.body.style.userSelect="";
+      document.body.style.cursor="";
+      if(lsKey){ try{ localStorage.setItem(lsKey,String(w)); }catch{} }
+    };
+    window.addEventListener("mousemove",move);
+    window.addEventListener("mouseup",up);
+    return ()=>{ window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
+  },[resizable,w,lsKey]);
+  const startDrag=e=>{
+    e.preventDefault(); e.stopPropagation();
+    dragRef.current={x:e.clientX,w};
+    document.body.style.userSelect="none";
+    document.body.style.cursor="ew-resize";
+  };
   // Backdrop click closes; clicks inside the content are ignored via stopPropagation.
   return <div onClick={()=>onClose&&onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:16}}>
-    <div onClick={e=>e.stopPropagation()} style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,width:"100%",maxWidth:width,maxHeight:"92vh",overflowY:"auto",boxShadow:T.shadow}}>{children}</div>
+    <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:T.card,border:`1px solid ${T.border}`,borderRadius:14,width:"100%",maxWidth:w,maxHeight:"92vh",overflowY:"auto",boxShadow:T.shadow}}>
+      {children}
+      {resizable&&<div onMouseDown={startDrag} title="Kengaytirish uchun torting"
+        style={{position:"absolute",top:0,right:0,width:12,height:"100%",cursor:"ew-resize",
+          display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{width:3,height:34,borderRadius:2,background:T.border}}/>
+      </div>}
+    </div>
   </div>;
 }
 // Searchable select for leads/team

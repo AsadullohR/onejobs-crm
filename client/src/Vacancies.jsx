@@ -851,7 +851,7 @@ function VacancyDetail({
   );
 
   return (
-    <Modal onClose={onClose} width={820}>
+    <Modal onClose={onClose} width={1100} resizable storageKey="vacancy">
       <div style={{ background: T.card, borderRadius: 12, overflow: "hidden" }}>
         {/* Tab bar */}
         <div
@@ -1437,6 +1437,9 @@ function VacancyDetail({
                   </div>
                   <div style={{ fontSize: 11, color: T.muted }}>
                     Jami {candLoading ? "…" : candidates.length} ta nomzod
+                    <span style={{ marginLeft: 8, opacity: 0.75 }}>
+                      · Shift + g'ildirak = yon tomonga · chetidan torting = kengaytirish
+                    </span>
                   </div>
                 </div>
                 {/* Group status change - the project-first workflow moves people
@@ -1520,15 +1523,27 @@ function VacancyDetail({
 
               {candidates.length > 0 && (
                 <div
+                  // overflow was "hidden", so the extra columns were simply
+                  // clipped with no way to reach them. Scroll sideways instead,
+                  // and let shift+wheel drive it (a vertical wheel is what most
+                  // mice have).
+                  onWheel={(e) => {
+                    if (!e.shiftKey) return;
+                    const d = e.deltaY || e.deltaX;
+                    if (!d) return;
+                    e.currentTarget.scrollLeft += d;
+                  }}
                   style={{
                     border: `1px solid ${T.border}`,
                     borderRadius: 10,
-                    overflow: "hidden",
+                    overflowX: "auto",
+                    overflowY: "hidden",
                   }}
                 >
                   <table
                     style={{
                       width: "100%",
+                      minWidth: 940,
                       borderCollapse: "collapse",
                       fontSize: 11,
                     }}
