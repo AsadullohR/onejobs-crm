@@ -145,6 +145,62 @@ const isBackwardMove = (from, to) => {
 const stagesLost = (from, to) =>
   isBackwardMove(from, to) ? progressIndex(from) - progressIndex(to) : 0;
 
+// --- CANDIDATE DOCUMENT TRACKS ---------------------------------------------
+// Each track is one document moving through the same physical journey.
+// Stored on the candidate as { trackKey: { stepKey: "YYYY-MM-DD" } } -- a
+// date rather than a boolean, because "when did the diploma reach them" is
+// the question people actually ask. Steps are data, so adding one later
+// never needs a migration and never breaks a candidate mid-process.
+const DOC_TRACKS = [
+  {
+    key: "shartnoma", label: "Ish shartnomasi", icon: "📄",
+    steps: [
+      { key: "keldi", label: "Keldi" },
+      { key: "imzolandi", label: "Imzolandi" },
+      { key: "skaner", label: "Skaner tashlandi" },
+      { key: "jonatildi", label: "Jo'natildi" },
+      { key: "yetib_bordi", label: "Yetib bordi" },
+    ],
+  },
+  {
+    key: "diplom", label: "Diplom", icon: "🎓",
+    steps: [
+      { key: "qabul", label: "Qabul qilindi" },
+      { key: "apostilga", label: "Tarjima/apostilga topshirildi" },
+      { key: "apostil_tayyor", label: "Apostil tayyor" },
+      { key: "jonatildi", label: "Jo'natildi" },
+      { key: "yetib_bordi", label: "Yetib bordi" },
+    ],
+  },
+  {
+    key: "prava", label: "Prava", icon: "🚗",
+    steps: [
+      { key: "qabul", label: "Qabul qilindi" },
+      { key: "apostilga", label: "Tarjima/apostilga topshirildi" },
+      { key: "apostil_tayyor", label: "Apostil tayyor" },
+      { key: "jonatildi", label: "Jo'natildi" },
+      { key: "yetib_bordi", label: "Yetib bordi" },
+    ],
+  },
+  {
+    key: "sudlanmaganlik", label: "Sudlanmaganlik", icon: "🛡",
+    steps: [
+      { key: "qabul", label: "Qabul qilindi" },
+      { key: "apostilga", label: "Tarjima/apostilga topshirildi" },
+      { key: "apostil_tayyor", label: "Apostil tayyor" },
+      { key: "jonatildi", label: "Jo'natildi" },
+      { key: "yetib_bordi", label: "Yetib bordi" },
+    ],
+  },
+];
+
+// How many steps of a track are done, and whether it is finished.
+const trackProgress = (checklist, track) => {
+  const t = (checklist || {})[track.key] || {};
+  const done = track.steps.filter(st => t[st.key]).length;
+  return { done, total: track.steps.length, complete: done === track.steps.length };
+};
+
 // Income booked straight into realised profit instead of only lifting Balans.
 // Mirrors isConfirmedSpend. Works for both ledgers (transactions + external).
 const isConfirmedIncome = (r) => r.type === "income" && r.source === "confirmed";
@@ -206,5 +262,6 @@ RAW_LEADS, FIN_MAP,
 SALARY_CATS, isPayrollTxn, isConfirmedSpend, isConfirmedIncome,
 confirmedLeadProfit, confirmedIncome, confirmedSpend,
 calcTasdiqlangan, calcSofFoyda, confirmSnapshotProfit,
-PROGRESS_STAGES, isBackwardMove, stagesLost
+PROGRESS_STAGES, isBackwardMove, stagesLost,
+DOC_TRACKS, trackProgress
 };

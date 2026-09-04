@@ -4,7 +4,7 @@ import { useLang } from "./i18n.jsx";
 import { inp, lab, I, Modal, SearchSelect, Av, fmtMs, MoneyInput } from "./helpers.jsx";
 import { vacanciesAPI, candidatesAPI, leadsAPI, txnAPI } from "./api.js";
 import { CandidateProfile, normCandStatus } from "./EmployerPortal.jsx";
-import { STAGES, isBackwardMove, stagesLost } from "./constants.js";
+import { STAGES, isBackwardMove, stagesLost, DOC_TRACKS, trackProgress } from "./constants.js";
 // ─── STATUS CONFIG ────────────────────────────────────────────────────────────
 const V_STATUS = {
   active: { label: "Active", c: "#16a34a", bg: "#dcfce7" },
@@ -332,6 +332,9 @@ function VacancyDetail({
   // Money entry straight from the vacancy: same fields as the client finance
   // form, so a payment recorded here is indistinguishable from one recorded
   // on the client's own card. `finMode` is "one" or "bulk".
+  const [docCand, setDocCand] = useState(null);     // candidate whose documents are open
+  const [docBusy, setDocBusy] = useState(false);
+  const [expModal, setExpModal] = useState(false);
   const [finModal, setFinModal] = useState(null);   // {mode, cand} | null
   const [finBusy, setFinBusy] = useState(false);
   const [finForm, setFinForm] = useState({
@@ -347,6 +350,27 @@ function VacancyDetail({
     });
     setFinModal({ mode, cand });
   };
+  // Toggling a step stores today's date (or clears it). Saved immediately so
+  // two people working the same vacancy don't overwrite each other's ticks.
+  const toggleStep = async (cand, trackKey, stepKey) => {
+    const cur = cand.checklist || {};
+    const track = { ...(cur[trackKey] || {}) };
+    if (track[stepKey]) delete track[stepKey];
+    else track[stepKey] = new Date().toISOString().slice(0, 10);
+    const next = { ...cur, [trackKey]: track };
+    setDocBusy(true);
+    setCandidates(p => p.map(c => c.id === cand.id ? { ...c, checklist: next } : c));
+    setDocCand(p => p && p.id === cand.id ? { ...p, checklist: next } : p);
+    try {
+      await candidatesAPI.update(cand.id, { checklist: next });
+    } catch (e) {
+      alert("Saqlanmadi: " + e.message);
+      setCandidates(p => p.map(c => c.id === cand.id ? { ...c, checklist: cur } : c));
+      setDocCand(p => p && p.id === cand.id ? { ...p, checklist: cur } : p);
+    }
+    setDocBusy(false);
+  };
+
   const INC_CATS = ["XBA To'lov", "1-Qism", "2-Qism", "3-Qism", "Bonus", "Boshqa"];
   const EXP_CATS = ["Elchixona", "VFS", "Sug'urta", "Bilet", "Hamkorga", "Boshqa"];
 
@@ -543,6 +567,66 @@ function VacancyDetail({
     setEditing(false);
   };
 
+  // Every exportable column in one place: the picker, the header row and the
+  // cell values all read from this, so they cannot drift apart.
+  const EXPORT_COLS = [
+    { key: "name",     label: "Ism",              get: c => c.leadName || c.name || "" },
+    { key: "phone",    label: "Telefon",          get: c => c.leadPhone || c.phone || "" },
+    { key: "status",   label: "Holat",            get: c => c.status || "" },
+    { key: "vacancy",  label: "Vakansiya",        get: () => v.title || "" },
+    { key: "country",  label: "Davlat",           get: c => c.leadCountry || "" },
+    { key: "position", label: "Lavozim",          get: c => c.leadPosition || "" },
+    { key: "sector",   label: "Soha",             get: c => c.leadSector || "" },
+    { key: "gender",   label: "Jinsi",            get: c => c.leadGender || "" },
+    { key: "source",   label: "Manba",            get: c => c.leadSource || "" },
+    { key: "addedBy",  label: "Biriktirgan",      get: c => c.addedByName || "" },
+    { key: "appliedAt",label: "Qo'shilgan sana",  get: c => String(c.appliedAt || "").slice(0, 10) },
+    { key: "leadId",   label: "Mijoz ID",         get: c => c.leadId || "" },
+    { key: "note",     label: "Izoh",             get: c => c.note || "" },
+    ...(canSeeMoney ? [
+      { key: "income",  label: "Kirim",  get: c => c.totalIncome ?? "" },
+      { key: "expense", label: "Chiqim", get: c => c.totalExpense ?? "" },
+      { key: "balance", label: "Balans", get: c => c.netBalance ?? "" },
+    ] : []),
+    // One column per document step, holding the date it was completed.
+    ...DOC_TRACKS.flatMap(tr => tr.steps.map(st => ({
+      key: `${tr.key}.${st.key}`,
+      label: `${tr.label}: ${st.label}`,
+      get: c => ((c.checklist || {})[tr.key] || {})[st.key] || "",
+    }))),
+  ];
+  const [expCols, setExpCols] = useState(
+    () => new Set(["name", "phone", "status", "country", "position"]));
+  const toggleExpCol = k => setExpCols(prev => {
+    const n = new Set(prev);
+    if (n.has(k)) n.delete(k); else n.add(k);
+    return n;
+  });
+
+  const runExport = () => {
+    const cols = EXPORT_COLS.filter(c => expCols.has(c.key));
+    if (!cols.length) { alert("Kamida bitta ustun tanlang."); return; }
+    const rows = candSel.size ? candidates.filter(c => candSel.has(c.id)) : candidates;
+    const esc = val => {
+      const str = String(val ?? "");
+      return /[",;\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+    };
+    const lines = [cols.map(c => esc(c.label)).join(";")];
+    rows.forEach(c => lines.push(cols.map(col => esc(col.get(c))).join(";")));
+    // BOM so Excel reads UTF-8; semicolons so it splits columns in locales
+    // where the comma is the decimal separator.
+    const blob = new Blob(["\ufeff" + lines.join("\r\n")],
+      { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(v.title || "vakansiya").replace(/[^\w\u0400-\u04FF -]/g, "").trim() || "vakansiya"}-nomzodlar.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    setExpModal(false);
+  };
+
   const finTargets = finModal
     ? (finModal.mode === "one" ? [finModal.cand] : candidates.filter(c => candSel.has(c.id)))
     : [];
@@ -639,6 +723,102 @@ function VacancyDetail({
               cursor: finBusy || !finForm.amount ? "not-allowed" : "pointer" }}>
             {finBusy ? "Saqlanmoqda…" : "Saqlash"}
           </button>
+        </div>
+      </div>
+    </Modal>
+  );
+
+  const docModalEl = docCand && (
+    <Modal onClose={() => setDocCand(null)} width={560}>
+      <div style={{ padding: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>
+          {docCand.leadName || docCand.name}
+        </div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 16 }}>
+          Hujjatlar holati — bosib belgilang, sana avtomatik yoziladi
+        </div>
+        {DOC_TRACKS.map(tr => {
+          const pr = trackProgress(docCand.checklist, tr);
+          const done = (docCand.checklist || {})[tr.key] || {};
+          return (
+            <div key={tr.key} style={{ marginBottom: 14, border: `1px solid ${T.border}`,
+              borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "8px 12px", background: T.card2 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.text }}>
+                  {tr.icon} {tr.label}
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 700,
+                  color: pr.complete ? "#16a34a" : T.muted }}>
+                  {pr.done}/{pr.total}
+                </div>
+              </div>
+              <div style={{ padding: "6px 12px 10px" }}>
+                {tr.steps.map(st => {
+                  const at = done[st.key];
+                  return (
+                    <label key={st.key}
+                      style={{ display: "flex", alignItems: "center", gap: 9, padding: "5px 0",
+                        cursor: docBusy ? "wait" : "pointer" }}>
+                      <input type="checkbox" checked={!!at} disabled={docBusy}
+                        onChange={() => toggleStep(docCand, tr.key, st.key)}
+                        style={{ cursor: "inherit" }} />
+                      <span style={{ fontSize: 12, color: at ? T.text : T.muted,
+                        fontWeight: at ? 600 : 400 }}>{st.label}</span>
+                      {at && <span style={{ marginLeft: "auto", fontSize: 10, color: T.muted }}>{at}</span>}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+
+  const expModalEl = expModal && (
+    <Modal onClose={() => setExpModal(false)} width={560}>
+      <div style={{ padding: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: T.text }}>Excelga yuklash</div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 14 }}>
+          {candSel.size
+            ? `${candSel.size} ta tanlangan nomzod`
+            : `Barcha nomzodlar (${candidates.length} ta)`} — ustunlarni tanlang
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+          <button onClick={() => setExpCols(new Set(EXPORT_COLS.map(c => c.key)))}
+            style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, cursor: "pointer",
+              border: `1px solid ${T.border}`, background: "transparent", color: T.muted,
+              fontFamily: "inherit" }}>Hammasi</button>
+          <button onClick={() => setExpCols(new Set())}
+            style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, cursor: "pointer",
+              border: `1px solid ${T.border}`, background: "transparent", color: T.muted,
+              fontFamily: "inherit" }}>Tozalash</button>
+          <span style={{ marginLeft: "auto", fontSize: 11, color: T.muted, alignSelf: "center" }}>
+            {expCols.size} ta ustun
+          </span>
+        </div>
+        <div style={{ maxHeight: 320, overflowY: "auto", border: `1px solid ${T.border}`,
+          borderRadius: 8, padding: 10 }}>
+          {EXPORT_COLS.map(col => (
+            <label key={col.key}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer" }}>
+              <input type="checkbox" checked={expCols.has(col.key)}
+                onChange={() => toggleExpCol(col.key)} style={{ cursor: "pointer" }} />
+              <span style={{ fontSize: 12, color: T.text }}>{col.label}</span>
+            </label>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <button onClick={() => setExpModal(false)}
+            style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.border}`,
+              background: "transparent", color: T.muted, cursor: "pointer",
+              fontFamily: "inherit", fontSize: 12 }}>Bekor</button>
+          <button onClick={runExport}
+            style={{ flex: 2, padding: "10px", borderRadius: 8, border: "none", background: T.accent,
+              color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer",
+              fontFamily: "inherit" }}>Yuklab olish</button>
         </div>
       </div>
     </Modal>
@@ -1296,6 +1476,16 @@ function VacancyDetail({
                   </div>
                 )}
                 <button
+                  onClick={() => setExpModal(true)}
+                  title="Excel (CSV) yuklab olish"
+                  style={{ display: "flex", alignItems: "center", gap: 5,
+                    padding: "7px 13px", borderRadius: 7, marginRight: 8,
+                    border: `1px solid ${T.border}`, background: "transparent",
+                    color: T.text, cursor: "pointer", fontFamily: "inherit",
+                    fontSize: 12, fontWeight: 600 }}>
+                  Excel
+                </button>
+                <button
                   onClick={() => setCandModal(true)}
                   style={{
                     display: "flex",
@@ -1359,6 +1549,7 @@ function VacancyDetail({
                           "Working position",
                           "Added by agent",
                           "Status",
+                          "Hujjatlar",
                           ...(canSeeMoney ? ["Balans"] : []),
                           "Actions",
                         ].map((h) => (
@@ -1487,6 +1678,26 @@ function VacancyDetail({
                                 </span>
                               )}
                             </td>
+                            <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                              <button onClick={(e) => { e.stopPropagation(); setDocCand(c); }}
+                                title="Hujjatlarni ochish"
+                                style={{ display: "inline-flex", gap: 5, alignItems: "center",
+                                  border: `1px solid ${T.border}`, background: "transparent",
+                                  borderRadius: 7, padding: "3px 7px", cursor: "pointer",
+                                  fontFamily: "inherit", fontSize: 11 }}>
+                                {DOC_TRACKS.map(tr => {
+                                  const pr = trackProgress(c.checklist, tr);
+                                  return (
+                                    <span key={tr.key} title={`${tr.label}: ${pr.done}/${pr.total}`}
+                                      style={{ opacity: pr.done ? 1 : 0.25,
+                                        color: pr.complete ? "#16a34a" : T.text,
+                                        fontWeight: pr.complete ? 800 : 400 }}>
+                                      {tr.icon}{pr.done ? pr.done : ""}
+                                    </span>
+                                  );
+                                })}
+                              </button>
+                            </td>
                             {canSeeMoney && (
                               <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                                 {!c.leadId ? <span style={{ color: T.muted }}>-</span> : (() => {
@@ -1560,6 +1771,8 @@ function VacancyDetail({
 
       {/* Candidate Profile Modal (editable for internal staff) */}
       {finModalEl}
+      {docModalEl}
+      {expModalEl}
       {selCandProfile && (
         <CandidateProfile
           candidate={selCandProfile}

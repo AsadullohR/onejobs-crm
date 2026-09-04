@@ -2058,7 +2058,8 @@ app.get("/api/candidates/all", auth, async (req, res) => {
     res.json(rows.map(r => ({
       id: r.id, vacancyId: r.vacancy_id, leadId: r.lead_id, vacancyTitle: r.vacancy_title,
       vacancy_id: r.vacancy_id, lead_id: r.lead_id,
-      name: r.name, phone: r.phone, status: r.status, note: r.note, created_at: r.created_at,
+      name: r.name, phone: r.phone, status: r.status, note: r.note,
+      checklist: r.checklist || {}, created_at: r.created_at,
     })));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -2320,6 +2321,7 @@ async function syncCandidatesFromLead(leadId, status) {
 
 app.put("/api/candidates/:id", auth, async (req, res) => {
   let { name, phone, status, note } = req.body;
+  const checklist = req.body.checklist === undefined ? null : JSON.stringify(req.body.checklist);
   let vacancyId = req.body.vacancy_id || req.body.vacancyId || null;
   try {
     if (req.user.role === "partner") return res.status(403).json({ error: "Forbidden" });
@@ -2340,9 +2342,10 @@ app.put("/api/candidates/:id", auth, async (req, res) => {
         name=COALESCE($1,name), phone=COALESCE($2,phone),
         status=COALESCE($3,status), note=COALESCE($4,note),
         vacancy_id=COALESCE($6,vacancy_id),
+        checklist=COALESCE($7::jsonb, checklist),
         updated_at=NOW()
        WHERE id=$5 RETURNING *`,
-      [name || null, phone || null, status || null, note || null, req.params.id, vacancyId],
+      [name || null, phone || null, status || null, note || null, req.params.id, vacancyId, checklist],
     );
     if (!rows[0]) return res.status(404).json({ error: "Not found" });
     const cand = rows[0];
@@ -2892,6 +2895,11 @@ app.listen(PORT, async () => {
       await pool.query(`UPDATE candidates SET status=$1 WHERE status=$2`, [stage, legacy]);
     }
     await pool.query(`ALTER TABLE candidates ALTER COLUMN status SET DEFAULT 'Yangi'`);
+    // Per-candidate document tracking (contract / diploma / licence / police
+    // clearance), each track a set of steps -> date. Kept as JSONB because the
+    // step list is presentation, not schema: adding a step must not need a
+    // migration, and a candidate mid-process must not break when one is added.
+    await pool.query(`ALTER TABLE candidates ADD COLUMN IF NOT EXISTS checklist JSONB DEFAULT '{}'::jsonb`);
 
     // Recalculate BOTH clients when a transaction moves between them. The
     // original trigger used COALESCE(NEW.lead_id, OLD.lead_id), so a
