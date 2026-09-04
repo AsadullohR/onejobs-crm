@@ -192,6 +192,13 @@ const DOC_TRACKS = [
       { key: "yetib_bordi", label: "Yetib bordi" },
     ],
   },
+  {
+    key: "zagran", label: "Zagran", icon: "🛂",
+    steps: [
+      { key: "olindi", label: "Olindi" },
+      { key: "jonatildi", label: "Jo'natildi" },
+    ],
+  },
 ];
 
 // How many steps of a track are done, and whether it is finished.
