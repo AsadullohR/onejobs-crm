@@ -4,7 +4,7 @@ import { useLang } from "./i18n.jsx";
 import { inp, lab, I, Modal, SearchSelect, Av, fmtMs, MoneyInput } from "./helpers.jsx";
 import { vacanciesAPI, candidatesAPI, leadsAPI, txnAPI } from "./api.js";
 import { CandidateProfile, normCandStatus } from "./EmployerPortal.jsx";
-import { STAGES, isBackwardMove, stagesLost, DOC_TRACKS, trackProgress } from "./constants.js";
+import { STAGES, isBackwardMove, stagesLost, DOC_TRACKS, trackProgress, lastTrackStep } from "./constants.js";
 // ─── STATUS CONFIG ────────────────────────────────────────────────────────────
 const V_STATUS = {
   active: { label: "Active", c: "#16a34a", bg: "#dcfce7" },
@@ -588,7 +588,21 @@ function VacancyDetail({
       { key: "expense", label: "Chiqim", get: c => c.totalExpense ?? "" },
       { key: "balance", label: "Balans", get: c => c.netBalance ?? "" },
     ] : []),
-    // One column per document step, holding the date it was completed.
+    // One column per document showing WHERE IT HAS GOT TO -- the furthest
+    // completed step. This is what a report is normally asking; the 22
+    // per-step date columns below stay available but are off by default.
+    ...DOC_TRACKS.map(tr => ({
+      key: `track.${tr.key}`,
+      label: tr.label,
+      get: c => { const l = lastTrackStep(c.checklist, tr); return l ? l.label : ""; },
+    })),
+    ...DOC_TRACKS.map(tr => ({
+      key: `trackdate.${tr.key}`,
+      label: `${tr.label} — sana`,
+      get: c => { const l = lastTrackStep(c.checklist, tr); return l ? l.date : ""; },
+    })),
+    // Every individual step, holding the date it was completed. Useful for an
+    // audit of the whole journey rather than a status snapshot.
     ...DOC_TRACKS.flatMap(tr => tr.steps.map(st => ({
       key: `${tr.key}.${st.key}`,
       label: `${tr.label}: ${st.label}`,
@@ -596,7 +610,8 @@ function VacancyDetail({
     }))),
   ];
   const [expCols, setExpCols] = useState(
-    () => new Set(["name", "phone", "status", "country", "position"]));
+    () => new Set(["name", "phone", "status", "country", "position",
+      ...DOC_TRACKS.map(tr => `track.${tr.key}`)]));
   const toggleExpCol = k => setExpCols(prev => {
     const n = new Set(prev);
     if (n.has(k)) n.delete(k); else n.add(k);
@@ -801,14 +816,28 @@ function VacancyDetail({
         </div>
         <div style={{ maxHeight: 320, overflowY: "auto", border: `1px solid ${T.border}`,
           borderRadius: 8, padding: 10 }}>
-          {EXPORT_COLS.map(col => (
-            <label key={col.key}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer" }}>
-              <input type="checkbox" checked={expCols.has(col.key)}
-                onChange={() => toggleExpCol(col.key)} style={{ cursor: "pointer" }} />
-              <span style={{ fontSize: 12, color: T.text }}>{col.label}</span>
-            </label>
-          ))}
+          {[
+            ["Asosiy", c => !c.key.includes(".")],
+            ["Hujjat holati", c => c.key.startsWith("track.") || c.key.startsWith("trackdate.")],
+            ["Har bir bosqich (sana)", c => c.key.includes(".") && !c.key.startsWith("track.") && !c.key.startsWith("trackdate.")],
+          ].map(([groupLabel, match]) => {
+            const cols = EXPORT_COLS.filter(match);
+            if (!cols.length) return null;
+            return (
+              <div key={groupLabel} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase",
+                  letterSpacing: "0.04em", margin: "4px 0 6px" }}>{groupLabel}</div>
+                {cols.map(col => (
+                  <label key={col.key}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0", cursor: "pointer" }}>
+                    <input type="checkbox" checked={expCols.has(col.key)}
+                      onChange={() => toggleExpCol(col.key)} style={{ cursor: "pointer" }} />
+                    <span style={{ fontSize: 12, color: T.text }}>{col.label}</span>
+                  </label>
+                ))}
+              </div>
+            );
+          })}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
           <button onClick={() => setExpModal(false)}
@@ -1703,7 +1732,11 @@ function VacancyDetail({
                                 {DOC_TRACKS.map(tr => {
                                   const pr = trackProgress(c.checklist, tr);
                                   return (
-                                    <span key={tr.key} title={`${tr.label}: ${pr.done}/${pr.total}`}
+                                    <span key={tr.key}
+                                      title={(() => {
+                                        const l = lastTrackStep(c.checklist, tr);
+                                        return `${tr.label}: ${l ? l.label + " (" + l.date + ")" : "boshlanmagan"}  ${pr.done}/${pr.total}`;
+                                      })()}
                                       style={{ opacity: pr.done ? 1 : 0.25,
                                         color: pr.complete ? "#16a34a" : T.text,
                                         fontWeight: pr.complete ? 800 : 400 }}>

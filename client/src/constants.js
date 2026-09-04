@@ -201,6 +201,19 @@ const DOC_TRACKS = [
   },
 ];
 
+// The furthest completed step of a track -- i.e. where that document has
+// actually got to. Walks backwards so a skipped middle step doesn't hide
+// later progress: if "jo'natildi" is ticked but "skaner" was never marked,
+// the document is still sent.
+const lastTrackStep = (checklist, track) => {
+  const t = (checklist || {})[track.key] || {};
+  for (let i = track.steps.length - 1; i >= 0; i--) {
+    const st = track.steps[i];
+    if (t[st.key]) return { key: st.key, label: st.label, date: t[st.key], index: i };
+  }
+  return null;
+};
+
 // How many steps of a track are done, and whether it is finished.
 const trackProgress = (checklist, track) => {
   const t = (checklist || {})[track.key] || {};
@@ -270,5 +283,5 @@ SALARY_CATS, isPayrollTxn, isConfirmedSpend, isConfirmedIncome,
 confirmedLeadProfit, confirmedIncome, confirmedSpend,
 calcTasdiqlangan, calcSofFoyda, confirmSnapshotProfit,
 PROGRESS_STAGES, isBackwardMove, stagesLost,
-DOC_TRACKS, trackProgress
+DOC_TRACKS, trackProgress, lastTrackStep
 };
