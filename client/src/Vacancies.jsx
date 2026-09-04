@@ -5,6 +5,7 @@ import { inp, lab, I, Modal, SearchSelect, Av, fmtMs, MoneyInput } from "./helpe
 import { vacanciesAPI, candidatesAPI, leadsAPI, txnAPI } from "./api.js";
 import { CandidateProfile, normCandStatus } from "./EmployerPortal.jsx";
 import { STAGES, isBackwardMove, stagesLost, DOC_TRACKS, trackProgress, lastTrackStep } from "./constants.js";
+import { EXPORT_LANGS, trCol, trTrack, trStep, trStage } from "./exportI18n.js";
 // ─── STATUS CONFIG ────────────────────────────────────────────────────────────
 const V_STATUS = {
   active: { label: "Active", c: "#16a34a", bg: "#dcfce7" },
@@ -335,6 +336,7 @@ function VacancyDetail({
   const [docCand, setDocCand] = useState(null);     // candidate whose documents are open
   const [docBusy, setDocBusy] = useState(false);
   const [expModal, setExpModal] = useState(false);
+  const [expLang, setExpLang] = useState("uz");
   const [finModal, setFinModal] = useState(null);   // {mode, cand} | null
   const [finBusy, setFinBusy] = useState(false);
   const [finForm, setFinForm] = useState({
@@ -569,43 +571,49 @@ function VacancyDetail({
 
   // Every exportable column in one place: the picker, the header row and the
   // cell values all read from this, so they cannot drift apart.
+  const L = expLang;
   const EXPORT_COLS = [
-    { key: "name",     label: "Ism",              get: c => c.leadName || c.name || "" },
-    { key: "phone",    label: "Telefon",          get: c => c.leadPhone || c.phone || "" },
-    { key: "status",   label: "Holat",            get: c => c.status || "" },
-    { key: "vacancy",  label: "Vakansiya",        get: () => v.title || "" },
-    { key: "country",  label: "Davlat",           get: c => c.leadCountry || "" },
-    { key: "position", label: "Lavozim",          get: c => c.leadPosition || "" },
-    { key: "sector",   label: "Soha",             get: c => c.leadSector || "" },
-    { key: "gender",   label: "Jinsi",            get: c => c.leadGender || "" },
-    { key: "source",   label: "Manba",            get: c => c.leadSource || "" },
-    { key: "addedBy",  label: "Biriktirgan",      get: c => c.addedByName || "" },
-    { key: "appliedAt",label: "Qo'shilgan sana",  get: c => String(c.appliedAt || "").slice(0, 10) },
-    { key: "leadId",   label: "Mijoz ID",         get: c => c.leadId || "" },
-    { key: "note",     label: "Izoh",             get: c => c.note || "" },
+    { key: "name",     label: trCol("name", L),      get: c => c.leadName || c.name || "" },
+    { key: "phone",    label: trCol("phone", L),     get: c => c.leadPhone || c.phone || "" },
+    // The status VALUE is translated too, not just its header -- this export
+    // goes to employers abroad, for whom "Hujjatlar Jonatildi" means nothing.
+    { key: "status",   label: trCol("status", L),    get: c => trStage(c.status, L) },
+    { key: "vacancy",  label: trCol("vacancy", L),   get: () => v.title || "" },
+    { key: "country",  label: trCol("country", L),   get: c => c.leadCountry || "" },
+    { key: "position", label: trCol("position", L),  get: c => c.leadPosition || "" },
+    { key: "sector",   label: trCol("sector", L),    get: c => c.leadSector || "" },
+    { key: "gender",   label: trCol("gender", L),    get: c => c.leadGender || "" },
+    { key: "source",   label: trCol("source", L),    get: c => c.leadSource || "" },
+    { key: "addedBy",  label: trCol("addedBy", L),   get: c => c.addedByName || "" },
+    { key: "appliedAt",label: trCol("appliedAt", L), get: c => String(c.appliedAt || "").slice(0, 10) },
+    { key: "leadId",   label: trCol("leadId", L),    get: c => c.leadId || "" },
+    { key: "note",     label: trCol("note", L),      get: c => c.note || "" },
     ...(canSeeMoney ? [
-      { key: "income",  label: "Kirim",  get: c => c.totalIncome ?? "" },
-      { key: "expense", label: "Chiqim", get: c => c.totalExpense ?? "" },
-      { key: "balance", label: "Balans", get: c => c.netBalance ?? "" },
+      { key: "income",  label: trCol("income", L),  get: c => c.totalIncome ?? "" },
+      { key: "expense", label: trCol("expense", L), get: c => c.totalExpense ?? "" },
+      { key: "balance", label: trCol("balance", L), get: c => c.netBalance ?? "" },
     ] : []),
     // One column per document showing WHERE IT HAS GOT TO -- the furthest
     // completed step. This is what a report is normally asking; the 22
     // per-step date columns below stay available but are off by default.
     ...DOC_TRACKS.map(tr => ({
       key: `track.${tr.key}`,
-      label: tr.label,
-      get: c => { const l = lastTrackStep(c.checklist, tr); return l ? l.label : ""; },
+      label: trTrack(tr.key, L, tr.label),
+      get: c => {
+        const l = lastTrackStep(c.checklist, tr);
+        return l ? trStep(l.key, L, l.label) : "";
+      },
     })),
     ...DOC_TRACKS.map(tr => ({
       key: `trackdate.${tr.key}`,
-      label: `${tr.label} — sana`,
+      label: `${trTrack(tr.key, L, tr.label)} — ${trCol("_date", L)}`,
       get: c => { const l = lastTrackStep(c.checklist, tr); return l ? l.date : ""; },
     })),
     // Every individual step, holding the date it was completed. Useful for an
     // audit of the whole journey rather than a status snapshot.
     ...DOC_TRACKS.flatMap(tr => tr.steps.map(st => ({
       key: `${tr.key}.${st.key}`,
-      label: `${tr.label}: ${st.label}`,
+      label: `${trTrack(tr.key, L, tr.label)}: ${trStep(st.key, L, st.label)}`,
       get: c => ((c.checklist || {})[tr.key] || {})[st.key] || "",
     }))),
   ];
@@ -626,15 +634,17 @@ function VacancyDetail({
       const str = String(val ?? "");
       return /[",;\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
     };
-    const lines = [cols.map(c => esc(c.label)).join(";")];
+    // "sep=;" on the first line is Excel's own directive: without it Excel
+    // applies the machine's list separator, and on a comma-locale machine the
+    // whole row lands in column A. This is what made the file look "off".
+    const lines = ["sep=;", cols.map(c => esc(c.label)).join(";")];
     rows.forEach(c => lines.push(cols.map(col => esc(col.get(c))).join(";")));
-    // BOM so Excel reads UTF-8; semicolons so it splits columns in locales
-    // where the comma is the decimal separator.
-    const blob = new Blob(["\ufeff" + lines.join("\r\n")],
+    // BOM so Excel reads UTF-8 (Cyrillic names otherwise arrive as mojibake).
+    const blob = new Blob(["\ufeff" + lines.join("\r\n") + "\r\n"],
       { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${(v.title || "vakansiya").replace(/[^\w\u0400-\u04FF -]/g, "").trim() || "vakansiya"}-nomzodlar.csv`;
+    a.download = `${(v.title || "vakansiya").replace(/[^\w\u0400-\u04FF -]/g, "").trim() || "vakansiya"}-${L}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -800,6 +810,16 @@ function VacancyDetail({
           {candSel.size
             ? `${candSel.size} ta tanlangan nomzod`
             : `Barcha nomzodlar (${candidates.length} ta)`} — ustunlarni tanlang
+        </div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+          {EXPORT_LANGS.map(l => (
+            <button key={l.key} onClick={() => setExpLang(l.key)}
+              style={{ flex: 1, padding: "7px", borderRadius: 8, fontFamily: "inherit",
+                cursor: "pointer", fontSize: 12, fontWeight: expLang === l.key ? 700 : 400,
+                border: `1px solid ${expLang === l.key ? T.accent : T.border}`,
+                background: expLang === l.key ? `${T.accent}18` : "transparent",
+                color: expLang === l.key ? T.accent : T.muted }}>{l.label}</button>
+          ))}
         </div>
         <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
           <button onClick={() => setExpCols(new Set(EXPORT_COLS.map(c => c.key)))}
