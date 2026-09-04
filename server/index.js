@@ -2229,6 +2229,7 @@ app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
       id: String(r.id), vacancyId: r.vacancy_id, leadId: r.lead_id,
       leadName: r.lead_name || r.name, leadPhone: r.lead_phone || r.phone,
       name: r.name, phone: r.phone, status: r.status, note: r.note,
+      checklist: r.checklist || {},
       appliedAt: r.applied_at, addedByName: r.added_by_name,
       leadCountry: r.lead_country, leadPosition: r.lead_position, leadSector: r.lead_sector,
       leadGender: r.lead_gender, leadStatus: r.lead_status, leadSource: r.lead_source,
