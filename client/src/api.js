@@ -84,13 +84,32 @@ export const leadsAPI = {
   // Keep paging until we actually hold every row.
   getAllPaged: async (limit = 2000) => {
     const first = await req("GET", `/api/leads?limit=${limit}&page=1`);
-    const leads = first.leads || [];
-    const total = Number(first.total || leads.length);
-    for (let page = 2; leads.length < total; page++) {
+    const total = Number(first.total || (first.leads || []).length);
+    const seen = new Set();
+    const leads = [];
+    // Deduplicate by id. OFFSET paging can only be exact when the server's sort
+    // is total, and a duplicate here renders the same person twice in the
+    // pipeline. The server now orders by (created_at, id); this is the belt to
+    // that braces, and it also stops one bad page from corrupting the list.
+    const take = rows => {
+      let added = 0;
+      for (const l of rows || []) {
+        if (!l || seen.has(l.id)) continue;
+        seen.add(l.id);
+        leads.push(l);
+        added++;
+      }
+      return added;
+    };
+    take(first.leads);
+    // Bound the loop by pages rather than by rows: if a page returns only
+    // duplicates, `leads.length` stops growing and a row-based condition would
+    // spin forever.
+    const maxPages = Math.ceil(total / limit) + 2;
+    for (let page = 2; leads.length < total && page <= maxPages; page++) {
       const next = await req("GET", `/api/leads?limit=${limit}&page=${page}`);
-      const rows = next.leads || [];
-      if (!rows.length) break;
-      leads.push(...rows);
+      if (!(next.leads || []).length) break;
+      take(next.leads);
     }
     return { ...first, leads, total };
   },

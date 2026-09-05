@@ -341,7 +341,12 @@ app.get("/api/leads", auth, async (req, res) => {
       LEFT JOIN users u_c ON l.owner_consult = u_c.id
       LEFT JOIN users u_d ON l.owner_docs = u_d.id
       ${where}
-      ORDER BY l.created_at DESC
+      -- id is the tiebreaker, and it is not optional. Bulk-imported leads share
+      -- a created_at to the second, so ordering on that column alone leaves ties
+      -- in an arbitrary order that can differ between queries. With OFFSET
+      -- paging that means a row lands on two pages while another is skipped --
+      -- which is exactly what produced duplicate cards in the pipeline.
+      ORDER BY l.created_at DESC, l.id DESC
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
     params.push(limit, offset);
