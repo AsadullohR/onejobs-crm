@@ -188,10 +188,15 @@ function SearchSelect({items,value,onChange,placeholder}) {
         <div style={{position:"relative"}}><span style={{position:"absolute",left:7,top:"50%",transform:"translateY(-50%)",color:T.muted}}>{I.search}</span>
           <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Qidirish (ID, Ism, Tel)..." style={{width:"100%",padding:"6px 8px 6px 24px",borderRadius:5,border:`1px solid ${T.border}`,background:T.inp,color:T.text,fontSize:11,outline:"none",boxSizing:"border-box"}} autoFocus/></div>
       </div>
-      {fil.map(it=><div key={it.value} onClick={()=>{onChange(it.value);setOpen(false);setQ("");}} style={{padding:"8px 10px",cursor:"pointer",fontSize:12,color:T.text,background:it.value===value?`${T.accent}22`:"transparent",borderBottom:`1px solid ${T.border}22`}}
+      {fil.map(it=><div key={it.value} onClick={()=>{onChange(it.value);setOpen(false);setQ("");}} style={{padding:"8px 10px",cursor:"pointer",fontSize:12,color:T.text,background:it.value===value?`${T.accent}22`:"transparent",borderBottom:`1px solid ${T.border}22`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}
         onMouseEnter={e=>e.currentTarget.style.background=`${T.accent}15`} onMouseLeave={e=>e.currentTarget.style.background=it.value===value?`${T.accent}22`:"transparent"}>
-        <div style={{fontWeight:600}}>{it.label}</div>
-        {(it.id||it.phone)&&<div style={{fontSize:9,color:T.muted}}>{[it.id,it.phone].filter(Boolean).join(" · ")}</div>}
+        <div style={{minWidth:0}}>
+          <div style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</div>
+          {(it.id||it.phone)&&<div style={{fontSize:9,color:T.muted}}>{[it.id,it.phone].filter(Boolean).join(" · ")}</div>}
+        </div>
+        {/* Optional right-side badge — e.g. a client's balance, so two people
+            named the same are told apart before one is picked by mistake. */}
+        {it.right!=null&&<div style={{flexShrink:0}}>{it.right}</div>}
       </div>)}
       {fil.length===0&&<div style={{padding:12,color:T.muted,fontSize:11,textAlign:"center"}}>Topilmadi</div>}
     </div>}

@@ -971,12 +971,35 @@ function VacancyDetail({
     </Modal>
   );
 
-  const leadOpts = leads.map((l) => ({
-    value: l.id,
-    label: l.name,
-    id: l.id,
-    phone: l.phone,
-  }));
+  // One pass over the ledger rather than a filter per lead — leads runs into
+  // the thousands, and the search list is rebuilt on every keystroke.
+  const leadBalanceMap = (() => {
+    const m = new Map();
+    if (!canSeeMoney) return m;
+    for (const t of txns) {
+      if (!t.leadId) continue;
+      const cur = m.get(t.leadId) || 0;
+      m.set(t.leadId, cur + (t.type === "income" ? Number(t.amount || 0) : -Number(t.amount || 0)));
+    }
+    return m;
+  })();
+  // Balance shown next to every name in the picker, not just the one already
+  // chosen — with a large, name-colliding client base ("Zafar", "Qodirali...")
+  // this is what tells two same-named people apart before the wrong one is
+  // attached to a vacancy.
+  const leadOpts = leads.map((l) => {
+    const bal = leadBalanceMap.get(l.id);
+    return {
+      value: l.id,
+      label: l.name,
+      id: l.id,
+      phone: l.phone,
+      right: canSeeMoney && bal
+        ? <span style={{ fontSize: 10, fontWeight: 700,
+            color: bal > 0 ? "#16a34a" : bal < 0 ? T.red : T.muted }}>{fmtMs(bal)}</span>
+        : undefined,
+    };
+  });
 
   const tabBtn = (key, label) => (
     <button
