@@ -329,7 +329,10 @@ function VacancyDetail({
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
   // Client money is staff-only; the server withholds it from everyone else.
-  const canSeeMoney = ["admin", "manager", "finance_manager"].includes(user.role);
+  // Everyone on staff sees candidate balances now except call center ("sales"
+  // role) — they work the pipeline, not payments. Must mirror the server,
+  // which withholds the money fields entirely rather than just hiding them.
+  const canSeeMoney = !["sales", "partner", "employer"].includes(user.role);
   // Money entry straight from the vacancy: same fields as the client finance
   // form, so a payment recorded here is indistinguishable from one recorded
   // on the client's own card. `finMode` is "one" or "bulk".
@@ -1902,6 +1905,25 @@ function VacancyDetail({
                   placeholder="Search by name or phone..."
                 />
               </div>
+              {/* Balance of the selected client, computed from the live txn
+                  ledger rather than a cached lead field — matches Finance. */}
+              {canSeeMoney && candForm.leadId && (() => {
+                const inc = txns.filter(t => t.leadId === candForm.leadId && t.type === "income")
+                  .reduce((s, t) => s + Number(t.amount || 0), 0);
+                const exp = txns.filter(t => t.leadId === candForm.leadId && t.type === "expense")
+                  .reduce((s, t) => s + Number(t.amount || 0), 0);
+                const bal = inc - exp;
+                return (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "8px 11px", borderRadius: 8, background: T.card2, border: `1px solid ${T.border}` }}>
+                    <span style={{ fontSize: 11, color: T.muted }}>Mijoz balansi</span>
+                    <span title={`Kirim ${fmtMs(inc)} / Chiqim ${fmtMs(exp)}`}
+                      style={{ fontSize: 13, fontWeight: 800, color: bal > 0 ? "#16a34a" : bal < 0 ? T.red : T.muted }}>
+                      {fmtMs(bal)}
+                    </span>
+                  </div>
+                );
+              })()}
               <div>
                 <label style={lab(T)}>Status</label>
                 <select

@@ -2209,7 +2209,10 @@ app.get("/api/vacancies/:id/candidates", auth, async (req, res) => {
     if (!(await canAccessVacancy(req.user, req.params.id)))
       return res.status(403).json({ error: "Forbidden" });
     // Money is staff-only — employers and partners never see client finances.
-    const canSeeMoney = ["admin", "manager", "finance_manager"].includes(req.user.role);
+    // Everyone on staff sees candidate balances now except call center
+    // ("sales" role) — they work the pipeline, not payments. Partner and
+    // employer are excluded separately below (they're not staff at all).
+    const canSeeMoney = !["sales", "partner", "employer"].includes(req.user.role);
     const { rows } = await pool.query(
       `SELECT c.*, l.name as lead_name, l.phone as lead_phone,
               l.country as lead_country, l.position as lead_position, l.sector as lead_sector,
