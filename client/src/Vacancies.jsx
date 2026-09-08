@@ -376,6 +376,45 @@ function VacancyDetail({
     setDocBusy(false);
   };
 
+  // Same step, applied to every selected candidate at once — sequential PUTs
+  // rather than a bulk endpoint, matching how bulk status/finance already
+  // work here, so one failure doesn't stop the rest and the count that
+  // reports back is accurate per-candidate.
+  const [bulkDocModal, setBulkDocModal] = useState(false);
+  const [bulkDocTrack, setBulkDocTrack] = useState(DOC_TRACKS[0].key);
+  const [bulkDocStep, setBulkDocStep] = useState(DOC_TRACKS[0].steps[0].key);
+  const [bulkDocBusy, setBulkDocBusy] = useState(false);
+
+  const applyBulkDoc = async (mark) => {
+    const targets = candidates.filter(c => candSel.has(c.id));
+    if (!targets.length) return;
+    setBulkDocBusy(true);
+    const today = new Date().toISOString().slice(0, 10);
+    let ok = 0, fail = 0;
+    const updates = {};
+    for (const c of targets) {
+      const cur = c.checklist || {};
+      const track = { ...(cur[bulkDocTrack] || {}) };
+      if (mark) track[bulkDocStep] = today; else delete track[bulkDocStep];
+      const next = { ...cur, [bulkDocTrack]: track };
+      try {
+        await candidatesAPI.update(c.id, { checklist: next });
+        updates[c.id] = next;
+        ok++;
+      } catch (e) { fail++; }
+    }
+    if (ok) {
+      setCandidates(p => p.map(c => updates[c.id] ? { ...c, checklist: updates[c.id] } : c));
+    }
+    setBulkDocBusy(false);
+    setBulkDocModal(false);
+    setCandSel(new Set());
+    const trLabel = DOC_TRACKS.find(t => t.key === bulkDocTrack)?.label || bulkDocTrack;
+    const stLabel = DOC_TRACKS.find(t => t.key === bulkDocTrack)?.steps.find(s => s.key === bulkDocStep)?.label || bulkDocStep;
+    alert(`${ok}/${targets.length} nomzodda "${trLabel}: ${stLabel}" ${mark ? "belgilandi" : "bekor qilindi"}`
+      + (fail ? `  (${fail} ta xato)` : ""));
+  };
+
   const INC_CATS = ["XBA To'lov", "1-Qism", "2-Qism", "3-Qism", "Bonus", "Boshqa"];
   const EXP_CATS = ["Elchixona", "VFS", "Sug'urta", "Bilet", "Hamkorga", "Boshqa"];
 
@@ -801,6 +840,62 @@ function VacancyDetail({
             </div>
           );
         })}
+      </div>
+    </Modal>
+  );
+
+  const bulkDocTrackObj = DOC_TRACKS.find(t => t.key === bulkDocTrack) || DOC_TRACKS[0];
+  const bulkDocModalEl = bulkDocModal && (
+    <Modal onClose={() => setBulkDocModal(false)} width={460}>
+      <div style={{ padding: 20 }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 3 }}>
+          Hujjatlarni belgilash
+        </div>
+        <div style={{ fontSize: 11, color: T.muted, marginBottom: 16 }}>
+          {candSel.size} ta tanlangan nomzod uchun bitta bosqich birdaniga belgilanadi
+        </div>
+
+        <label style={labS}>Hujjat</label>
+        <select value={bulkDocTrack}
+          onChange={e => {
+            const tr = DOC_TRACKS.find(t => t.key === e.target.value);
+            setBulkDocTrack(e.target.value);
+            setBulkDocStep(tr.steps[0].key);
+          }}
+          style={inpS}>
+          {DOC_TRACKS.map(tr => <option key={tr.key} value={tr.key}>{tr.icon} {tr.label}</option>)}
+        </select>
+
+        <label style={{ ...labS, marginTop: 10 }}>Bosqich</label>
+        <select value={bulkDocStep} onChange={e => setBulkDocStep(e.target.value)} style={inpS}>
+          {bulkDocTrackObj.steps.map(st => <option key={st.key} value={st.key}>{st.label}</option>)}
+        </select>
+
+        <div style={{ fontSize: 10, color: T.muted, marginTop: 8 }}>
+          "Belgilash" bugungi sana bilan qo'yadi; "Bekor qilish" belgini olib tashlaydi —
+          har ikkisi barcha tanlangan nomzodlarga bir xilda qo'llanadi.
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <button onClick={() => setBulkDocModal(false)}
+            style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.border}`,
+              background: "transparent", color: T.muted, cursor: "pointer", fontFamily: "inherit", fontSize: 12 }}>
+            Bekor
+          </button>
+          <button onClick={() => applyBulkDoc(false)} disabled={bulkDocBusy}
+            style={{ flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${T.red}`,
+              background: "transparent", color: T.red, fontWeight: 700, fontSize: 12,
+              cursor: bulkDocBusy ? "wait" : "pointer", fontFamily: "inherit" }}>
+            Bekor qilish
+          </button>
+          <button onClick={() => applyBulkDoc(true)} disabled={bulkDocBusy}
+            style={{ flex: 2, padding: "10px", borderRadius: 8, border: "none", fontFamily: "inherit",
+              background: bulkDocBusy ? T.border : "#16a34a",
+              color: bulkDocBusy ? T.muted : "#fff", fontWeight: 700, fontSize: 12,
+              cursor: bulkDocBusy ? "wait" : "pointer" }}>
+            {bulkDocBusy ? "Saqlanmoqda…" : "Belgilash"}
+          </button>
+        </div>
       </div>
     </Modal>
   );
@@ -1522,6 +1617,12 @@ function VacancyDetail({
                         cursor: "pointer", fontFamily: "inherit" }}>
                       Kirim / Chiqim
                     </button>
+                    <button onClick={() => setBulkDocModal(true)}
+                      style={{ padding: "6px 12px", borderRadius: 7, border: `1px solid ${T.accent}`,
+                        background: `${T.accent}18`, color: T.accent, fontWeight: 700, fontSize: 11,
+                        cursor: "pointer", fontFamily: "inherit" }}>
+                      Hujjatlar
+                    </button>
                     <button onClick={() => setCandSel(new Set())}
                       style={{ padding: "6px 10px", borderRadius: 7, border: `1px solid ${T.border}`,
                         background: "transparent", color: T.muted, fontSize: 11,
@@ -1843,6 +1944,7 @@ function VacancyDetail({
       {/* Candidate Profile Modal (editable for internal staff) */}
       {finModalEl}
       {docModalEl}
+      {bulkDocModalEl}
       {expModalEl}
       {selCandProfile && (
         <CandidateProfile
