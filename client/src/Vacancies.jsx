@@ -573,6 +573,35 @@ function VacancyDetail({
     } catch (err) { alert("Xato: " + err.message); }
   };
 
+  // Move every ticked candidate to a different vacancy at once. No server
+  // bulk endpoint for this, so sequential PUTs like the other bulk actions
+  // here — one failure doesn't block the rest, and the count reported back
+  // is accurate per-candidate rather than all-or-nothing.
+  const [bulkVacTarget, setBulkVacTarget] = useState("");
+  const [bulkVacBusy, setBulkVacBusy] = useState(false);
+  const bulkMoveVacancy = async () => {
+    const ids = [...candSel];
+    if (!ids.length || !bulkVacTarget || bulkVacTarget === v.id) return;
+    const target = allVacancies.find(x => String(x.id) === String(bulkVacTarget));
+    if (!confirm(`${ids.length} ta nomzod "${target?.title || bulkVacTarget}" vakansiyasiga ko'chirilsinmi?`)) return;
+    setBulkVacBusy(true);
+    const moved = new Set();
+    let fail = 0;
+    for (const id of ids) {
+      try {
+        await candidatesAPI.update(id, { vacancy_id: bulkVacTarget });
+        moved.add(id);
+      } catch (e) { fail++; }
+    }
+    // Only candidates that actually moved leave this vacancy's list — a
+    // failed one stays visible, same as the single-row move's own behaviour.
+    setCandidates(p => p.filter(c => !moved.has(c.id)));
+    setBulkVacBusy(false);
+    setCandSel(new Set());
+    setBulkVacTarget("");
+    alert(`${moved.size}/${ids.length} nomzod ko'chirildi` + (fail ? `  (${fail} ta xato)` : ""));
+  };
+
   // Group status change across every ticked candidate.
   const bulkChangeStatus = async () => {
     const ids = [...candSel];
@@ -1645,6 +1674,21 @@ function VacancyDetail({
                         background: `${T.accent}18`, color: T.accent, fontWeight: 700, fontSize: 11,
                         cursor: "pointer", fontFamily: "inherit" }}>
                       Hujjatlar
+                    </button>
+                    <select value={bulkVacTarget} onChange={e => setBulkVacTarget(e.target.value)}
+                      style={{ ...inpS, width: 190, padding: "5px 8px", fontSize: 11 }}>
+                      <option value="">Vakansiyaga ko'chirish…</option>
+                      {allVacancies.filter(x => String(x.id) !== String(v.id)).map(x => (
+                        <option key={x.id} value={x.id}>{x.title}</option>
+                      ))}
+                    </select>
+                    <button onClick={bulkMoveVacancy} disabled={!bulkVacTarget || bulkVacBusy}
+                      style={{ padding: "6px 12px", borderRadius: 7, border: "1px solid #7c3aed", fontFamily: "inherit",
+                        background: bulkVacTarget && !bulkVacBusy ? "#7c3aed18" : "transparent",
+                        color: bulkVacTarget && !bulkVacBusy ? "#7c3aed" : T.muted,
+                        fontWeight: 700, fontSize: 11,
+                        cursor: bulkVacTarget && !bulkVacBusy ? "pointer" : "not-allowed" }}>
+                      {bulkVacBusy ? "…" : "Ko'chirish"}
                     </button>
                     <button onClick={() => setCandSel(new Set())}
                       style={{ padding: "6px 10px", borderRadius: 7, border: `1px solid ${T.border}`,
