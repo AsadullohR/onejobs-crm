@@ -470,6 +470,26 @@ function VacancyDetail({
         netBalance: Number(l.netBalance || 0) + delta[l.id],
       }));
     }
+    // The Balans column on THIS vacancy's table reads from `candidates`, a
+    // separate array from `leads` — updating only setLeads above left it
+    // showing the pre-payment figure until the vacancy was closed and
+    // reopened. Keyed by leadId since a candidate row's own id isn't what
+    // saveFin's `made` entries carry.
+    if (made.length) {
+      setCandidates(prev => prev.map(c => {
+        if (!c.leadId || delta[c.leadId] === undefined) return c;
+        return {
+          ...c,
+          totalIncome: Number(c.totalIncome || 0) + made
+            .filter(m => m.leadId === c.leadId && m.type === "income")
+            .reduce((s, m) => s + m.amount, 0),
+          totalExpense: Number(c.totalExpense || 0) + made
+            .filter(m => m.leadId === c.leadId && m.type !== "income")
+            .reduce((s, m) => s + m.amount, 0),
+          netBalance: Number(c.netBalance || 0) + delta[c.leadId],
+        };
+      }));
+    }
     setFinBusy(false);
     setFinModal(null);
     setCandSel(new Set());
@@ -1940,9 +1960,17 @@ function VacancyDetail({
                             {canSeeMoney && (
                               <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                                 {!c.leadId ? <span style={{ color: T.muted }}>-</span> : (() => {
-                                  const inc = c.totalIncome != null ? c.totalIncome : (lead && lead.totalIncome) || 0;
-                                  const exp = c.totalExpense != null ? c.totalExpense : (lead && lead.totalExpense) || 0;
-                                  const bal = c.netBalance != null ? c.netBalance : inc - exp;
+                                  // Computed live from the shared txn ledger rather than the
+                                  // candidate row's server-cached snapshot. Money is often added
+                                  // through the regular Finance page while this vacancy tab stays
+                                  // open, and that cache had no way to hear about it -- this reads
+                                  // the same source of truth Finance itself uses, so it can't drift.
+                                  const leadTx = txns.filter(t => t.leadId === c.leadId);
+                                  const inc = leadTx.filter(t => t.type === "income")
+                                    .reduce((s, t) => s + Number(t.amount || 0), 0);
+                                  const exp = leadTx.filter(t => t.type === "expense")
+                                    .reduce((s, t) => s + Number(t.amount || 0), 0);
+                                  const bal = inc - exp;
                                   return (
                                     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                                       <span title={"Kirim " + fmtMs(inc) + " / Chiqim " + fmtMs(exp)}
