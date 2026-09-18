@@ -480,12 +480,17 @@ function VacancyDetail({
     }
     // Keep the app's shared ledger in step so Finance totals move immediately.
     if (made.length) setTxns && setTxns(p => [...p, ...made]);
+    // Computed once, used by both the leads sync and the candidates sync
+    // below — it was previously declared inside the setLeads block only,
+    // which threw ReferenceError: delta is not defined the moment that
+    // block was skipped (or even when it ran, since the second block sits
+    // outside its braces regardless).
+    const delta = {};
+    made.forEach(m => {
+      delta[m.leadId] = (delta[m.leadId] || 0) + (m.type === "income" ? m.amount : -m.amount);
+    });
     // Cached client balances changed server-side; mirror them locally too.
     if (made.length && setLeads) {
-      const delta = {};
-      made.forEach(m => {
-        delta[m.leadId] = (delta[m.leadId] || 0) + (m.type === "income" ? m.amount : -m.amount);
-      });
       setLeads(prev => prev.map(l => delta[l.id] === undefined ? l : {
         ...l,
         totalIncome: Number(l.totalIncome || 0) + made
