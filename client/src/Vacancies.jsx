@@ -355,6 +355,33 @@ function VacancyDetail({
     });
     setFinModal({ mode, cand });
   };
+
+  // Delete from the finance modal's own history list. Mirrors saveFin's
+  // add-side bookkeeping in reverse: shared ledger, cached lead totals, and
+  // this vacancy's own candidate row all move together.
+  const [finDeleteBusy, setFinDeleteBusy] = useState(null); // txn id mid-delete
+  const deleteFinTxn = async (t) => {
+    if (!confirm("Bu tranzaksiya o'chirilsinmi?")) return;
+    setFinDeleteBusy(t.id);
+    try {
+      await txnAPI.delete(t.id);
+      setTxns && setTxns(p => p.filter(x => x.id !== t.id));
+      const sign = t.type === "income" ? -1 : 1;
+      if (setLeads) setLeads(prev => prev.map(l => l.id !== t.leadId ? l : {
+        ...l,
+        totalIncome: Number(l.totalIncome || 0) + (t.type === "income" ? -t.amount : 0),
+        totalExpense: Number(l.totalExpense || 0) + (t.type === "expense" ? -t.amount : 0),
+        netBalance: Number(l.netBalance || 0) + sign * t.amount,
+      }));
+      setCandidates(prev => prev.map(c => c.leadId !== t.leadId ? c : {
+        ...c,
+        totalIncome: Number(c.totalIncome || 0) + (t.type === "income" ? -t.amount : 0),
+        totalExpense: Number(c.totalExpense || 0) + (t.type === "expense" ? -t.amount : 0),
+        netBalance: Number(c.netBalance || 0) + sign * t.amount,
+      }));
+    } catch (e) { alert("O'chirishda xato: " + e.message); }
+    setFinDeleteBusy(null);
+  };
   // Toggling a step stores today's date (or clears it). Saved immediately so
   // two people working the same vacancy don't overwrite each other's ticks.
   const toggleStep = async (cand, trackKey, stepKey) => {
@@ -748,9 +775,80 @@ function VacancyDetail({
     : [];
   const finNoLead = finTargets.filter(c => c && !c.leadId).length;
 
+  // Single-candidate mode gets the client's own finance card first — same
+  // three numbers and transaction list as the Finance page, just scoped to
+  // this one person, so switching status/documents/money never needs
+  // leaving the vacancy to check "has he actually paid."
+  const finLeadTx = (finModal && finModal.mode === "one" && finModal.cand?.leadId)
+    ? txns.filter(t => t.leadId === finModal.cand.leadId).sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    : [];
+  const finLeadInc = finLeadTx.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount || 0), 0);
+  const finLeadExp = finLeadTx.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount || 0), 0);
+
   const finModalEl = finModal && (
-    <Modal onClose={() => setFinModal(null)} width={460}>
+    <Modal onClose={() => setFinModal(null)} width={finModal.mode === "one" ? 560 : 460}>
       <div style={{ padding: 20 }}>
+        {finModal.mode === "one" && (
+          <>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 2 }}>
+              {finModal.cand?.leadName || finModal.cand?.name}
+            </div>
+            <div style={{ fontSize: 11, color: T.muted, marginBottom: 12 }}>
+              {finModal.cand?.leadId} · {finModal.cand?.status}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 14 }}>
+              {[["Kirim", finLeadInc, "#16a34a"], ["Chiqim", finLeadExp, T.red],
+                ["Balans", finLeadInc - finLeadExp, (finLeadInc - finLeadExp) >= 0 ? "#16a34a" : T.red]].map(([lbl, v, c]) => (
+                <div key={lbl} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "8px 10px", background: T.card2 }}>
+                  <div style={{ fontSize: 9, color: T.muted, fontWeight: 700, textTransform: "uppercase" }}>{lbl}</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: c }}>{fmtMs(v)}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 6 }}>
+              Tranzaksiyalar ({finLeadTx.length})
+            </div>
+            <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 16 }}>
+              {finLeadTx.length === 0 && (
+                <div style={{ fontSize: 11, color: T.muted, padding: "10px 0", textAlign: "center" }}>
+                  Hali tranzaksiya yo'q
+                </div>
+              )}
+              {finLeadTx.map(t => {
+                const c = t.type === "income" ? "#16a34a" : T.red;
+                return (
+                  <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "7px 9px", borderRadius: 7, marginBottom: 3, background: T.card,
+                    border: `1px solid ${T.border}`, borderLeft: `3px solid ${c}` }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: T.text }}>{t.desc || t.cat || "—"}</div>
+                      <div style={{ fontSize: 9, color: T.muted }}>{t.cat} · {t.date}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: c }}>
+                        {t.type === "income" ? "+" : "-"}{fmtMs(t.amount)}
+                      </span>
+                      <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4,
+                        background: (t.paymentMethod || "cash") === "bank" ? "#2563eb22" : "#05966922",
+                        color: (t.paymentMethod || "cash") === "bank" ? "#2563eb" : "#059669", fontWeight: 700 }}>
+                        {(t.paymentMethod || "cash") === "bank" ? "BANK" : "NAQD"}
+                      </span>
+                      {canEdit && (
+                        <button onClick={() => deleteFinTxn(t)} disabled={finDeleteBusy === t.id}
+                          style={{ padding: "3px 7px", borderRadius: 4, background: `${T.red}15`, color: T.red,
+                            border: `1px solid ${T.red}33`, cursor: finDeleteBusy === t.id ? "wait" : "pointer", fontSize: 10 }}>
+                          🗑
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ height: 1, background: T.border, margin: "4px 0 14px" }} />
+          </>
+        )}
+
         <div style={{ fontSize: 15, fontWeight: 800, color: T.text, marginBottom: 3 }}>
           {finForm.type === "income" ? "Kirim qo'shish" : "Chiqim qo'shish"}
         </div>
