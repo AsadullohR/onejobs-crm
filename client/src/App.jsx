@@ -78,7 +78,18 @@ export default function App() {
   const [drawer,setDrawer]=useState(null);
   const [notifs,setNotifs]=useState([]);
   const [debts,setDebts]=useState([]);
-  const [stages,setStages]=useState(STAGES);
+  const [stages,setStagesRaw]=useState(STAGES);
+  // Reordering/renaming stages in Pipeline's editor was pure local state —
+  // it visibly worked, then silently reset for that user on the next reload
+  // and never reached anyone else's screen at all. Persist it the same way
+  // roles/config already are.
+  const setStages = useCallback((updater) => {
+    setStagesRaw(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      configAPI.set('pipelineStages', next).catch(()=>{});
+      return next;
+    });
+  }, []);
   const [vacancies,setVacancies]=useState([]);
   const [candidates,setCandidates]=useState([]);
   const [showNotif,setShowNotif]=useState(false);
@@ -442,6 +453,19 @@ const deleteLead = useCallback(async (id) => {
           const merged={};
           cfgKeys.forEach(k=>{ const v=parse(cfgRes[k]); if(v) merged[k]=v; });
           if(Object.keys(merged).length) setConfigRaw(c=>({...c,...merged}));
+          // Saved order/labels/colors take precedence; any stage that exists
+          // in the current default set but not in the saved copy (a status
+          // added after someone last customised the board) is appended
+          // rather than dropped, and a saved key that no longer exists in
+          // STAGES is discarded rather than rendering a dead column.
+          const savedStages = parse(cfgRes.pipelineStages);
+          if(Array.isArray(savedStages) && savedStages.length){
+            const byKey = new Map(STAGES.map(s=>[s.key,s]));
+            const merged=savedStages.filter(s=>byKey.has(s.key)).map(s=>({...byKey.get(s.key),...s}));
+            const seen=new Set(merged.map(s=>s.key));
+            STAGES.forEach(s=>{ if(!seen.has(s.key)) merged.push(s); });
+            setStagesRaw(merged);
+          }
         }
         if(usersRes?.length) setTeam(usersRes.map(u=>({
           id:u.id, username:u.username, name:u.name, role:u.role,

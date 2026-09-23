@@ -36,6 +36,20 @@ const PHASES = [
 
 const LOST_STATUSES = ["Viza Rad Etildi", "Rad etildi", "Bekor qildi", "Anchagacha ko'tarmadi"];
 
+// The "Barcha bosqichlar" checklist below renders the raw status string for
+// every stage, which put "XBA To'lov qildi" / "1 - Qism To'landi" — payment
+// milestones — in plain text on a page anyone with the link can open with no
+// login. Relabelled to something that carries the same progress meaning
+// without naming a payment. "2/3 - Qism To'landi" aren't real stage keys
+// today, but are listed defensively in case they're added later.
+const PUBLIC_LABEL = {
+  "XBA To'lov qildi":   "Ariza tasdiqlandi",
+  "1 - Qism To'landi":  "Jarayon davom etmoqda",
+  "2 - Qism To'landi":  "Jarayon davom etmoqda",
+  "3 - Qism To'landi":  "Jarayon davom etmoqda",
+};
+const publicLabel = (s) => PUBLIC_LABEL[s] || s;
+
 const NEXT_STEPS = {
   "Yangi":                          "Arizangiz qabul qilindi. Mutaxassisimiz tez orada siz bilan bog'lanadi.",
   "Qilindi":                        "Arizangiz ko'rib chiqilmoqda. Mutaxassisimiz siz bilan bog'lanadi.",
@@ -44,11 +58,11 @@ const NEXT_STEPS = {
   "Onlayn Suhbat":                  "Online suhbat o'tkazilmoqda. Natijalar haqida tez orada ma'lumot beramiz.",
   "Suhbat":                         "Ofis suhbatiga tayyorlanishingizni so'raymiz. Hujjatlarni tayyor tutib keling.",
   "Shartnoma qildi":                "Shartnoma imzolandi! Hujjatlarni to'plash bosqichi boshlanmoqda.",
-  "XBA To'lov qildi":               "To'lov qabul qilindi. Hujjatlar tayyorlash bosqichi boshlandi.",
+  "XBA To'lov qildi":               "Arizangiz tasdiqlandi. Hujjatlar tayyorlash bosqichi boshlandi.",
   "CV Topshirildi":                 "CV ish beruvchiga topshirildi. Natija kutilmoqda.",
   "Interview ga qo'yildi":          "Ish beruvchi bilan suhbatga qo'yildingiz. Sanani kuting.",
   "Ishga qabul qilindi":            "Tabriklaymiz! Ish beruvchi sizi qabul qildi. Hujjatlar tayyorlanmoqda.",
-  "1 - Qism To'landi":              "1-qism to'lovi qabul qilindi. Hujjatlar tayyorlanmoqda.",
+  "1 - Qism To'landi":              "Jarayon davom etmoqda. Hujjatlar tayyorlanmoqda.",
   "Hujjatlar Tayyorlanmoqda":       "Hujjatlaringiz tayyorlanmoqda. Tayyor bo'lgach xabar beramiz.",
   "Hujjatlar Jonatilishga Tayyor":  "Hujjatlaringiz tayyor! Yuborishga tayyorlanmoqda.",
   "Hujjatlar Jonatildi":            "Hujjatlaringiz yuborildi. Elchixona jarayoni boshlanmoqda.",
@@ -305,7 +319,7 @@ export function TrackPage({ leadId: initialId }) {
                             fontWeight: current ? 800 : done ? 600 : 400,
                             color: current ? "#4f46e5" : done ? "#374151" : "#9ca3af",
                           }}>
-                            {s}
+                            {publicLabel(s)}
                           </span>
                           {current && (
                             <span style={{ marginLeft: "auto", fontSize: 9, fontWeight: 700, color: "#6366f1", background: "#eef2ff", borderRadius: 8, padding: "2px 8px", whiteSpace: "nowrap" }}>
