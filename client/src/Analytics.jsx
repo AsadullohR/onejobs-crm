@@ -188,6 +188,184 @@ function DocsSentTab({ T }) {
   </div>;
 }
 
+// ─── RFM TAHLILI (Recency / Frequency / Monetary) ────────────────────────────
+// RFM is built for repeat-purchase businesses; most OneJobs clients pass
+// through the pipeline exactly once, so there is no "frequency" the way a
+// shop has it. Adapted here to score PAYMENT BEHAVIOUR within the active
+// pipeline instead: how recently a client last paid, how many separate
+// payments they've made, how much in total — a generalised, ongoing version
+// of the earlier one-off "which clients stopped halfway" check, rather than
+// something that has to be re-run by hand each time.
+//
+// Scope: leads not yet departed, lost, or parked, with at least one income
+// transaction — R/F/M are undefined for someone who has never paid.
+const RFM_EXCLUDED_STATUS = new Set([...DONE, ...LOST, "Keyinchalik"]);
+
+// Percentile rank within the whole in-scope population, bucketed into
+// quintiles 1 (worst) – 5 (best). O(n) per value against a pre-sorted array
+// via a running count would be faster, but n here is a few hundred clients —
+// the simple O(n²) scan is fine and easy to read.
+const rfmQuintile = (value, all, higherIsBetter) => {
+  if (all.length <= 1) return 3;
+  const rank = all.filter(v => v <= value).length / all.length; // 0..1
+  const q = rank <= 0.2 ? 1 : rank <= 0.4 ? 2 : rank <= 0.6 ? 3 : rank <= 0.8 ? 4 : 5;
+  return higherIsBetter ? q : 6 - q;
+};
+
+// Recency and Monetary drive the segment; Frequency is shown but mostly
+// describes the same thing R/M already capture for a one-shot business, so
+// it isn't a third independent axis worth its own branch here.
+const RFM_SEGMENTS = {
+  top:     { label: "Faol, qimmatli",         c: "#16a34a" },
+  active:  { label: "Faol",                   c: "#22c55e" },
+  watch:   { label: "Nazorat kerak",          c: "#eab308" },
+  hotcold: { label: "Qimmatli, sovib qolmoqda", c: "#dc2626" },
+  cold:    { label: "Sovib qolgan",           c: "#9ca3af" },
+};
+const rfmSegment = (rScore, mScore) => {
+  if (rScore >= 4 && mScore >= 4) return "top";
+  if (rScore >= 4) return "active";
+  if (rScore <= 2 && mScore >= 4) return "hotcold";
+  if (rScore === 3) return "watch";
+  return "cold";
+};
+
+function RfmTab({ leads, txns, T }) {
+  const [sortKey, setSortKey] = useState("priority");
+  const [segFilter, setSegFilter] = useState("all");
+  const [q, setQ] = useState("");
+
+  const rows = (() => {
+    // Last payment date and count/sum of income per lead, in one pass.
+    const byLead = {};
+    for (const t of txns) {
+      if (t.type !== "income" || !t.leadId) continue;
+      const b = byLead[t.leadId] || (byLead[t.leadId] = { count: 0, total: 0, last: null });
+      b.count += 1;
+      b.total += Number(t.amount || 0);
+      if (t.date && (!b.last || t.date > b.last)) b.last = t.date;
+    }
+    const now = new Date();
+    const out = [];
+    for (const l of leads) {
+      if (RFM_EXCLUDED_STATUS.has(l.status)) continue;
+      const b = byLead[l.id];
+      if (!b || !b.last) continue; // never paid -- R/F/M meaningless
+      const days = Math.floor((now - new Date(b.last)) / 86400000);
+      out.push({ lead: l, days, freq: b.count, total: b.total });
+    }
+    const allDays = out.map(r => r.days);
+    const allFreq = out.map(r => r.freq);
+    const allTotal = out.map(r => r.total);
+    return out.map(r => {
+      const rScore = rfmQuintile(r.days, allDays, false);
+      const fScore = rfmQuintile(r.freq, allFreq, true);
+      const mScore = rfmQuintile(r.total, allTotal, true);
+      return { ...r, rScore, fScore, mScore, seg: rfmSegment(rScore, mScore) };
+    });
+  })();
+
+  const filtered = rows
+    .filter(r => segFilter === "all" || r.seg === segFilter)
+    .filter(r => !q || (r.lead.name || "").toLowerCase().includes(q.toLowerCase()) || r.lead.id.includes(q));
+
+  const segOrder = { hotcold: 0, watch: 1, cold: 2, active: 3, top: 4 };
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortKey === "priority") {
+      const so = segOrder[a.seg] - segOrder[b.seg];
+      return so !== 0 ? so : b.total - a.total;
+    }
+    if (sortKey === "days") return b.days - a.days;
+    if (sortKey === "freq") return b.freq - a.freq;
+    if (sortKey === "total") return b.total - a.total;
+    return 0;
+  });
+
+  const card = { background: T.card, border: `1px solid ${T.border}`, borderRadius: 10, padding: 14 };
+  const segCounts = {};
+  Object.keys(RFM_SEGMENTS).forEach(k => { segCounts[k] = { n: 0, sum: 0 }; });
+  rows.forEach(r => { segCounts[r.seg].n++; segCounts[r.seg].sum += r.total; });
+
+  return <div>
+    <div style={{ fontSize: 11, color: T.muted, marginBottom: 14, maxWidth: 720 }}>
+      Faol pipeline'dagi (hali jo'nab ketmagan / yo'qotilmagan) va kamida bitta to'lov qilgan mijozlar
+      to'lov xatti-harakati bo'yicha baholanadi: oxirgi to'lovdan necha kun o'tgani (R),
+      nechta alohida to'lov qilgani (F), jami qancha to'lagani (M).
+    </div>
+
+    {/* Segment summary cards -- click to filter the table below */}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 10, marginBottom: 16 }}>
+      {Object.entries(RFM_SEGMENTS).map(([k, s]) => (
+        <div key={k} onClick={() => setSegFilter(p => p === k ? "all" : k)}
+          style={{ ...card, borderLeft: `3px solid ${s.c}`, cursor: "pointer",
+            outline: segFilter === k ? `2px solid ${s.c}` : "none" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: s.c, marginBottom: 4 }}>{s.label}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>{segCounts[k].n}</div>
+          <div style={{ fontSize: 10, color: T.muted }}>{fmtMs(segCounts[k].sum)} so'm</div>
+        </div>
+      ))}
+    </div>
+
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+      <input value={q} onChange={e => setQ(e.target.value)} placeholder="Ism yoki ID bo'yicha qidirish..."
+        style={{ ...inp(T), width: 220, fontSize: 11 }} />
+      <select value={sortKey} onChange={e => setSortKey(e.target.value)} style={{ ...inp(T), width: 200, fontSize: 11 }}>
+        <option value="priority">Muhimlik bo'yicha (avval sovib qolganlar)</option>
+        <option value="days">Eng ko'p kun o'tgan</option>
+        <option value="total">Eng ko'p to'lagan</option>
+        <option value="freq">Eng ko'p to'lov qilgan</option>
+      </select>
+      {segFilter !== "all" && (
+        <button onClick={() => setSegFilter("all")}
+          style={{ fontSize: 11, padding: "5px 10px", borderRadius: 6, cursor: "pointer",
+            border: `1px solid ${T.border}`, background: "transparent", color: T.muted, fontFamily: "inherit" }}>
+          Filtrni tozalash
+        </button>
+      )}
+      <span style={{ fontSize: 11, color: T.muted, marginLeft: "auto" }}>{sorted.length} ta mijoz</span>
+    </div>
+
+    <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 760 }}>
+          <thead>
+            <tr style={{ background: T.card2 }}>
+              {["Mijoz", "Holat", "Oxirgi to'lov", "Kun oldin (R)", "To'lovlar soni (F)", "Jami to'lagan (M)", "Segment"].map(h => (
+                <th key={h} style={{ textAlign: "left", padding: "8px 10px", color: T.muted, fontWeight: 600, whiteSpace: "nowrap" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map(r => {
+              const s = RFM_SEGMENTS[r.seg];
+              return (
+                <tr key={r.lead.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                  <td style={{ padding: "7px 10px", fontWeight: 600, color: T.text, whiteSpace: "nowrap" }}>
+                    {r.lead.name || "—"} <span style={{ color: T.muted, fontWeight: 400 }}>· {r.lead.id}</span>
+                  </td>
+                  <td style={{ padding: "7px 10px", color: T.muted, whiteSpace: "nowrap" }}>{r.lead.status}</td>
+                  <td style={{ padding: "7px 10px", color: T.muted, whiteSpace: "nowrap" }}>{r.days === 0 ? "bugun" : `${r.days} kun oldin`}</td>
+                  <td style={{ padding: "7px 10px", color: T.muted }}>{r.rScore}/5</td>
+                  <td style={{ padding: "7px 10px", color: T.muted }}>{r.freq}</td>
+                  <td style={{ padding: "7px 10px", fontWeight: 700, color: T.text, whiteSpace: "nowrap" }}>{fmtMs(r.total)}</td>
+                  <td style={{ padding: "7px 10px" }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: s.c, background: `${s.c}18`, borderRadius: 12, padding: "2px 9px", whiteSpace: "nowrap" }}>
+                      {s.label}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+            {sorted.length === 0 && (
+              <tr><td colSpan={7} style={{ padding: 24, textAlign: "center", color: T.muted }}>Mijoz topilmadi</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>;
+}
+
 // ─── ANALYTICS PAGE (Employee Productivity + Time Analysis) ─────────────────
 function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
   const T=useT();
@@ -480,7 +658,7 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
 
     {/* Tabs */}
     <div style={{display:"flex",gap:0,marginBottom:16,background:T.card2,border:`1px solid ${T.border}`,borderRadius:8,padding:3,width:"fit-content"}}>
-      {[["productivity","👔 Xodimlar Samaradorligi"],["time","⏱️ Vaqt Tahlili"],["docs","📄 Hujjat Jo'natish"],["kpi","🎯 KPI Nazorat"],...(roles[user?.role]?.canSalary?[["salary","💰 Maosh Tahlili"]]:[])] .map(([k,l])=>(
+      {[["productivity","👔 Xodimlar Samaradorligi"],["time","⏱️ Vaqt Tahlili"],["docs","📄 Hujjat Jo'natish"],["rfm","📊 RFM Tahlili"],["kpi","🎯 KPI Nazorat"],...(roles[user?.role]?.canSalary?[["salary","💰 Maosh Tahlili"]]:[])] .map(([k,l])=>(
         <button key={k} onClick={()=>setTab(k)} style={{padding:"7px 16px",borderRadius:6,border:"none",background:tab===k?T.accent:"transparent",color:tab===k?"#fff":T.muted,cursor:"pointer",fontSize:11,fontWeight:tab===k?700:400}}>{l}</button>
       ))}
     </div>
@@ -490,6 +668,9 @@ function Analytics({leads, tasks, team, txns, roles, user, initialTab}) {
 
     {/* ══════ HUJJAT JO'NATISH ═════════════════════════════════════════════════ */}
     {tab==="docs"&&<DocsSentTab T={T}/>}
+
+    {/* ══════ RFM TAHLILI ═══════════════════════════════════════════════════ */}
+    {tab==="rfm"&&<RfmTab leads={leads} txns={txns} T={T}/>}
 
     {/* ══════ TAB 1: PRODUCTIVITY ══════════════════════════════════════════════ */}
     {tab==="productivity"&&<div>
