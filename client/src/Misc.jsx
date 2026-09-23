@@ -206,7 +206,8 @@ function TeamPage({user, team, setTeam, roles}) {
             <div style={{fontSize:9,color:T.muted,marginTop:3}}>⚠️ Bu nom vakansiya kompaniya nomiga aynan mos kelishi kerak</div>
           </div>}
           <div><label style={labS}>Username *</label><input value={form.username||""} onChange={e=>f("username",e.target.value)} style={inpS}/></div>
-          <div><label style={labS}>Parol</label><input value={form.password||""} onChange={e=>f("password",e.target.value)} style={inpS}/></div>
+          <div><label style={labS}>Parol</label><input value={form.password||""} onChange={e=>f("password",e.target.value)} style={inpS}
+            placeholder={form.id ? "Bo'sh qoldiring — o'zgarmaydi" : ""}/></div>
           <div><label style={labS}>Telefon</label><input value={form.phone||""} onChange={e=>f("phone",e.target.value)} style={inpS}/></div>
           {activeTab==="staff"&&<div><label style={labS}>Rol</label><select value={form.role||"sales"} onChange={e=>f("role",e.target.value)} style={inpS}>{STAFF_ROLES.map(r=><option key={r} value={r}>{roles[r]?.label||r}</option>)}</select></div>}
           <div><label style={labS}>Avatar (2 harf)</label><input value={form.av||""} onChange={e=>f("av",e.target.value.toUpperCase().slice(0,2))} maxLength={2} style={inpS} placeholder="AS"/></div>

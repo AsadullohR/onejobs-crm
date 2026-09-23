@@ -470,7 +470,14 @@ const deleteLead = useCallback(async (id) => {
         if(usersRes?.length) setTeam(usersRes.map(u=>({
           id:u.id, username:u.username, name:u.name, role:u.role,
           avatar:u.avatar||"", color:u.color||"#6366f1",
-          phone:u.phone||"", active:u.active!==false, password:u.username,
+          phone:u.phone||"", active:u.active!==false,
+          // Never a real password -- the server never returns one. This used
+          // to be seeded to the username as a placeholder, which meant every
+          // edit (even a plain role toggle, since those spread {...m} into
+          // the save payload) silently reset that person's real password to
+          // their own username. Leave it unset; the edit form's Parol field
+          // then starts genuinely blank and the payload omits it entirely
+          // unless an admin types a real new one.
         })));
       } catch(err){
         console.error("Load failed:", err.message);

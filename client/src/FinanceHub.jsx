@@ -16,7 +16,10 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
   const T = useT();
   const inpS = inp(T);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0,10), category: "Ofis ijara", description: "", amount: "", recurring: false, type: "expense", paymentMethod: "cash", source: "balance" });
+  // "Boshqa" rather than a specific category (was "Ofis ijara") -- a saved
+  // entry with the dropdown untouched should read as uncategorized, not as
+  // office rent.
+  const [form, setForm] = useState({ date: new Date().toISOString().slice(0,10), category: "Boshqa", description: "", amount: "", recurring: false, type: "expense", paymentMethod: "cash", source: "balance" });
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState({});
   const [filterCat, setFilterCat] = useState("all");
@@ -115,7 +118,7 @@ function ExternalExpenses({ user, addNotif, items = [], setItems }) {
         <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
           {[["expense", "💸 Chiqim", T.red], ["income", "💰 Kirim", T.green]].map(([k, lb, c]) => (
             <button key={k}
-              onClick={() => setForm(p => ({ ...p, type: k, category: k === "income" ? EXT_INC_CATS[0] : EXT_CATS[0] }))}
+              onClick={() => setForm(p => ({ ...p, type: k, category: "Boshqa" }))}
               style={{ padding: "5px 14px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer",
                 border: `1px solid ${form.type === k ? c : T.border}`,
                 background: form.type === k ? `${c}18` : "transparent",

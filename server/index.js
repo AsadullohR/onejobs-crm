@@ -997,6 +997,7 @@ app.put("/api/users/:id", auth, adminOnly, async (req, res) => {
     const updates = [];
     const params = [];
     const fields = {
+      username: "username",
       name: "name",
       role: "role",
       avatar: "avatar",
@@ -1863,6 +1864,27 @@ app.post("/api/webhook/meta", async (req, res) => {
         }
 
         const id = "META-" + leadgenId;
+        const metaPhone = f.phone_number || f.phone || "";
+        // ON CONFLICT(id) only protects against the SAME leadgen_id arriving
+        // twice. It does nothing when the same real person submits a second
+        // time (a new leadgen_id) or when /api/facebook/webhook — a second,
+        // independent ingestion route for the identical Meta leadgen event —
+        // already saved this person under an "NO-..." id. Both routes now
+        // share one normalized phone check across the whole leads table, the
+        // same last-9-digit match the manual lead form already uses, so
+        // formatting differences ("+998..." vs "998..." vs spaced) don't slip
+        // a duplicate past it the way an exact string match did.
+        const metaDigits = (metaPhone.match(/\d/g) || []).join("");
+        if (metaDigits.length >= 7) {
+          const dup = await pool.query(
+            `SELECT id FROM leads WHERE phone LIKE $1 LIMIT 1`,
+            [`%${metaDigits.slice(-9)}`],
+          );
+          if (dup.rows.length > 0) {
+            console.log("Meta lead dup phone, skipped:", metaPhone, "already", dup.rows[0].id);
+            continue;
+          }
+        }
         await pool.query(
           `INSERT INTO leads (id,name,phone,status,country,source,reklama_name,comment,created_at)
            VALUES ($1,$2,$3,'Yangi',$4,'Meta Ads',$5,$6,NOW())
@@ -1870,13 +1892,13 @@ app.post("/api/webhook/meta", async (req, res) => {
           [
             id,
             f.full_name || f.name || "Noma'lum",
-            f.phone_number || f.phone || "",
+            metaPhone,
             f.country || f.city || "",
             change.value.ad_name || "",
             `Ad: ${change.value.ad_id || ""}`,
           ],
         );
-        console.log("✅ Meta lead:", id, f.full_name, f.phone_number);
+        console.log("✅ Meta lead:", id, f.full_name, metaPhone);
       }
     }
   } catch (err) {
@@ -3123,10 +3145,17 @@ async function fetchAndSaveFbLead(leadId) {
   if (!fields.name && !fields.phone) return;
 
   const phone = fields.phone || "";
-  // Skip if phone already exists
-  if (phone) {
-    const dup = await pool.query("SELECT id FROM leads WHERE phone=$1 LIMIT 1", [phone]);
-    if (dup.rows.length > 0) { console.log("FB lead dup phone:", phone); return; }
+  // Was an EXACT string match, so "+998901234567", "998901234567" and
+  // "90 123 45 67" (all the same real person, in the formats Meta's own
+  // forms actually send across different submissions) each looked like a
+  // new number — that's how the same person kept arriving as a fresh "Yangi"
+  // lead. Normalized to the last 9 digits, matching the manual lead form's
+  // own dedup and the /api/webhook/meta route below, so either route catches
+  // a duplicate the other one already saved.
+  const digits = (phone.match(/\d/g) || []).join("");
+  if (digits.length >= 7) {
+    const dup = await pool.query("SELECT id FROM leads WHERE phone LIKE $1 LIMIT 1", [`%${digits.slice(-9)}`]);
+    if (dup.rows.length > 0) { console.log("FB lead dup phone:", phone, "already", dup.rows[0].id); return; }
   }
 
   // Generate next NO- id

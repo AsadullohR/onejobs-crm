@@ -114,12 +114,13 @@ export function MobileFinance({ txns, setTxns, leads, extExps, user, config, add
     const cats = type === "income"
       ? (config?.txnInc || ["XBA To'lov","1-Qism","2-Qism","3-Qism","Bonus","Boshqa"])
       : (config?.txnExp || ["Maosh","Avans","Bonus","Reklama","Transport","Boshqa"]);
+    const defaultCat = cats.includes("Boshqa") ? "Boshqa" : (cats[0] || "");
     setForm({
       id: uid(),
       type,
       leadId: "",
       date: new Date().toISOString().slice(0, 10),
-      cat: cats[0] || "",
+      cat: defaultCat,
       desc: "",
       amount: "",
       paymentMethod: "cash",

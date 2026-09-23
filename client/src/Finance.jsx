@@ -257,13 +257,18 @@ function Finance({
     ];
 
     const cats = type === "income" ? incomeCats : expenseCats;
+    // Was cats[0] -- whichever category happened to be listed first (e.g.
+    // "XBA To'lov" / "Maosh"), so an entry saved without touching the
+    // dropdown was mis-categorized rather than obviously uncategorized.
+    // "Boshqa" is the deliberate catch-all default everywhere money is added.
+    const defaultCat = cats.includes("Boshqa") ? "Boshqa" : (cats[0] || "");
 
     setForm({
       id: uid(),
       leadId: leadId || "",
       date: new Date().toISOString().slice(0, 10),
       type,
-      cat: cats[0] || "",
+      cat: defaultCat,
       desc: "",
       amount: "",
       receipt: null,

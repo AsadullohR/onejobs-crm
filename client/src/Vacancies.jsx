@@ -343,13 +343,13 @@ function VacancyDetail({
   const [finModal, setFinModal] = useState(null);   // {mode, cand} | null
   const [finBusy, setFinBusy] = useState(false);
   const [finForm, setFinForm] = useState({
-    type: "income", amount: "", cat: "", desc: "",
+    type: "income", amount: "", cat: "Boshqa", desc: "",
     date: new Date().toISOString().slice(0, 10),
     paymentMethod: "cash", source: "balance",
   });
   const openFin = (mode, cand = null) => {
     setFinForm({
-      type: "income", amount: "", cat: "", desc: "",
+      type: "income", amount: "", cat: "Boshqa", desc: "",
       date: new Date().toISOString().slice(0, 10),
       paymentMethod: "cash", source: "balance",
     });
@@ -868,7 +868,7 @@ function VacancyDetail({
 
         <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
           {[["income", "Kirim"], ["expense", "Chiqim"]].map(([k, l]) => (
-            <button key={k} onClick={() => setFinForm(p => ({ ...p, type: k, cat: "" }))}
+            <button key={k} onClick={() => setFinForm(p => ({ ...p, type: k, cat: "Boshqa" }))}
               style={{ flex: 1, padding: "8px", borderRadius: 8, fontFamily: "inherit", cursor: "pointer",
                 fontSize: 12, fontWeight: 700,
                 border: `1px solid ${finForm.type === k ? (k === "income" ? "#16a34a" : T.red) : T.border}`,
