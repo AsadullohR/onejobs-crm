@@ -3001,6 +3001,20 @@ $$ LANGUAGE plpgsql;`);
       status TEXT NOT NULL,
       logged_at TIMESTAMPTZ DEFAULT NOW()
     )`);
+    // status_log has been insert-only since launch (one row per status
+    // change, across every lead) with NO index at all -- not even on
+    // lead_id. Every /api/leads request runs a correlated subquery against
+    // it (for status_since) PER ROW, and nearly every stats/KPI query does
+    // the same. At a few hundred leads a sequential scan per row is
+    // invisible; at 10,000+ leads and a status_log growing indefinitely, it
+    // is a full table scan per row, on every page of every leads request —
+    // exactly why the full lead list can go from fast to effectively hung
+    // as the table grows, while a single aggregate query (like the funnel)
+    // stays fast. (lead_id, status, logged_at DESC) covers the WHERE +
+    // MAX(logged_at) pattern used everywhere, and its leftmost prefix
+    // (lead_id) also serves the many queries that only filter by lead_id.
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_status_log_lead_status_logged
+      ON status_log (lead_id, status, logged_at DESC)`);
     await pool.query(`ALTER TABLE external_expenses ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'expense'`);
     await pool.query(`ALTER TABLE external_expenses ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'cash'`);
     // Which pot the money came out of: 'balance' (general funds) or
