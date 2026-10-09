@@ -2882,6 +2882,113 @@ const msUntilMidnight = (() => {
 })();
 setTimeout(() => { createStaleTasks(); setInterval(createStaleTasks, 24*60*60*1000); }, msUntilMidnight);
 
+// ─── DAILY TELEGRAM REPORT ───────────────────────────────────────────────────
+// Env: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (comma-separated for several chats),
+// optional DAILY_REPORT_HOUR (Tashkent hour, default 8).
+const REPORT_DONE_LOST = ["Jo'nab ketdi", "Viza Oldi", "Viza Rad Etildi", "Rad etildi", "Bekor qildi", "Anchagacha ko'tarmadi"];
+const tgEsc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const fmtNum = (n) => Number(n || 0).toLocaleString("en-US").replace(/,/g, " ");
+
+async function buildDailyReport() {
+  const ydayQ = `(NOW() AT TIME ZONE $1)::date - 1`;
+  const [leadsR, bySrcR, visitsR, payR, staleR, tasksR, debtsR, activeR] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int n FROM leads WHERE (created_at AT TIME ZONE $1)::date = ${ydayQ}`, [APP_TZ]),
+    pool.query(
+      `SELECT COALESCE(NULLIF(source,''),'Noma''lum') src, COUNT(*)::int n FROM leads
+       WHERE (created_at AT TIME ZONE $1)::date = ${ydayQ} GROUP BY 1 ORDER BY n DESC LIMIT 5`, [APP_TZ]),
+    pool.query(
+      `SELECT name FROM leads
+       WHERE interview_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND LEFT(interview_date,10)::date = ${ydayQ} ORDER BY name`, [APP_TZ]),
+    pool.query(
+      `SELECT currency, COUNT(*)::int n, SUM(amount)::bigint total FROM transactions
+       WHERE type='income' AND date = ${ydayQ} GROUP BY currency ORDER BY total DESC`, [APP_TZ]),
+    pool.query(
+      `SELECT id, name, phone, status, total_income, last_touch,
+              ((NOW() AT TIME ZONE $1)::date - last_touch) AS days
+       FROM (
+         SELECT l.id, l.name, l.phone, l.status, l.total_income,
+                GREATEST(
+                  CASE WHEN l.last_contact ~ '^\\d{4}-\\d{2}-\\d{2}' THEN LEFT(l.last_contact,10)::date END,
+                  (SELECT MAX(sl.logged_at AT TIME ZONE $1)::date FROM status_log sl WHERE sl.lead_id = l.id),
+                  (l.created_at AT TIME ZONE $1)::date
+                ) AS last_touch
+         FROM leads l
+         WHERE (COALESCE(l.total_income,0) > 0 OR l.xba OR l.q1 OR l.q2 OR l.q3)
+           AND l.status <> ALL($2)
+       ) t
+       WHERE last_touch < (NOW() AT TIME ZONE $1)::date - 90
+       ORDER BY total_income DESC NULLS LAST`, [APP_TZ, REPORT_DONE_LOST]),
+    pool.query(
+      `SELECT COUNT(*)::int n FROM tasks
+       WHERE status <> 'done' AND due_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND LEFT(due_date,10)::date < (NOW() AT TIME ZONE $1)::date`, [APP_TZ]),
+    pool.query(`SELECT COUNT(*)::int n, COALESCE(SUM(amount),0)::bigint total FROM debts WHERE paid = FALSE`),
+    pool.query(`SELECT COUNT(*)::int n FROM leads WHERE status <> ALL($1) AND status <> 'Keyinchalik'`, [REPORT_DONE_LOST]),
+  ]);
+
+  const ydate = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ }).format(new Date(Date.now() - 864e5));
+  const L = [];
+  L.push(`<b>📊 OneJobs kunlik hisobot — ${ydate}</b>`, "");
+  L.push(`🆕 <b>Yangi lidlar:</b> ${leadsR.rows[0].n}`);
+  if (bySrcR.rows.length) L.push("   " + bySrcR.rows.map((r) => `${tgEsc(r.src)}: ${r.n}`).join(" · "));
+  L.push(`🏢 <b>Ofisga kelganlar:</b> ${visitsR.rows.length}`);
+  if (visitsR.rows.length) {
+    L.push("   " + visitsR.rows.slice(0, 15).map((r) => tgEsc(r.name)).join(", ") + (visitsR.rows.length > 15 ? ` … +${visitsR.rows.length - 15}` : ""));
+  }
+  if (payR.rows.length) {
+    const cnt = payR.rows.reduce((a, r) => a + r.n, 0);
+    L.push(`💰 <b>Kechagi to'lovlar:</b> ${cnt} ta — ` + payR.rows.map((r) => `${fmtNum(r.total)} ${tgEsc(r.currency || "UZS")}`).join(" + "));
+  } else {
+    L.push(`💰 <b>Kechagi to'lovlar:</b> yo'q`);
+  }
+  L.push("");
+  const stale = staleR.rows;
+  L.push(`⚠️ <b>To'lov qilgan, lekin 90+ kun aloqasiz:</b> ${stale.length}`);
+  stale.slice(0, 10).forEach((r) =>
+    L.push(`   • ${tgEsc(r.name)} (${tgEsc(r.id)}) — ${fmtNum(r.total_income)} to'lagan, ${r.days} kun, ${tgEsc(r.status)}`));
+  if (stale.length > 10) L.push(`   … yana ${stale.length - 10} ta`);
+  L.push("");
+  L.push(`📌 <b>Muhim:</b>`);
+  L.push(`   • Faol mijozlar (pipeline): ${activeR.rows[0].n}`);
+  L.push(`   • Muddati o'tgan vazifalar: ${tasksR.rows[0].n}`);
+  L.push(`   • To'lanmagan qarzlar: ${debtsR.rows[0].n} ta, ${fmtNum(debtsR.rows[0].total)}`);
+  return L.join("\n");
+}
+
+async function sendTelegram(text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chats = (process.env.TELEGRAM_CHAT_ID || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!token || !chats.length) throw new Error("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID sozlanmagan");
+  for (const chat_id of chats) {
+    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id, text: text.slice(0, 4000), parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+    if (!r.ok) throw new Error(`Telegram ${r.status}: ${await r.text()}`);
+  }
+}
+
+app.get("/api/admin/daily-report", auth, adminOnly, async (req, res) => {
+  try { res.type("text/plain").send(await buildDailyReport()); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+app.post("/api/admin/daily-report/send", auth, adminOnly, async (req, res) => {
+  try { await sendTelegram(await buildDailyReport()); res.json({ ok: true }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+let lastReportDay = null;
+setInterval(async () => {
+  if (!process.env.TELEGRAM_BOT_TOKEN) return;
+  const now = new Date();
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: APP_TZ, hour: "2-digit", hour12: false }).format(now));
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ }).format(now);
+  if (hour !== Number(process.env.DAILY_REPORT_HOUR || 8) || lastReportDay === day) return;
+  lastReportDay = day;
+  try { await sendTelegram(await buildDailyReport()); console.log("📨 Daily report sent"); }
+  catch (err) { console.error("Daily report error:", err.message); lastReportDay = null; }
+}, 60 * 1000);
+
 // ─── START SERVER ─────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {
   console.log(`🚀 OneJobs CRM API running on port ${PORT}`);
