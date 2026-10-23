@@ -5,6 +5,7 @@ import { uid, fmtMs, fmtD, inp, I, MoneyInput } from "./helpers.jsx";
 import { Finance } from "./Finance.jsx";
 import { SalaryPage } from "./SalaryPage.jsx";
 import { DebtsPage } from "./DebtsPage.jsx";
+import { AllTransactions } from "./AllTransactions.jsx";
 import { extExpAPI } from "./api.js";
 
 // ─── EXTERNAL EXPENSES TAB ────────────────────────────────────────────────────
@@ -759,6 +760,7 @@ function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNot
   const canSalary = roles[user?.role]?.canSalary;
   const TABS = [
     { k: "dashboard", l: "📊 Dashboard" },
+    { k: "all",       l: "📒 Barcha operatsiyalar" },
     { k: "clients",   l: "💼 Mijozlar Moliyasi" },
     { k: "kpi",       l: "🏆 KPI To'lovlar" },
     ...(canSalary ? [{ k: "salary", l: "👷 Xodim Xarajatlari" }] : []),
@@ -788,6 +790,9 @@ function FinanceHub({ leads, setLeads, team, user, txns, setTxns, config, addNot
       <div style={{ flex: 1, overflow: "auto", padding: "20px 18px" }}>
         {tab === "dashboard" && (
           <FinanceDashboard txns={txns} leads={leads} extExps={extExps} />
+        )}
+        {tab === "all" && (
+          <AllTransactions txns={txns} extExps={extExps} leads={leads} />
         )}
         {tab === "clients" && (
           <Finance leads={leads} setLeads={setLeads} team={team} user={user}
