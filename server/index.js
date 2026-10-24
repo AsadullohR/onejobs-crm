@@ -2954,8 +2954,9 @@ async function buildDailyReport() {
   const stale = staleR.rows;
   L.push(`⚠️ <b>To'lagan, lekin 90+ kun aloqasiz: ${stale.length}</b>`);
   if (stale.length) {
-    const head = "Mijoz".padEnd(18) + "To'ladi".padStart(10) + "Kun".padStart(5);
-    const body = stale.slice(0, 10).map((r) => cut(r.name, 17).padEnd(18) + fmtNum(r.total_income).padStart(10) + String(r.days).padStart(5));
+    const head = "ID".padEnd(9) + "Mijoz".padEnd(14) + "To'ladi".padStart(10) + "Kun".padStart(4);
+    const shortId = (id) => { id = String(id ?? ""); return id.length > 8 ? "…" + id.slice(-6) : id; };
+    const body = stale.slice(0, 10).map((r) => shortId(r.id).padEnd(9) + cut(r.name, 13).padEnd(14) + fmtNum(r.total_income).padStart(10) + String(r.days).padStart(4));
     if (stale.length > 10) body.push(`… yana ${stale.length - 10} ta`);
     L.push(`<pre>${tgEsc([head, ...body].join("\n"))}</pre>`);
   }
