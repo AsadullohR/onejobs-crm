@@ -2920,7 +2920,7 @@ async function buildDailyReport() {
        ORDER BY total_income DESC NULLS LAST`, [APP_TZ, REPORT_DONE_LOST]),
     pool.query(
       `SELECT COUNT(*)::int n FROM tasks
-       WHERE status <> 'done' AND due_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND LEFT(due_date,10)::date < (NOW() AT TIME ZONE $1)::date`, [APP_TZ]),
+       WHERE status <> 'done' AND due_date < (NOW() AT TIME ZONE $1)::date`, [APP_TZ]),
     pool.query(`SELECT COUNT(*)::int n, COALESCE(SUM(amount),0)::bigint total FROM debts WHERE paid = FALSE`),
     pool.query(`SELECT COUNT(*)::int n FROM leads WHERE status <> ALL($1) AND status <> 'Keyinchalik'`, [REPORT_DONE_LOST]),
   ]);
