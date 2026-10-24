@@ -2926,31 +2926,39 @@ async function buildDailyReport() {
   ]);
 
   const ydate = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ }).format(new Date(Date.now() - 864e5));
+  const [yy, ym, yd] = ydate.split("-");
+  const cut = (s, n) => { s = String(s ?? "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+  const row = (label, value, w = 33) => {
+    const v = String(value);
+    return cut(label, w - v.length - 1).padEnd(w - v.length) + v;
+  };
+  const line = "─".repeat(33);
+
+  const summary = [row("Yangi lidlar", leadsR.rows[0].n), row("Ofisga kelganlar", visitsR.rows.length)];
+  if (payR.rows.length) payR.rows.forEach((r) => summary.push(row(`To'lov, ${r.n} ta (${r.currency || "UZS"})`, fmtNum(r.total))));
+  else summary.push(row("To'lovlar", "yo'q"));
+  const overview = [
+    row("Faol lidlar", fmtNum(activeR.rows[0].n)),
+    row("Muddati o'tgan vazifalar", tasksR.rows[0].n),
+    row(`Qarzlar (${debtsR.rows[0].n} ta)`, fmtNum(debtsR.rows[0].total)),
+  ];
+
   const L = [];
-  L.push(`<b>📊 OneJobs kunlik hisobot — ${ydate}</b>`, "");
-  L.push(`🆕 <b>Yangi lidlar:</b> ${leadsR.rows[0].n}`);
-  if (bySrcR.rows.length) L.push("   " + bySrcR.rows.map((r) => `${tgEsc(r.src)}: ${r.n}`).join(" · "));
-  L.push(`🏢 <b>Ofisga kelganlar:</b> ${visitsR.rows.length}`);
+  L.push(`📊 <b>OneJobs hisobot — ${yd}.${ym}.${yy}</b>`, "");
+  L.push(`<pre>${tgEsc(["Kechagi natija", line, ...summary, line, ...overview].join("\n"))}</pre>`);
+  if (bySrcR.rows.length) L.push(`🎯 <b>Manbalar:</b> ${bySrcR.rows.map((r) => `${tgEsc(r.src)} ${r.n}`).join(" · ")}`);
   if (visitsR.rows.length) {
-    L.push("   " + visitsR.rows.slice(0, 15).map((r) => tgEsc(r.name)).join(", ") + (visitsR.rows.length > 15 ? ` … +${visitsR.rows.length - 15}` : ""));
-  }
-  if (payR.rows.length) {
-    const cnt = payR.rows.reduce((a, r) => a + r.n, 0);
-    L.push(`💰 <b>Kechagi to'lovlar:</b> ${cnt} ta — ` + payR.rows.map((r) => `${fmtNum(r.total)} ${tgEsc(r.currency || "UZS")}`).join(" + "));
-  } else {
-    L.push(`💰 <b>Kechagi to'lovlar:</b> yo'q`);
+    L.push(`🏢 <b>Ofisga kelganlar:</b> ` + visitsR.rows.slice(0, 15).map((r) => tgEsc(cut(r.name, 28))).join(", ") + (visitsR.rows.length > 15 ? ` … +${visitsR.rows.length - 15}` : ""));
   }
   L.push("");
   const stale = staleR.rows;
-  L.push(`⚠️ <b>To'lov qilgan, lekin 90+ kun aloqasiz:</b> ${stale.length}`);
-  stale.slice(0, 10).forEach((r) =>
-    L.push(`   • ${tgEsc(r.name)} (${tgEsc(r.id)}) — ${fmtNum(r.total_income)} to'lagan, ${r.days} kun, ${tgEsc(r.status)}`));
-  if (stale.length > 10) L.push(`   … yana ${stale.length - 10} ta`);
-  L.push("");
-  L.push(`📌 <b>Muhim:</b>`);
-  L.push(`   • Faol mijozlar (pipeline): ${activeR.rows[0].n}`);
-  L.push(`   • Muddati o'tgan vazifalar: ${tasksR.rows[0].n}`);
-  L.push(`   • To'lanmagan qarzlar: ${debtsR.rows[0].n} ta, ${fmtNum(debtsR.rows[0].total)}`);
+  L.push(`⚠️ <b>To'lagan, lekin 90+ kun aloqasiz: ${stale.length}</b>`);
+  if (stale.length) {
+    const head = "Mijoz".padEnd(18) + "To'ladi".padStart(10) + "Kun".padStart(5);
+    const body = stale.slice(0, 10).map((r) => cut(r.name, 17).padEnd(18) + fmtNum(r.total_income).padStart(10) + String(r.days).padStart(5));
+    if (stale.length > 10) body.push(`… yana ${stale.length - 10} ta`);
+    L.push(`<pre>${tgEsc([head, ...body].join("\n"))}</pre>`);
+  }
   return L.join("\n");
 }
 
