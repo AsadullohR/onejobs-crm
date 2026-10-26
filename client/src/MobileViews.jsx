@@ -94,11 +94,25 @@ function LeadPicker({ leads, value, onChange }) {
 }
 
 // ─── MOBILE FINANCE ───────────────────────────────────────────────────────────
-export function MobileFinance({ txns, setTxns, leads, extExps, user, config, addNotif }) {
+export function MobileFinance({ txns: allTxns, setTxns, leads, extExps, user, config, addNotif }) {
   const T = useT();
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
   const [view, setView] = useState("summary");
+  const [range, setRange] = useState({ from: "", to: "" });
+  const rangeOn = !!(range.from || range.to);
+  const txns = useMemo(
+    () => allTxns.filter((t) => (!range.from || (t.date || "") >= range.from) && (!range.to || (t.date || "") <= range.to)),
+    [allTxns, range]
+  );
+  const isoDay = (d) => d.toISOString().slice(0, 10);
+  const quick = (k) => {
+    const now = new Date();
+    if (k === "all") return setRange({ from: "", to: "" });
+    if (k === "today") return setRange({ from: isoDay(now), to: isoDay(now) });
+    if (k === "7") return setRange({ from: isoDay(new Date(now.getTime() - 6 * 864e5)), to: isoDay(now) });
+    if (k === "month") return setRange({ from: isoDay(now).slice(0, 8) + "01", to: isoDay(now) });
+  };
 
   const income = txns.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const expense = txns.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
@@ -110,7 +124,7 @@ export function MobileFinance({ txns, setTxns, leads, extExps, user, config, add
   const cashBalance = cashIncome - cashExp;
   const bankBalance = bankIncome - bankExp;
 
-  const recent = [...txns].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 20);
+  const recent = [...txns].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, rangeOn ? 300 : 20);
 
   const openForm = (type) => {
     const cats = type === "income"
@@ -186,7 +200,24 @@ export function MobileFinance({ txns, setTxns, leads, extExps, user, config, add
       </div>
       {view === "all" && (
         <div style={{ padding: "12px 14px 80px" }}>
-          <AllTransactions txns={txns} extExps={extExps || []} leads={leads} />
+          <AllTransactions txns={allTxns} extExps={extExps || []} leads={leads} />
+        </div>
+      )}
+
+      {view === "summary" && (
+        <div style={{ padding: "10px 14px 0" }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+            {[["all", "Hammasi"], ["today", "Bugun"], ["7", "7 kun"], ["month", "Shu oy"]].map(([k, lb]) => (
+              <button key={k} onClick={() => quick(k)}
+                style={{ padding: "6px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", border: `1px solid ${T.border}`, background: "transparent", color: T.muted }}>{lb}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input type="date" value={range.from} max={range.to || undefined} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} style={{ ...inp(T), flex: 1, height: 40 }} />
+            <span style={{ color: T.muted, fontSize: 12 }}>—</span>
+            <input type="date" value={range.to} min={range.from || undefined} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} style={{ ...inp(T), flex: 1, height: 40 }} />
+          </div>
+          {rangeOn && <div style={{ fontSize: 10, color: T.muted, marginTop: 6 }}>Tanlangan davr: {txns.length} ta tranzaksiya (yuqoridagi jamlar ham shu davr uchun)</div>}
         </div>
       )}
 
@@ -204,7 +235,7 @@ export function MobileFinance({ txns, setTxns, leads, extExps, user, config, add
 
       {/* Recent transactions */}
       {view === "summary" && <div style={{ padding: "0 14px 80px" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 8, textTransform: "uppercase" }}>So'nggi tranzaksiyalar</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 8, textTransform: "uppercase" }}>{rangeOn ? "Tranzaksiyalar" : "So'nggi tranzaksiyalar"}</div>
         {recent.length === 0 && (
           <div style={{ textAlign: "center", color: T.muted, fontSize: 12, padding: 24 }}>Tranzaksiyalar yo'q</div>
         )}
