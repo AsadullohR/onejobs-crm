@@ -30,6 +30,8 @@ function AllTransactions({ txns, extExps, leads }) {
   leads = leads || [];
   const inpS = inp(T);
   const [month, setMonth] = useState(todayISO().slice(0, 7));
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [allTime, setAllTime] = useState(false);
   const [kind, setKind] = useState("all");
   const [origin, setOrigin] = useState("all");
@@ -77,7 +79,10 @@ function AllTransactions({ txns, extExps, leads }) {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (!allTime && month && !r.date.startsWith(month)) return false;
+      if (from || to) {
+        if (from && r.date < from) return false;
+        if (to && r.date > to) return false;
+      } else if (!allTime && month && !r.date.startsWith(month)) return false;
       if (kind !== "all" && r.kind !== kind) return false;
       if (origin !== "all" && r.origin !== origin) return false;
       if (method !== "all" && r.method !== method) return false;
@@ -85,7 +90,7 @@ function AllTransactions({ txns, extExps, leads }) {
       if (needle && !`${r.who} ${r.leadId} ${r.cat} ${r.desc}`.toLowerCase().includes(needle)) return false;
       return true;
     });
-  }, [rows, month, allTime, kind, origin, method, cat, q]);
+  }, [rows, month, from, to, allTime, kind, origin, method, cat, q]);
 
   const inc = filtered.filter((r) => r.kind === "income").reduce((s, r) => s + r.amount, 0);
   const exp = filtered.filter((r) => r.kind === "expense").reduce((s, r) => s + r.amount, 0);
@@ -148,7 +153,11 @@ function AllTransactions({ txns, extExps, leads }) {
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12, alignItems: "center" }}>
-        <input type="month" value={month} disabled={allTime} onChange={(e) => { setMonth(e.target.value); setShown(PAGE); }} style={{ ...inpS, width: 150 }} />
+        <input type="month" value={month} disabled={allTime || !!(from || to)} onChange={(e) => { setMonth(e.target.value); setShown(PAGE); }} style={{ ...inpS, width: 150 }} />
+        <input type="date" value={from} max={to || undefined} title="Dan" onChange={(e) => { setFrom(e.target.value); setShown(PAGE); }} style={{ ...inpS, width: 150 }} />
+        <span style={{ color: T.muted, fontSize: 12 }}>—</span>
+        <input type="date" value={to} min={from || undefined} title="Gacha" onChange={(e) => { setTo(e.target.value); setShown(PAGE); }} style={{ ...inpS, width: 150 }} />
+        {(from || to) && <button onClick={() => { setFrom(""); setTo(""); setShown(PAGE); }} style={chip(false, T.red)}>✕ Sana</button>}
         <button onClick={() => { setAllTime(!allTime); setShown(PAGE); }} style={chip(allTime, T.accent)}>Barcha vaqt</button>
         {[["all", "Hammasi", T.accent], ["income", "Kirim", T.green], ["expense", "Chiqim", T.red]].map(([k, lb, c]) => (
           <button key={k} onClick={() => { setKind(k); setShown(PAGE); }} style={chip(kind === k, c)}>{lb}</button>
