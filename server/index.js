@@ -2886,12 +2886,14 @@ setTimeout(() => { createStaleTasks(); setInterval(createStaleTasks, 24*60*60*10
 // Env: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (comma-separated for several chats),
 // optional DAILY_REPORT_HOUR (Tashkent hour, default 8).
 const REPORT_DONE_LOST = ["Jo'nab ketdi", "Viza Oldi", "Viza Rad Etildi", "Rad etildi", "Bekor qildi", "Anchagacha ko'tarmadi"];
+// Optional report sections must never block the daily send.
+const safeQ = (...args) => pool.query(...args).catch((e) => { console.error("Report section failed:", e.message); return { rows: [] }; });
 const tgEsc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const fmtNum = (n) => Number(n || 0).toLocaleString("en-US").replace(/,/g, " ");
 
 async function buildDailyReport() {
   const ydayQ = `(NOW() AT TIME ZONE $1)::date - 1`;
-  const [leadsR, bySrcR, visitsR, payR, staleR, tasksR, debtsR, activeR] = await Promise.all([
+  const [leadsR, bySrcR, visitsR, payR, staleR, tasksR, debtsR, activeR, intR, uncR, mtdR, progR, odR] = await Promise.all([
     pool.query(`SELECT COUNT(*)::int n FROM leads WHERE (created_at AT TIME ZONE $1)::date = ${ydayQ}`, [APP_TZ]),
     pool.query(
       `SELECT COALESCE(NULLIF(source,''),'Noma''lum') src, COUNT(*)::int n FROM leads
@@ -2923,6 +2925,48 @@ async function buildDailyReport() {
        WHERE status <> 'done' AND due_date < (NOW() AT TIME ZONE $1)::date`, [APP_TZ]),
     pool.query(`SELECT COUNT(*)::int n, COALESCE(SUM(amount),0)::bigint total FROM debts WHERE paid = FALSE`),
     pool.query(`SELECT COUNT(*)::int n FROM leads WHERE status <> ALL($1) AND status <> 'Keyinchalik'`, [REPORT_DONE_LOST]),
+    // interviews booked for today / tomorrow
+    safeQ(
+      `SELECT l.id, l.name, u.name AS owner, d.dt
+       FROM leads l
+       LEFT JOIN users u ON u.id = l.owner_sales
+       CROSS JOIN LATERAL (SELECT CASE WHEN l.interview_scheduled ~ '^\\d{4}-\\d{2}-\\d{2}' THEN LEFT(l.interview_scheduled,10)::date END AS dt) d
+       WHERE d.dt BETWEEN (NOW() AT TIME ZONE $1)::date AND (NOW() AT TIME ZONE $1)::date + 1
+       ORDER BY d.dt, l.name`, [APP_TZ]),
+    // yesterday's new leads nobody has contacted, per owner
+    safeQ(
+      `SELECT COALESCE(u.name,'Biriktirilmagan') AS owner, COUNT(*)::int n
+       FROM leads l LEFT JOIN users u ON u.id = l.owner_sales
+       WHERE (l.created_at AT TIME ZONE $1)::date = ${ydayQ}
+         AND l.status = 'Yangi' AND NULLIF(l.last_contact,'') IS NULL
+       GROUP BY 1 ORDER BY n DESC`, [APP_TZ]),
+    // month-to-date vs the same days of last month
+    safeQ(
+      `WITH p AS (SELECT (NOW() AT TIME ZONE $1)::date - 1 AS y),
+       r AS (SELECT y, date_trunc('month', y)::date AS cs,
+                    (date_trunc('month', y) - interval '1 month')::date AS ps,
+                    LEAST((date_trunc('month', y) - interval '1 month')::date + (EXTRACT(day FROM y)::int - 1),
+                          date_trunc('month', y)::date - 1) AS pe FROM p)
+       SELECT EXTRACT(day FROM r.y)::int AS dom,
+         (SELECT COUNT(*) FROM leads WHERE (created_at AT TIME ZONE $1)::date BETWEEN r.cs AND r.y)::int AS leads_cur,
+         (SELECT COUNT(*) FROM leads WHERE (created_at AT TIME ZONE $1)::date BETWEEN r.ps AND r.pe)::int AS leads_prev,
+         (SELECT COUNT(*) FROM leads WHERE CASE WHEN interview_date ~ '^\\d{4}-\\d{2}-\\d{2}' THEN LEFT(interview_date,10)::date END BETWEEN r.cs AND r.y)::int AS vis_cur,
+         (SELECT COUNT(*) FROM leads WHERE CASE WHEN interview_date ~ '^\\d{4}-\\d{2}-\\d{2}' THEN LEFT(interview_date,10)::date END BETWEEN r.ps AND r.pe)::int AS vis_prev,
+         (SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='income' AND date BETWEEN r.cs AND r.y)::bigint AS inc_cur,
+         (SELECT COALESCE(SUM(amount),0) FROM transactions WHERE type='income' AND date BETWEEN r.ps AND r.pe)::bigint AS inc_prev
+       FROM r`, [APP_TZ]),
+    // stage entries yesterday
+    safeQ(
+      `SELECT status, COUNT(DISTINCT lead_id)::int n FROM status_log
+       WHERE logged_at > NOW() - INTERVAL '3 days' AND (logged_at AT TIME ZONE $1)::date = ${ydayQ}
+         AND status = ANY($2) GROUP BY status`,
+      [APP_TZ, ["Hujjatlar Jonatildi", "Taklifnoma keldi", "Vizaga Topshirildi", "Viza Oldi", "Jo'nab ketdi", "Viza Rad Etildi", "Rad etildi", "Bekor qildi"]]),
+    // overdue tasks per assignee
+    safeQ(
+      `SELECT COALESCE(u.name,'Biriktirilmagan') AS name, COUNT(*)::int n
+       FROM tasks t LEFT JOIN users u ON u.id = t.assignee
+       WHERE t.status <> 'done' AND t.due_date < (NOW() AT TIME ZONE $1)::date
+       GROUP BY 1 ORDER BY n DESC`, [APP_TZ]),
   ]);
 
   const ydate = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ }).format(new Date(Date.now() - 864e5));
@@ -2950,6 +2994,49 @@ async function buildDailyReport() {
   if (visitsR.rows.length) {
     L.push(`🏢 <b>Ofisga kelganlar:</b> ` + visitsR.rows.slice(0, 15).map((r) => tgEsc(cut(r.name, 28))).join(", ") + (visitsR.rows.length > 15 ? ` … +${visitsR.rows.length - 15}` : ""));
   }
+  const m = mtdR.rows[0] || { dom: 0, leads_cur: 0, leads_prev: 0, vis_cur: 0, vis_prev: 0, inc_cur: 0, inc_prev: 0 };
+  const pct = (a, b) => (b > 0 ? `${a >= b ? "+" : "−"}${Math.round(Math.abs(a - b) / b * 100)}%` : "—");
+  const mln = (v) => (Number(v) / 1e6).toFixed(1);
+  const mrow = (lb, a, b, fa = (x) => x) => lb.padEnd(13) + String(fa(a)).padStart(8) + String(fa(b)).padStart(8) + pct(Number(a), Number(b)).padStart(6);
+  L.push("");
+  L.push(`📈 <b>Oy boshidan (1–${m.dom}-kun), o'tgan oy bilan</b>`);
+  L.push(`<pre>${tgEsc([
+    "".padEnd(13) + "Shu oy".padStart(8) + "O'tgan".padStart(8) + "Farq".padStart(6),
+    mrow("Yangi lidlar", m.leads_cur, m.leads_prev),
+    mrow("Ofisga kelgan", m.vis_cur, m.vis_prev),
+    mrow("Kirim, mln", m.inc_cur, m.inc_prev, mln),
+  ].join("\n"))}</pre>`);
+
+  const P = Object.fromEntries(progR.rows.map((r) => [r.status, r.n]));
+  const lost = (P["Viza Rad Etildi"] || 0) + (P["Rad etildi"] || 0) + (P["Bekor qildi"] || 0);
+  L.push("");
+  L.push(`🚦 <b>Kechagi o'tishlar</b>`);
+  L.push(`<pre>${tgEsc([
+    row("Hujjat jo'natildi", P["Hujjatlar Jonatildi"] || 0, 28),
+    row("Taklifnoma keldi", P["Taklifnoma keldi"] || 0, 28),
+    row("Vizaga topshirdi", P["Vizaga Topshirildi"] || 0, 28),
+    row("Viza oldi", P["Viza Oldi"] || 0, 28),
+    row("Jo'nab ketdi", P["Jo'nab ketdi"] || 0, 28),
+    row("Rad / bekor", lost, 28),
+  ].join("\n"))}</pre>`);
+
+  const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ }).format(new Date());
+  const dstr = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
+  L.push("");
+  L.push(`📅 <b>Suhbatlar (bugun va ertaga): ${intR.rows.length}</b>`);
+  if (intR.rows.length) {
+    const body = intR.rows.slice(0, 12).map((r) => (dstr(r.dt) === todayStr ? "bugun" : "ertaga").padEnd(7) + cut(r.name, 15).padEnd(16) + cut(r.owner || "—", 12));
+    if (intR.rows.length > 12) body.push(`… yana ${intR.rows.length - 12} ta`);
+    L.push(`<pre>${tgEsc(["Kun".padEnd(7) + "Mijoz".padEnd(16) + "Xodim", ...body].join("\n"))}</pre>`);
+  }
+
+  const uncTotal = uncR.rows.reduce((a, r) => a + r.n, 0);
+  L.push("");
+  L.push(`📵 <b>Kechagi lidlardan aloqa qilinmagan: ${uncTotal}</b>`);
+  if (uncR.rows.length) {
+    L.push(`<pre>${tgEsc(uncR.rows.slice(0, 8).map((r) => row(r.owner, r.n, 28)).join("\n"))}</pre>`);
+  }
+
   L.push("");
   const stale = staleR.rows;
   L.push(`⚠️ <b>To'lagan, lekin 90+ kun aloqasiz: ${stale.length}</b>`);
@@ -2960,6 +3047,11 @@ async function buildDailyReport() {
     if (stale.length > 10) body.push(`… yana ${stale.length - 10} ta`);
     L.push(`<pre>${tgEsc([head, ...body].join("\n"))}</pre>`);
   }
+
+  const odTotal = odR.rows.reduce((a, r) => a + r.n, 0);
+  L.push("");
+  L.push(`⏰ <b>Muddati o'tgan vazifalar: ${odTotal}</b>`);
+  if (odR.rows.length) L.push(`<pre>${tgEsc(odR.rows.slice(0, 8).map((r) => row(r.name, r.n, 28)).join("\n"))}</pre>`);
   return L.join("\n");
 }
 
@@ -2967,13 +3059,23 @@ async function sendTelegram(text) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chats = (process.env.TELEGRAM_CHAT_ID || "").split(",").map((s) => s.trim()).filter(Boolean);
   if (!token || !chats.length) throw new Error("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID sozlanmagan");
+  // Telegram caps a message at 4096 chars; split on blank lines so <pre> blocks stay whole.
+  const parts = [];
+  let cur = "";
+  for (const block of text.split("\n\n")) {
+    if (cur && (cur + "\n\n" + block).length > 3800) { parts.push(cur); cur = block; }
+    else cur = cur ? cur + "\n\n" + block : block;
+  }
+  if (cur) parts.push(cur);
   for (const chat_id of chats) {
-    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id, text: text.slice(0, 4000), parse_mode: "HTML", disable_web_page_preview: true }),
-    });
-    if (!r.ok) throw new Error(`Telegram ${r.status}: ${await r.text()}`);
+    for (const part of parts) {
+      const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id, text: part, parse_mode: "HTML", disable_web_page_preview: true }),
+      });
+      if (!r.ok) throw new Error(`Telegram ${r.status}: ${await r.text()}`);
+    }
   }
 }
 
