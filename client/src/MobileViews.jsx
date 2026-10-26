@@ -3,6 +3,7 @@ import { useT } from "./theme.js";
 import { STAGES, DONE, LOST, gS } from "./constants.js";
 import { uid, fmtMs, fmtD, isOD, isSoon, inp, lab, I, Av, MoneyInput } from "./helpers.jsx";
 import { txnAPI, tasksAPI } from "./api.js";
+import { AllTransactions } from "./AllTransactions.jsx";
 
 // ─── SEARCHABLE CLIENT PICKER ─────────────────────────────────────────────────
 function LeadPicker({ leads, value, onChange }) {
@@ -97,6 +98,7 @@ export function MobileFinance({ txns, setTxns, leads, extExps, user, config, add
   const T = useT();
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState({});
+  const [view, setView] = useState("summary");
 
   const income = txns.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const expense = txns.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
@@ -175,8 +177,21 @@ export function MobileFinance({ txns, setTxns, leads, extExps, user, config, add
         ))}
       </div>
 
+      {/* View switch */}
+      <div style={{ display: "flex", gap: 6, padding: "10px 14px 0" }}>
+        {[["summary", "Umumiy"], ["all", "📒 Barcha operatsiyalar"]].map(([k, lb]) => (
+          <button key={k} onClick={() => setView(k)}
+            style={{ flex: 1, height: 38, borderRadius: 8, border: `1px solid ${view === k ? T.accent : T.border}`, background: view === k ? `${T.accent}18` : "transparent", color: view === k ? T.accent : T.muted, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{lb}</button>
+        ))}
+      </div>
+      {view === "all" && (
+        <div style={{ padding: "12px 14px 80px" }}>
+          <AllTransactions txns={txns} extExps={extExps || []} leads={leads} />
+        </div>
+      )}
+
       {/* Action buttons */}
-      <div style={{ display: "flex", gap: 8, padding: "12px 14px" }}>
+      {view === "summary" && <div style={{ display: "flex", gap: 8, padding: "12px 14px" }}>
         <button onClick={() => openForm("income")}
           style={{ flex: 1, height: 44, borderRadius: 10, background: `${T.green}20`, color: T.green, border: `1px solid ${T.green}44`, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
           + Kirim
@@ -185,10 +200,10 @@ export function MobileFinance({ txns, setTxns, leads, extExps, user, config, add
           style={{ flex: 1, height: 44, borderRadius: 10, background: `${T.red}20`, color: T.red, border: `1px solid ${T.red}44`, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
           + Chiqim
         </button>
-      </div>
+      </div>}
 
       {/* Recent transactions */}
-      <div style={{ padding: "0 14px 80px" }}>
+      {view === "summary" && <div style={{ padding: "0 14px 80px" }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 8, textTransform: "uppercase" }}>So'nggi tranzaksiyalar</div>
         {recent.length === 0 && (
           <div style={{ textAlign: "center", color: T.muted, fontSize: 12, padding: 24 }}>Tranzaksiyalar yo'q</div>
@@ -214,7 +229,7 @@ export function MobileFinance({ txns, setTxns, leads, extExps, user, config, add
             </div>
           );
         })}
-      </div>
+      </div>}
 
       {/* Add form modal */}
       {modal === "form" && (

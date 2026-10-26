@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useT } from "./theme.js";
 import { isPayrollTxn } from "./constants.js";
 import { fmtMs, inp } from "./helpers.jsx";
@@ -150,6 +150,26 @@ function AllTransactions({ txns = [], extExps = [], leads = [] }) {
         <button onClick={exportCsv} style={chip(false, T.muted)}>⬇ CSV</button>
       </div>
 
+      {narrow ? (
+        <div>
+          {filtered.slice(0, shown).map((r) => (
+            <div key={r.key} style={{ ...card, marginBottom: 8, display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.who || r.desc || r.cat || "—"}</div>
+                <div style={{ fontSize: 10, color: T.muted, marginTop: 2 }}>
+                  <span style={{ fontWeight: 700, color: ORIGINS[r.origin].c }}>{ORIGINS[r.origin].label}</span> · {r.cat || "—"} · {r.date}{r.leadId ? ` · ${r.leadId}` : ""}
+                </div>
+                {r.who && r.desc && <div style={{ fontSize: 10, color: T.muted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.desc}</div>}
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: r.kind === "income" ? T.green : T.red }}>{r.kind === "income" ? "+" : "−"}{fmtMs(r.amount)}</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: r.method === "bank" ? "#2563eb" : "#059669" }}>{r.method === "bank" ? "BANK" : "NAQD"}</div>
+              </div>
+            </div>
+          ))}
+          {!filtered.length && <div style={{ textAlign: "center", color: T.muted, fontSize: 12, padding: 24 }}>Operatsiya topilmadi</div>}
+        </div>
+      ) : (
       <div style={{ ...card, padding: 0, overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
           <thead>
@@ -178,6 +198,7 @@ function AllTransactions({ txns = [], extExps = [], leads = [] }) {
           </tbody>
         </table>
       </div>
+      )}
       {filtered.length > shown && (
         <button onClick={() => setShown(shown + PAGE)} style={{ ...chip(false, T.accent), marginTop: 10 }}>
           Yana {Math.min(PAGE, filtered.length - shown)} ta ko'rsatish ({filtered.length - shown} qoldi)
