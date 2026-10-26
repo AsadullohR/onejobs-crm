@@ -12,8 +12,22 @@ const ORIGINS = {
 const PAGE = 200;
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-function AllTransactions({ txns = [], extExps = [], leads = [] }) {
+function useNarrow() {
+  const [n, setN] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
+  useEffect(() => {
+    const f = () => setN(window.innerWidth < 768);
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
+  return n;
+}
+
+function AllTransactions({ txns, extExps, leads }) {
   const T = useT();
+  const narrow = useNarrow();
+  txns = txns || [];
+  extExps = extExps || [];
+  leads = leads || [];
   const inpS = inp(T);
   const [month, setMonth] = useState(todayISO().slice(0, 7));
   const [allTime, setAllTime] = useState(false);
