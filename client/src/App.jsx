@@ -703,7 +703,7 @@ const deleteLead = useCallback(async (id) => {
           {page==="vacancies" && <Vacancies leads={visibleLeads} user={user} team={team} roles={roles} setLeads={setLeads} txns={txns} setTxns={setTxns}/>}
           {page==="visa"       && <Visa user={user} roles={roles} config={config} setConfig={setConfig}/>}
           {page==="education"  && <Education user={user} config={config} setConfig={setConfig}/>}
-          {page==="attendance" && <Attendance user={user} config={config} setConfig={setConfig}/>}
+          {page==="attendance" && <Attendance user={user} team={team} config={config} setConfig={setConfig}/>}
           {page==="team"       && <TeamPage user={user} team={team} setTeam={setTeam} roles={roles}/>}
           {page==="settings"   && <Settings user={user} config={config} setConfig={setConfig} roles={roles} setRoles={setRoles}/>}
           {page==="finance"    && !isMobile && <FinanceHub leads={leads} setLeads={setLeads} team={team} user={user} txns={txns} setTxns={setTxns} config={config} addNotif={addNotif} debts={debts} setDebts={setDebts} roles={roles} extExps={extExps} setExtExps={setExtExps}/>}
