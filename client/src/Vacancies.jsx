@@ -2725,6 +2725,8 @@ function Vacancies({ leads, user, team, roles, setLeads, txns = [], setTxns }) {
             border: `1px solid ${T.border}`,
             borderRadius: 8,
             padding: 3,
+            maxWidth: "100%",
+            overflowX: "auto",
           }}
         >
           {[
@@ -2745,6 +2747,8 @@ function Vacancies({ leads, user, team, roles, setLeads, txns = [], setTxns }) {
                 border: "none",
                 cursor: "pointer",
                 fontSize: 10,
+                whiteSpace: "nowrap",
+                flexShrink: 0,
                 fontWeight: fStatus === k ? 700 : 400,
                 background: fStatus === k ? T.accent : "transparent",
                 color: fStatus === k ? "#fff" : T.muted,
