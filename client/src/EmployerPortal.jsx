@@ -453,8 +453,8 @@ function VacanciesTab({ vacancies, loading, leads, t, T, team, userId }) {
           const total = v.positions || 1;
           const cands = v.candidateCount || 0;
           const isSelected = selVac?.id === v.id;
-          const statusLabel = v.status === "active" ? t("emp_active") : v.status === "filled" ? t("emp_filled") : v.status === "pending" ? t("emp_pending") : v.status;
-          const statusColor = v.status === "active" ? T.green : v.status === "pending" ? T.yellow : T.muted;
+          const statusLabel = v.status === "active" ? t("emp_active") : v.status === "filled" ? t("emp_filled") : v.status === "pending" ? t("emp_pending") : v.status === "docs" ? t("emp_docs") : v.status;
+          const statusColor = v.status === "active" ? T.green : v.status === "pending" ? T.yellow : v.status === "docs" ? T.cyan : T.muted;
           return (
             <div key={v.id} onClick={() => setSelVac(isSelected ? null : v)}
               style={{ background: isSelected ? `${T.accent}12` : T.card, border: `1px solid ${isSelected ? T.accent : T.border}`,

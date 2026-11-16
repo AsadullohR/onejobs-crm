@@ -11,6 +11,7 @@ const V_STATUS = {
   active: { label: "Active", c: "#16a34a", bg: "#dcfce7" },
   waiting: { label: "Awaiting approval", c: "#d97706", bg: "#fef3c7" },
   revision: { label: "Awaiting revision", c: "#2563eb", bg: "#dbeafe" },
+  docs: { label: "Documents in preparation", c: "#0891b2", bg: "#cffafe" },
   inactive: { label: "Inactive", c: "#6b7280", bg: "#f3f4f6" },
   filled: { label: "Filled", c: "#9333ea", bg: "#f3e8ff" },
 };
@@ -2731,6 +2732,7 @@ function Vacancies({ leads, user, team, roles, setLeads, txns = [], setTxns }) {
             ["active", "Active"],
             ["waiting", "Awaiting approval"],
             ["revision", "Awaiting revision"],
+            ["docs", "Documents in preparation"],
             ["inactive", "Inactive"],
             ["filled", "Filled"],
           ].map(([k, l]) => (
