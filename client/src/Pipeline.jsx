@@ -156,7 +156,9 @@ function Pipeline({
         .filter((v) => v !== null && v !== undefined && v !== "")
         .map(String);
 
-      if (!owners.includes(String(fOwner))) return false;
+      if (fOwner === "none") {
+        if (owners.length) return false;
+      } else if (!owners.includes(String(fOwner))) return false;
     }
     if (fCountry && !l.country?.includes(fCountry)) return false;
     if (fSector && l.sector !== fSector) return false;
@@ -484,6 +486,7 @@ function Pipeline({
             style={{ ...inpS, width: "auto", fontSize: 11 }}
           >
             <option value="">Barcha mas'ul</option>
+            <option value="none">⚠️ Biriktirilmagan (mas'ulsiz)</option>
             {team
               .filter((t) => t.role !== "partner")
               .map((t) => (
