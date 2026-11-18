@@ -2891,6 +2891,37 @@ const safeQ = (...args) => pool.query(...args).catch((e) => { console.error("Rep
 const tgEsc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const fmtNum = (n) => Number(n || 0).toLocaleString("en-US").replace(/,/g, " ");
 
+// Accepted ("Ishga qabul qilindi") -> documents sent ("Hujjatlar Jonatildi") delay.
+// Dates are the FIRST time a client entered each status, from status_log.
+const DOCS_WAIT_STATUSES = ["Ishga qabul qilindi", "1 - Qism To'landi", "Hujjatlar Tayyorlanmoqda", "Hujjatlar Jonatilishga Tayyor"];
+async function docsAcceptanceStats() {
+  const base = `WITH acc AS (SELECT lead_id, MIN(logged_at) t FROM status_log WHERE status = 'Ishga qabul qilindi' GROUP BY lead_id),
+                     docs AS (SELECT lead_id, MIN(logged_at) t FROM status_log WHERE status = 'Hujjatlar Jonatildi' GROUP BY lead_id)`;
+  const [waitR, sentR] = await Promise.all([
+    safeQ(`${base}
+           SELECT l.id, l.status, COALESCE(u.name,'Biriktirilmagan') AS owner,
+                  ((NOW() AT TIME ZONE $1)::date - (acc.t AT TIME ZONE $1)::date)::int AS days
+           FROM acc JOIN leads l ON l.id = acc.lead_id
+           LEFT JOIN users u ON u.id = l.owner_docs
+           WHERE NOT EXISTS (SELECT 1 FROM docs WHERE docs.lead_id = acc.lead_id) AND l.status = ANY($2)
+           ORDER BY days DESC`, [APP_TZ, DOCS_WAIT_STATUSES]),
+    safeQ(`${base}
+           SELECT ((docs.t AT TIME ZONE $1)::date - (acc.t AT TIME ZONE $1)::date)::int AS days
+           FROM docs JOIN acc USING (lead_id) JOIN leads l ON l.id = docs.lead_id
+           WHERE docs.t > NOW() - INTERVAL '30 days' AND docs.t >= acc.t`, [APP_TZ]),
+  ]);
+  const w = waitR.rows;
+  const byOwner = {};
+  w.filter((r) => r.days > 7).forEach((r) => { byOwner[r.owner] = (byOwner[r.owner] || 0) + 1; });
+  const sent = sentR.rows.map((r) => r.days).sort((a, b) => a - b);
+  return {
+    waiting: { total: w.length, over7: w.filter((r) => r.days > 7).length, over14: w.filter((r) => r.days > 14).length, over30: w.filter((r) => r.days > 30).length },
+    waitingOver7ByOwner: Object.entries(byOwner).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n),
+    oldest: w.slice(0, 10).map((r) => ({ id: r.id, days: r.days, status: r.status, owner: r.owner })),
+    sentLast30d: { count: sent.length, over7: sent.filter((d) => d > 7).length, medianDays: sent.length ? sent[Math.floor(sent.length / 2)] : null },
+  };
+}
+
 async function buildDailyReport() {
   const ydayQ = `(NOW() AT TIME ZONE $1)::date - 1`;
   const [leadsR, bySrcR, visitsR, payR, staleR, tasksR, debtsR, activeR, intR, uncR, mtdR, progR, odR] = await Promise.all([
@@ -3018,6 +3049,21 @@ async function buildDailyReport() {
     row("Viza oldi", P["Viza Oldi"] || 0, 28),
     row("Jo'nab ketdi", P["Jo'nab ketdi"] || 0, 28),
     row("Rad / bekor", lost, 28),
+  ].join("\n"))}</pre>`);
+
+  const dx = await docsAcceptanceStats();
+  const rw = (label, v, w = 30) => label + " ".repeat(Math.max(1, w - label.length - String(v).length)) + v;
+  L.push("");
+  L.push(`📄 <b>Qabul → hujjat jo'natish (7+ kun)</b>`);
+  L.push(`<pre>${tgEsc([
+    rw("Kutayotgan (hujjat yo'q)", dx.waiting.total),
+    rw("  shundan 7+ kun", dx.waiting.over7),
+    rw("  shundan 14+ kun", dx.waiting.over14),
+    rw("  shundan 30+ kun", dx.waiting.over30),
+    rw("30 kunda jo'natildi", dx.sentLast30d.count),
+    rw("  shundan 7+ kun olgan", dx.sentLast30d.over7),
+    ...(dx.waitingOver7ByOwner.length ? ["", "Kutayotgan 7+ — mas'ul bo'yicha:", ...dx.waitingOver7ByOwner.slice(0, 5).map((o) => rw(cut(o.name, 22), o.n))] : []),
+    ...(dx.oldest.length ? ["", "Eng eskilari:", ...dx.oldest.slice(0, 5).map((o) => (o.id.length > 8 ? "…" + o.id.slice(-6) : o.id).padEnd(9) + String(o.days).padStart(4) + " kun  " + cut(o.owner, 12))] : []),
   ].join("\n"))}</pre>`);
 
   const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ }).format(new Date());
@@ -3209,6 +3255,7 @@ async function gatherAdviceData() {
       top15: staleRows.slice(0, 15).map((r) => ({ id: r.id, status: r.status, paid: Number(r.total_income || 0), days_silent: r.days })),
     },
     interviews_today_tomorrow: interviews.rows,
+    accepted_waiting_for_documents_and_recent_delays: await docsAcceptanceStats(),
     staff_attendance_last7d: Object.entries(attBy).map(([name, v]) => ({ name, ...v })),
     ...(errs.length ? { _missing_sections_errors: errs } : {}),
   };
