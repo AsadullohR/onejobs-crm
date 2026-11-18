@@ -3225,6 +3225,7 @@ Qoidalar:
 - 5 tadan 7 tagacha tavsiya ber, eng muhimidan boshlab. Har biri: nima bo'layotgani (raqam bilan), nima uchun muhim, bugun kim nima qilsin.
 - Oxirida bitta qatorda "Kuzatish kerak:" deb ertaga tekshiriladigan bitta ko'rsatkichni ayt.
 - Format: oddiy matn. Ro'yxat 1., 2., 3. ko'rinishida. Markdown (**, #) ishlatma. Jami 1800 belgidan oshmasin.
+- Oxirgi 60 kunlik manba hisobotida yangi (bir necha kunlik) lidlar hali to'lov qilmagan bo'lishi mumkin: konversiyani qat'iy xulosa qilma, "hozircha past" deb ayt.
 - Xodimlarni tanqid qilganda faqat faktni ayt (masalan "22 ta muddati o'tgan vazifa"), shaxsiy baho berma.`;
 
 async function generateAdvice(data) {
@@ -3239,7 +3240,7 @@ async function generateAdvice(data) {
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
         model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
-        max_tokens: 1500,
+        max_tokens: 4000,
         system: ADVICE_SYSTEM,
         messages: [{ role: "user", content: "Mana CRM ma'lumotlari:\n" + JSON.stringify(data) }],
       }),
@@ -3249,6 +3250,7 @@ async function generateAdvice(data) {
     const j = JSON.parse(body);
     const text = (j.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
     if (!text) throw new Error("Anthropic bo'sh javob qaytardi");
+    if (j.stop_reason === "max_tokens") console.error("Daily advice was cut off by max_tokens");
     return text;
   } finally { clearTimeout(timer); }
 }
